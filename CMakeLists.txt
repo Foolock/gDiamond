@@ -36,4 +36,21 @@ endif()
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(GDIAMOND_EXAMPLE_DIR ${PROJECT_SOURCE_DIR}/examples)
+set(GDIAMOND_3RD_PARTY_DIR ${PROJECT_SOURCE_DIR}/3rd-party)
+
+# Enable test
+include(CheckLanguage)
+include(CTest)
+set(CMAKE_CTEST_ARGUMENTS "--output-on-failure")
+
 add_subdirectory(examples)
+add_subdirectory(unittests)
+
+
+
+
+
+
+
+
+

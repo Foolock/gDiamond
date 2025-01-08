@@ -1,5 +1,5 @@
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/examples)
-add_executable(simple ${GDIAMOND_EXAMPLE_DIR}/simple.cpp)
+add_executable(simple ${GDIAMOND_EXAMPLE_DIR}/simple.cu)
 
 list(APPEND GDIAMOND_EXAMPLES
   simple
