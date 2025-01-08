@@ -17,6 +17,8 @@ class gDiamond {
                                                _Hx_seq(Nx * Ny * Nz), _Hy_seq(Nx * Ny * Nz), _Hz_seq(Nx * Ny * Nz),
                                                _Ex_gpu(Nx * Ny * Nz), _Ey_gpu(Nx * Ny * Nz), _Ez_gpu(Nx * Ny * Nz),
                                                _Hx_gpu(Nx * Ny * Nz), _Hy_gpu(Nx * Ny * Nz), _Hz_gpu(Nx * Ny * Nz),
+                                               _Ex_omp(Nx * Ny * Nz), _Ey_omp(Nx * Ny * Nz), _Ez_omp(Nx * Ny * Nz),
+                                               _Hx_omp(Nx * Ny * Nz), _Hy_omp(Nx * Ny * Nz), _Hz_omp(Nx * Ny * Nz),
                                                _Jx(Nx * Ny * Nz, 1), _Jy(Nx * Ny * Nz, 1), _Jz(Nx * Ny * Nz, 1),
                                                _Mx(Nx * Ny * Nz, 1), _My(Nx * Ny * Nz, 1), _Mz(Nx * Ny * Nz, 1),
                                                _Cax(Nx * Ny * Nz, 1), _Cay(Nx * Ny * Nz, 1), _Caz(Nx * Ny * Nz, 1),
@@ -46,11 +48,15 @@ class gDiamond {
     // run FDTD in cpu single thread
     void update_FDTD_seq(size_t num_timesteps);
 
+    // run FDTD in openmp
+    void update_FDTD_omp(size_t num_timesteps);
+
     // run FDTD in gpu without diamond tiling 
     void update_FDTD_gpu(size_t num_timesteps);
 
     // check correctness
-    bool check_correctness();
+    bool check_correctness_gpu();
+    bool check_correctness_omp();
 
   private:
     size_t _Nx;
@@ -72,6 +78,14 @@ class gDiamond {
     std::vector<float> _Hx_seq;
     std::vector<float> _Hy_seq;
     std::vector<float> _Hz_seq;
+
+    // E and H (result from openmp)
+    std::vector<float> _Ex_omp;
+    std::vector<float> _Ey_omp;
+    std::vector<float> _Ez_omp;
+    std::vector<float> _Hx_omp;
+    std::vector<float> _Hy_omp;
+    std::vector<float> _Hz_omp;
     
     // E and H (result from GPU)
     std::vector<float> _Ex_gpu;
@@ -172,11 +186,36 @@ void gDiamond::update_FDTD_seq(size_t num_timesteps) {
   }
 }
 
-bool gDiamond::check_correctness() {
+bool gDiamond::check_correctness_gpu() {
   bool correct = true;
 
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    if(fabs(_Ex_seq[i] - _Ex_gpu[i]) >= 1e-8) {
+    if(fabs(_Ex_seq[i] - _Ex_gpu[i]) >= 1e-8 ||
+       fabs(_Ey_seq[i] - _Ey_gpu[i]) >= 1e-8 ||
+       fabs(_Ez_seq[i] - _Ez_gpu[i]) >= 1e-8 ||
+       fabs(_Hx_seq[i] - _Hx_gpu[i]) >= 1e-8 ||
+       fabs(_Hy_seq[i] - _Hy_gpu[i]) >= 1e-8 ||
+       fabs(_Hz_seq[i] - _Hz_gpu[i]) >= 1e-8
+    ) {
+      correct = false;
+      break;
+    }
+  }
+
+  return correct;
+} 
+
+bool gDiamond::check_correctness_omp() {
+  bool correct = true;
+
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    if(fabs(_Ex_seq[i] - _Ex_omp[i]) >= 1e-8 ||
+       fabs(_Ey_seq[i] - _Ey_omp[i]) >= 1e-8 ||
+       fabs(_Ez_seq[i] - _Ez_omp[i]) >= 1e-8 ||
+       fabs(_Hx_seq[i] - _Hx_omp[i]) >= 1e-8 ||
+       fabs(_Hy_seq[i] - _Hy_omp[i]) >= 1e-8 ||
+       fabs(_Hz_seq[i] - _Hz_omp[i]) >= 1e-8
+    ) {
       correct = false;
       break;
     }

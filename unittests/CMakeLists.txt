@@ -2,8 +2,11 @@ enable_testing()
 
 include(${GDIAMOND_3RD_PARTY_DIR}/doctest/doctest.cmake)
 
-list(APPEND ITAP_UNITTESTS 
-  checker
+add_executable(checker_gpu checker_gpu.cu)
+add_executable(checker_omp checker_omp.cpp)
+list(APPEND GDIAMOND_UNITTESTS 
+  checker_gpu
+  checker_omp
 )
 
 string(FIND '${CMAKE_CXX_FLAGS}' "-fsanitize" sanitize)
@@ -14,11 +17,14 @@ string(FIND '${CMAKE_CXX_FLAGS}' "-fsanitize" sanitize)
 #   list(APPEND ITAP_UNITTESTS test_exceptions)
 # endif()
 
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(checker_omp PUBLIC OpenMP::OpenMP_CXX)
+endif()
 
 find_package(Threads REQUIRED)
-foreach(unittest IN LISTS ITAP_UNITTESTS)
+foreach(unittest IN LISTS GDIAMOND_UNITTESTS)
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/unittests)
-  add_executable(${unittest} ${unittest}.cu)
   target_link_libraries(${unittest} 
     PRIVATE Threads::Threads
     )
