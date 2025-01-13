@@ -51,6 +51,9 @@ class gDiamond {
     // run FDTD in openmp
     void update_FDTD_omp(size_t num_timesteps);
 
+    // run FDTD in openmp with diamond tiling
+    void update_FDTD_omp_dt(size_t num_timesteps);
+
     // run FDTD in gpu without diamond tiling 
     void update_FDTD_gpu(size_t num_timesteps);
 
@@ -59,6 +62,11 @@ class gDiamond {
     bool check_correctness_omp();
 
   private:
+
+    // get number of tiles
+    // BLX is the length of the 1st row of a mountain, BLT is the number of time steps, Nx is space size
+    size_t _get_num_of_tiles(size_t BLX, size_t BLT, size_t Nx);
+
     size_t _Nx;
     size_t _Ny;
     size_t _Nz;
@@ -223,6 +231,45 @@ bool gDiamond::check_correctness_omp() {
 
   return correct;
 } 
+
+size_t gDiamond::_get_num_of_tiles(size_t BLX, size_t BLT, size_t Nx) {
+
+  // here we always set a mountain at the beginning of space
+  
+  size_t num_tiles;
+
+  size_t mountain_bottom = BLX;
+  size_t valley_top = BLX - 2*(BLT - 1) - 1;
+
+  size_t two_tiles = mountain_bottom + valley_top;
+
+  size_t num_two_tiles = Nx / two_tiles;
+  size_t remain = Nx - num_two_tiles * two_tiles;
+  size_t remain_tiles = 0;
+
+  /*
+        E E E |
+      H H H H |
+      E E E E | E
+    H H H H H | H
+    E E E E E | E E
+  H H H H H H | H H
+             check
+  */
+  size_t check = mountain_bottom - (BLT - 1);
+
+  if(remain > 0 && remain <= check) {
+    remain_tiles = 1;
+  }
+  else if(remain > check && remain < two_tiles) {
+    remain_tiles = 2;
+  }
+
+  // + 1 since there is always a valley at the beginning
+  num_tiles = 2*num_two_tiles + remain_tiles + 1;
+
+  return num_tiles;
+}
 
 } // end of namespace gdiamond
 

@@ -72,6 +72,17 @@ void gDiamond::update_FDTD_omp(size_t num_timesteps) {
   }
 }
 
+void gDiamond::update_FDTD_omp_dt(size_t num_timesteps) {
+
+  size_t BLX = 8;
+  size_t BLT = 3;
+  size_t Nx = 19;
+  size_t num_tiles = _get_num_of_tiles(BLX, BLT, Nx); 
+
+  std::cout << "num_tiles = " << num_tiles << "\n";
+
+}
+
 } // end of namespace gdiamond
 
 #endif
