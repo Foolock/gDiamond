@@ -81,6 +81,9 @@ void gDiamond::update_FDTD_omp_dt(size_t num_timesteps) {
 
   std::cout << "num_tiles = " << num_tiles << "\n";
 
+  std::cout << "num_mountains = " << _num_mountains << "\n";
+  std::cout << "num_valleys = " << _num_valleys << "\n";
+
 }
 
 } // end of namespace gdiamond

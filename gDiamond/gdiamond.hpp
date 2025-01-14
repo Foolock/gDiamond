@@ -67,6 +67,25 @@ class gDiamond {
     // BLX is the length of the 1st row of a mountain, BLT is the number of time steps, Nx is space size
     size_t _get_num_of_tiles(size_t BLX, size_t BLT, size_t Nx);
 
+    // fill up indices and ranges vector for mountains and valleys
+    void _get_indices_and_ranges(size_t BLX, size_t BLT, size_t Nx);
+
+    // diamond tiles
+    size_t _num_mountains = 0;
+    size_t _num_valleys = 0;
+    
+    // mountain indices in different time steps
+    std::vector<std::vector<size_t>> _mountain_indices;
+    // mountain range in different time steps
+    // e.g., the index range of 1st mountain in the 1st time step is 
+    // [mountain_indices[0], mountain_indices[0][0] + mountain_ranges[0][0] - 1] 
+    std::vector<std::vector<size_t>> _mountain_ranges;
+
+    // valley indices
+    std::vector<std::vector<size_t>> _valley_indices;
+    // valley (bottom) range
+    std::vector<std::vector<size_t>> _valley_ranges;
+
     size_t _Nx;
     size_t _Ny;
     size_t _Nz;
@@ -267,6 +286,9 @@ size_t gDiamond::_get_num_of_tiles(size_t BLX, size_t BLT, size_t Nx) {
 
   // + 1 since there is always a valley at the beginning
   num_tiles = 2*num_two_tiles + remain_tiles + 1;
+
+  _num_mountains = num_tiles / 2;
+  _num_valleys = _num_mountains + 1;
 
   return num_tiles;
 }
