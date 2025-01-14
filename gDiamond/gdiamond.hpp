@@ -20,6 +20,8 @@ class gDiamond {
                                                _Hx_gpu(Nx * Ny * Nz), _Hy_gpu(Nx * Ny * Nz), _Hz_gpu(Nx * Ny * Nz),
                                                _Ex_omp(Nx * Ny * Nz), _Ey_omp(Nx * Ny * Nz), _Ez_omp(Nx * Ny * Nz),
                                                _Hx_omp(Nx * Ny * Nz), _Hy_omp(Nx * Ny * Nz), _Hz_omp(Nx * Ny * Nz),
+                                               _Ex_omp_dt(Nx * Ny * Nz), _Ey_omp_dt(Nx * Ny * Nz), _Ez_omp_dt(Nx * Ny * Nz),
+                                               _Hx_omp_dt(Nx * Ny * Nz), _Hy_omp_dt(Nx * Ny * Nz), _Hz_omp_dt(Nx * Ny * Nz),
                                                _Jx(Nx * Ny * Nz, 1), _Jy(Nx * Ny * Nz, 1), _Jz(Nx * Ny * Nz, 1),
                                                _Mx(Nx * Ny * Nz, 1), _My(Nx * Ny * Nz, 1), _Mz(Nx * Ny * Nz, 1),
                                                _Cax(Nx * Ny * Nz, 1), _Cay(Nx * Ny * Nz, 1), _Caz(Nx * Ny * Nz, 1),
@@ -61,6 +63,7 @@ class gDiamond {
     // check correctness
     bool check_correctness_gpu();
     bool check_correctness_omp();
+    bool check_correctness_omp_dt();
 
   private:
 
@@ -71,6 +74,9 @@ class gDiamond {
                                  std::vector<std::vector<size_t>>& valley_indices,
                                  std::vector<std::vector<size_t>>& valley_ranges
                                  );
+
+    // set ranges according to phases
+    std::vector<int> _set_ranges(size_t t, size_t xx, size_t yy, size_t zz, size_t phase);
 
     // diamond tiles
     // mountain indices in different time steps
@@ -120,6 +126,14 @@ class gDiamond {
     std::vector<float> _Hx_omp;
     std::vector<float> _Hy_omp;
     std::vector<float> _Hz_omp;
+
+    // E and H (result from openmp and diamond tiling)
+    std::vector<float> _Ex_omp_dt;
+    std::vector<float> _Ey_omp_dt;
+    std::vector<float> _Ez_omp_dt;
+    std::vector<float> _Hx_omp_dt;
+    std::vector<float> _Hy_omp_dt;
+    std::vector<float> _Hz_omp_dt;
     
     // E and H (result from GPU)
     std::vector<float> _Ex_gpu;
@@ -258,6 +272,25 @@ bool gDiamond::check_correctness_omp() {
   return correct;
 } 
 
+bool gDiamond::check_correctness_omp_dt() {
+  bool correct = true;
+
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    if(fabs(_Ex_seq[i] - _Ex_omp_dt[i]) >= 1e-8 ||
+       fabs(_Ey_seq[i] - _Ey_omp_dt[i]) >= 1e-8 ||
+       fabs(_Ez_seq[i] - _Ez_omp_dt[i]) >= 1e-8 ||
+       fabs(_Hx_seq[i] - _Hx_omp_dt[i]) >= 1e-8 ||
+       fabs(_Hy_seq[i] - _Hy_omp_dt[i]) >= 1e-8 ||
+       fabs(_Hz_seq[i] - _Hz_omp_dt[i]) >= 1e-8
+    ) {
+      correct = false;
+      break;
+    }
+  }
+
+  return correct;
+} 
+
 void gDiamond::_get_indices_and_ranges(size_t BLX, size_t BLT, size_t Nx,
                                        std::vector<std::vector<size_t>>& mountain_indices,
                                        std::vector<std::vector<size_t>>& mountain_ranges,
@@ -319,6 +352,103 @@ void gDiamond::_get_indices_and_ranges(size_t BLX, size_t BLT, size_t Nx,
     }
   }
 
+}
+
+std::vector<int> gDiamond::_set_ranges(size_t t, size_t xx, size_t yy, size_t zz, size_t phase) {
+ 
+  // results = {x_head, x_tail, y_head, y_tail, z_head, z_tail}
+  std::vector<int> results(6, -1); 
+  switch(phase) {
+    case 0: // phase 1: mountains on X, mountains on Y, mountains on Z
+      results[0] = (_mountain_indices_X[t][xx] >= 1)? _mountain_indices_X[t][xx]:1;
+      results[1] = (results[0] + _mountain_ranges_X[t][xx] - 1 <= _Nx-2)? 
+                      results[0] + _mountain_ranges_X[t][xx] - 1:_Nx-2;
+      results[2] = (_mountain_indices_Y[t][yy] >= 1)? _mountain_indices_Y[t][yy]:1;
+      results[3] = (results[2] + _mountain_ranges_Y[t][yy] - 1 <= _Ny-2)? 
+                      results[2] + _mountain_ranges_Y[t][yy] - 1:_Ny-2;
+      results[4] = (_mountain_indices_Z[t][zz] >= 1)? _mountain_indices_Z[t][zz]:1;
+      results[5] = (results[4] + _mountain_ranges_Z[t][zz] - 1 <= _Nz-2)? 
+                      results[4] + _mountain_ranges_Z[t][zz] - 1:_Nz-2;
+    case 1: // phase 2: valleys on X, mountains on Y, mountains on Z
+      results[0] = (_valley_indices_X[t][xx] >= 1)? _valley_indices_X[t][xx]:1;
+      results[1] = (results[0] + _valley_ranges_X[t][xx] - 1 <= _Nx-2)? 
+                      results[0] + _valley_ranges_X[t][xx] - 1:_Nx-2;
+      results[2] = (_mountain_indices_Y[t][yy] >= 1)? _mountain_indices_Y[t][yy]:1;
+      results[3] = (results[2] + _mountain_ranges_Y[t][yy] - 1 <= _Ny-2)? 
+                      results[2] + _mountain_ranges_Y[t][yy] - 1:_Ny-2;
+      results[4] = (_mountain_indices_Z[t][zz] >= 1)? _mountain_indices_Z[t][zz]:1;
+      results[5] = (results[4] + _mountain_ranges_Z[t][zz] - 1 <= _Nz-2)? 
+                      results[4] + _mountain_ranges_Z[t][zz] - 1:_Nz-2;
+    case 2: // phase 3: mountains on X, valleys on Y, mountains on Z
+      results[0] = (_mountain_indices_X[t][xx] >= 1)? _mountain_indices_X[t][xx]:1;
+      results[1] = (results[0] + _mountain_ranges_X[t][xx] - 1 <= _Nx-2)? 
+                      results[0] + _mountain_ranges_X[t][xx] - 1:_Nx-2;
+      results[2] = (_valley_indices_Y[t][yy] >= 1)? _valley_indices_Y[t][yy]:1;
+      results[3] = (results[2] + _valley_ranges_Y[t][yy] - 1 <= _Ny-2)? 
+                      results[2] + _valley_ranges_Y[t][yy] - 1:_Ny-2;
+      results[4] = (_mountain_indices_Z[t][zz] >= 1)? _mountain_indices_Z[t][zz]:1;
+      results[5] = (results[4] + _mountain_ranges_Z[t][zz] - 1 <= _Nz-2)? 
+                      results[4] + _mountain_ranges_Z[t][zz] - 1:_Nz-2;
+    case 3: // phase 4: mountains on X, mountains on Y, valleys on Z
+      results[0] = (_mountain_indices_X[t][xx] >= 1)? _mountain_indices_X[t][xx]:1;
+      results[1] = (results[0] + _mountain_ranges_X[t][xx] - 1 <= _Nx-2)? 
+                      results[0] + _mountain_ranges_X[t][xx] - 1:_Nx-2;
+      results[2] = (_mountain_indices_Y[t][yy] >= 1)? _mountain_indices_Y[t][yy]:1;
+      results[3] = (results[2] + _mountain_ranges_Y[t][yy] - 1 <= _Ny-2)? 
+                      results[2] + _mountain_ranges_Y[t][yy] - 1:_Ny-2;
+      results[4] = (_valley_indices_Z[t][zz] >= 1)? _valley_indices_Z[t][zz]:1;
+      results[5] = (results[4] + _valley_ranges_Z[t][zz] - 1 <= _Nz-2)? 
+                      results[4] + _valley_ranges_Z[t][zz] - 1:_Nz-2;
+    case 4: // phase 5: valleys on X, valleys on Y, mountains on Z
+      results[0] = (_valley_indices_X[t][xx] >= 1)? _valley_indices_X[t][xx]:1;
+      results[1] = (results[0] + _valley_ranges_X[t][xx] - 1 <= _Nx-2)? 
+                      results[0] + _valley_ranges_X[t][xx] - 1:_Nx-2;
+      results[2] = (_valley_indices_Y[t][yy] >= 1)? _valley_indices_Y[t][yy]:1;
+      results[3] = (results[2] + _valley_ranges_Y[t][yy] - 1 <= _Ny-2)? 
+                      results[2] + _valley_ranges_Y[t][yy] - 1:_Ny-2;
+      results[4] = (_mountain_indices_Z[t][zz] >= 1)? _mountain_indices_Z[t][zz]:1;
+      results[5] = (results[4] + _mountain_ranges_Z[t][zz] - 1 <= _Nz-2)? 
+                      results[4] + _mountain_ranges_Z[t][zz] - 1:_Nz-2;
+    case 5: // phase 6: valleys on X, mountains on Y, valleys on Z
+      results[0] = (_valley_indices_X[t][xx] >= 1)? _valley_indices_X[t][xx]:1;
+      results[1] = (results[0] + _valley_ranges_X[t][xx] - 1 <= _Nx-2)? 
+                      results[0] + _valley_ranges_X[t][xx] - 1:_Nx-2;
+      results[2] = (_mountain_indices_Y[t][yy] >= 1)? _mountain_indices_Y[t][yy]:1;
+      results[3] = (results[2] + _mountain_ranges_Y[t][yy] - 1 <= _Ny-2)? 
+                      results[2] + _mountain_ranges_Y[t][yy] - 1:_Ny-2;
+      results[4] = (_valley_indices_Z[t][zz] >= 1)? _valley_indices_Z[t][zz]:1;
+      results[5] = (results[4] + _valley_ranges_Z[t][zz] - 1 <= _Nz-2)? 
+                      results[4] + _valley_ranges_Z[t][zz] - 1:_Nz-2;
+    case 6: // phase 7: mountains on X, valleys on Y, valleys on Z
+      results[0] = (_mountain_indices_X[t][xx] >= 1)? _mountain_indices_X[t][xx]:1;
+      results[1] = (results[0] + _mountain_ranges_X[t][xx] - 1 <= _Nx-2)? 
+                      results[0] + _mountain_ranges_X[t][xx] - 1:_Nx-2;
+      results[2] = (_valley_indices_Y[t][yy] >= 1)? _valley_indices_Y[t][yy]:1;
+      results[3] = (results[2] + _valley_ranges_Y[t][yy] - 1 <= _Ny-2)? 
+                      results[2] + _valley_ranges_Y[t][yy] - 1:_Ny-2;
+      results[4] = (_valley_indices_Z[t][zz] >= 1)? _valley_indices_Z[t][zz]:1;
+      results[5] = (results[4] + _valley_ranges_Z[t][zz] - 1 <= _Nz-2)? 
+                      results[4] + _valley_ranges_Z[t][zz] - 1:_Nz-2;
+    case 7: // phase 8: valleys on X, valleys on Y, valleys on Z
+      results[0] = (_valley_indices_X[t][xx] >= 1)? _valley_indices_X[t][xx]:1;
+      results[1] = (results[0] + _valley_ranges_X[t][xx] - 1 <= _Nx-2)? 
+                      results[0] + _valley_ranges_X[t][xx] - 1:_Nx-2;
+      results[2] = (_valley_indices_Y[t][yy] >= 1)? _valley_indices_Y[t][yy]:1;
+      results[3] = (results[2] + _valley_ranges_Y[t][yy] - 1 <= _Ny-2)? 
+                      results[2] + _valley_ranges_Y[t][yy] - 1:_Ny-2;
+      results[4] = (_valley_indices_Z[t][zz] >= 1)? _valley_indices_Z[t][zz]:1;
+      results[5] = (results[4] + _valley_ranges_Z[t][zz] - 1 <= _Nz-2)? 
+                      results[4] + _valley_ranges_Z[t][zz] - 1:_Nz-2;
+  }
+
+  for(size_t i=0; i<6; i++) {
+    if(results[i] < 0) {
+      std::cerr << "error: x_head/x_tail wrong\n";
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
+  return results;
 }
 
 } // end of namespace gdiamond

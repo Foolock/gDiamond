@@ -4,9 +4,11 @@ include(${GDIAMOND_3RD_PARTY_DIR}/doctest/doctest.cmake)
 
 add_executable(checker_gpu checker_gpu.cu)
 add_executable(checker_omp checker_omp.cpp)
+add_executable(checker_omp_dt checker_omp_dt.cpp)
 list(APPEND GDIAMOND_UNITTESTS 
   checker_gpu
   checker_omp
+  checker_omp_dt
 )
 
 string(FIND '${CMAKE_CXX_FLAGS}' "-fsanitize" sanitize)
