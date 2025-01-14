@@ -4,6 +4,7 @@
 #include <iostream>
 #include <random> 
 #include <chrono>
+#include <vector>
 
 namespace gdiamond {
 
@@ -63,9 +64,9 @@ class gDiamond {
 
   private:
 
-    // get number of tiles
+    // get num_mountains and num_valleys
     // BLX is the length of the 1st row of a mountain, BLT is the number of time steps, Nx is space size
-    size_t _get_num_of_tiles(size_t BLX, size_t BLT, size_t Nx);
+    void _get_num_of_tiles(size_t BLX, size_t BLT, size_t Nx);
 
     // fill up indices and ranges vector for mountains and valleys
     void _get_indices_and_ranges(size_t BLX, size_t BLT, size_t Nx);
@@ -251,9 +252,10 @@ bool gDiamond::check_correctness_omp() {
   return correct;
 } 
 
-size_t gDiamond::_get_num_of_tiles(size_t BLX, size_t BLT, size_t Nx) {
+void gDiamond::_get_num_of_tiles(size_t BLX, size_t BLT, size_t Nx) {
 
   // here we always set a mountain at the beginning of space
+  // base on that 1st row is H 
   
   size_t num_tiles;
 
@@ -290,7 +292,99 @@ size_t gDiamond::_get_num_of_tiles(size_t BLX, size_t BLT, size_t Nx) {
   _num_mountains = num_tiles / 2;
   _num_valleys = _num_mountains + 1;
 
-  return num_tiles;
+}
+
+void gDiamond::_get_indices_and_ranges(size_t BLX, size_t BLT, size_t Nx) {
+
+  // here we always set a mountain at the beginning of space
+  // base on that 1st row is E 
+
+  size_t mountain_bottom = BLX;
+  size_t valley_top = BLX - 2*(BLT - 1) - 1;
+
+  size_t two_tiles = mountain_bottom + valley_top;
+
+  // fill up mountain_indices
+  _mountain_indices.resize(BLT*2);
+  size_t row = 0;
+  for(size_t t=0; t<BLT; t++) {
+    for(size_t index=t; index<Nx; index+=two_tiles) {
+      _mountain_indices[row].push_back(index);
+      _mountain_indices[row+1].push_back(index);
+    }
+    row += 2;
+  }
+
+  // fill up mountain_ranges 
+  _mountain_ranges.resize(BLT*2);
+  size_t range = BLX;
+  for(size_t row=0; row<BLT*2; row++) {
+    for(auto index : _mountain_indices[row]) {
+      if(index + range < Nx) {
+        _mountain_ranges[row].push_back(range);
+      } 
+      else {
+        _mountain_ranges[row].push_back(Nx - index);
+      }
+    }
+    --range;
+  }
+
+  // fill up valley_indices and valley_ranges
+  _valley_indices.resize(BLT*2);
+  _valley_ranges.resize(BLT*2);
+  for(size_t row=0; row<BLT*2; row++) {
+    size_t current = 0; // Pointer for AB_mix
+    for (size_t i = 0; i < _mountain_indices[row].size(); ++i) {
+      size_t mountain_start = _mountain_indices[row][i];
+      size_t mountain_length = _mountain_ranges[row][i];
+
+      if (current < mountain_start) {
+        _valley_indices[row].push_back(current);
+        _valley_ranges[row].push_back(mountain_start - current);
+      }
+
+      current = mountain_start + mountain_length;
+    }
+
+    if (current < Nx) {
+      _valley_indices[row].push_back(current);
+      _valley_ranges[row].push_back(Nx - current);
+    }
+  }
+
+  std::cout << "_mountain_indices = \n";
+  for(size_t t=0; t<BLT*2; t++) {
+    for(auto index : _mountain_indices[t]) {
+      std::cout << index << " ";
+    }
+    std::cout << "\n";
+  }
+
+  std::cout << "_mountain_ranges = \n";
+  for(size_t t=0; t<BLT*2; t++) {
+    for(auto index : _mountain_ranges[t]) {
+      std::cout << index << " ";
+    }
+    std::cout << "\n";
+  }
+
+  std::cout << "_valley_indices = \n";
+  for(size_t t=0; t<BLT*2; t++) {
+    for(auto index : _valley_indices[t]) {
+      std::cout << index << " ";
+    }
+    std::cout << "\n";
+  }
+
+  std::cout << "_valley_ranges = \n";
+  for(size_t t=0; t<BLT*2; t++) {
+    for(auto index : _valley_ranges[t]) {
+      std::cout << index << " ";
+    }
+    std::cout << "\n";
+  }
+      
 }
 
 } // end of namespace gdiamond
