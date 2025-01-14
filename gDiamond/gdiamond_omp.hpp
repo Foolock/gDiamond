@@ -72,12 +72,17 @@ void gDiamond::update_FDTD_omp(size_t num_timesteps) {
   }
 }
 
-void gDiamond::update_FDTD_omp_dt(size_t num_timesteps) {
+void gDiamond::update_FDTD_omp_dt(size_t BLX, size_t BLY, size_t BLZ, size_t BLT, size_t num_timesteps) {
 
-  size_t BLX = 7;
-  size_t BLT = 3;
-  size_t Nx = 19;
-  _get_indices_and_ranges(BLX, BLT, Nx); 
+  _get_indices_and_ranges(BLX, BLT, _Nx, _mountain_indices_X, _mountain_ranges_X, _valley_indices_X, _valley_ranges_X); 
+  _get_indices_and_ranges(BLY, BLT, _Ny, _mountain_indices_Y, _mountain_ranges_Y, _valley_indices_Y, _valley_ranges_Y); 
+  _get_indices_and_ranges(BLZ, BLT, _Nz, _mountain_indices_Z, _mountain_ranges_Z, _valley_indices_Z, _valley_ranges_Z); 
+
+  // let's first consider num_timesteps is a multiply of BLT
+  size_t steps = num_timesteps / BLT;
+  for(size_t tt=0; tt<steps; tt++) {
+    // phase 1: mountains on X, mountains on Y, mountains on Z,
+  }
 
 }
 
