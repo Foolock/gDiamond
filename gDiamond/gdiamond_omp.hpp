@@ -9,23 +9,21 @@ namespace gdiamond {
 void gDiamond::update_FDTD_omp(size_t num_timesteps) {
 
   // create temporary E and H for experiments
-  std::vector<float> Ex_temp(_Nx * _Ny * _Nz);
-  std::vector<float> Ey_temp(_Nx * _Ny * _Nz);
-  std::vector<float> Ez_temp(_Nx * _Ny * _Nz);
-  std::vector<float> Hx_temp(_Nx * _Ny * _Nz);
-  std::vector<float> Hy_temp(_Nx * _Ny * _Nz);
-  std::vector<float> Hz_temp(_Nx * _Ny * _Nz);
-  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    Ex_temp[i] = _Ex[i];
-    Ey_temp[i] = _Ey[i];
-    Ez_temp[i] = _Ez[i];
-    Hx_temp[i] = _Hx[i];
-    Hy_temp[i] = _Hy[i];
-    Hz_temp[i] = _Hz[i];
-  }
+  std::vector<float> Ex_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Ey_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Ez_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Hx_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Hy_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Hz_temp(_Nx * _Ny * _Nz, 0);
+
+  // clear source Mz for experiments
+  _Mz.clear();
 
   auto start = std::chrono::high_resolution_clock::now();
   for(size_t t=0; t<num_timesteps; t++) {
+
+    float Mz_value = M_source_amp * std::sin(SOURCE_OMEGA * t * dt);
+    _Mz[_source_idx] = Mz_value;
 
     // update E
     #pragma omp parallel for collapse(2)

@@ -1,4 +1,4 @@
-#include "gdiamond_gpu.cuh"
+#include "gdiamond.hpp"
 
 int main() {
 
@@ -9,11 +9,6 @@ int main() {
   gdiamond::gDiamond exp(Nx, Ny, Nz); 
 
   exp.update_FDTD_seq(num_timesteps);
-  exp.update_FDTD_gpu(num_timesteps);
 
-  if(!exp.check_correctness_gpu()) {
-    std::cerr << "error: results not match\n";
-    std::exit(EXIT_FAILURE);
-  }
   return 0;
 }

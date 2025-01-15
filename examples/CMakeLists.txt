@@ -2,11 +2,13 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/examples)
 add_executable(gpu ${GDIAMOND_EXAMPLE_DIR}/gpu.cu)
 add_executable(omp ${GDIAMOND_EXAMPLE_DIR}/omp.cpp)
 add_executable(omp_dt ${GDIAMOND_EXAMPLE_DIR}/omp_dt.cpp)
+add_executable(seq ${GDIAMOND_EXAMPLE_DIR}/seq.cpp)
 
 list(APPEND GDIAMOND_EXAMPLES
   gpu
   omp
   omp_dt
+  seq
 )
 
 find_package(OpenMP)

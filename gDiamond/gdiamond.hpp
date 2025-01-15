@@ -5,6 +5,7 @@
 #include <random> 
 #include <chrono>
 #include <vector>
+#include "utils.h"
 
 namespace gdiamond {
 
@@ -22,30 +23,38 @@ class gDiamond {
                                                _Hx_omp(Nx * Ny * Nz), _Hy_omp(Nx * Ny * Nz), _Hz_omp(Nx * Ny * Nz),
                                                _Ex_omp_dt(Nx * Ny * Nz), _Ey_omp_dt(Nx * Ny * Nz), _Ez_omp_dt(Nx * Ny * Nz),
                                                _Hx_omp_dt(Nx * Ny * Nz), _Hy_omp_dt(Nx * Ny * Nz), _Hz_omp_dt(Nx * Ny * Nz),
-                                               _Jx(Nx * Ny * Nz, 1), _Jy(Nx * Ny * Nz, 1), _Jz(Nx * Ny * Nz, 1),
-                                               _Mx(Nx * Ny * Nz, 1), _My(Nx * Ny * Nz, 1), _Mz(Nx * Ny * Nz, 1),
-                                               _Cax(Nx * Ny * Nz, 1), _Cay(Nx * Ny * Nz, 1), _Caz(Nx * Ny * Nz, 1),
-                                               _Cbx(Nx * Ny * Nz, 1), _Cby(Nx * Ny * Nz, 1), _Cbz(Nx * Ny * Nz, 1),
-                                               _Dax(Nx * Ny * Nz, 1), _Day(Nx * Ny * Nz, 1), _Daz(Nx * Ny * Nz, 1),
-                                               _Dbx(Nx * Ny * Nz, 1), _Dby(Nx * Ny * Nz, 1), _Dbz(Nx * Ny * Nz, 1)
+                                               _Jx(Nx * Ny * Nz, 0), _Jy(Nx * Ny * Nz, 0), _Jz(Nx * Ny * Nz, 0),
+                                               _Mx(Nx * Ny * Nz, 0), _My(Nx * Ny * Nz, 0), _Mz(Nx * Ny * Nz, 0),
+                                               _Cax(Nx * Ny * Nz, 0), _Cay(Nx * Ny * Nz, 0), _Caz(Nx * Ny * Nz, 0),
+                                               _Cbx(Nx * Ny * Nz, 0), _Cby(Nx * Ny * Nz, 0), _Cbz(Nx * Ny * Nz, 0),
+                                               _Dax(Nx * Ny * Nz, 0), _Day(Nx * Ny * Nz, 0), _Daz(Nx * Ny * Nz, 0),
+                                               _Dbx(Nx * Ny * Nz, 0), _Dby(Nx * Ny * Nz, 0), _Dbz(Nx * Ny * Nz, 0)
     {
+      std::cerr << "initializing Ca, Cb, Da, Db...\n";
 
-      // fix random seed so we generate same numbers every time
-      const int fixedSeed = 42;
-      std::mt19937 gen(fixedSeed); // Standard mersenne_twister_engine
-      std::uniform_real_distribution<> dis(0.0, 1.0); // Range [0, 1]
+      _source_idx = Nx/2 + Ny/2 * Nx + Nz/2 * Nx * Ny;
+    
+      bool *mask;
+      mask = (bool *)malloc(Nx * Ny * sizeof(bool));
+      memset(mask, 0, Nx * Ny * sizeof(bool));
+      Complex eps_air = Complex(1.0f, 0.0f);
+      Complex eps_Si = Complex(12.0f, 0.001f);
 
-      // randomly fill up E and H 
-      for(size_t i=0; i<Nx*Ny*Nz; i++) {
-        _Ex[i] = dis(gen);
-        _Ey[i] = -_Ex[i];
-        _Ez[i] = _Ex[i];
-        _Hx[i] = -_Ex[i] + 1;
-        _Hy[i] = _Hx[i];
-        _Hz[i] = -_Hx[i];
-      }
+      float t_slab = 200 * nm;  // slab thickness
+      int t_slab_grid = std::round(t_slab / _dx);
+      int k_mid = Nz / 2;
+      int slab_k_min = k_mid - t_slab_grid / 2;
+      int slab_k_max = slab_k_min + t_slab_grid;
+      float h_PML = 0.5 * um;  // Thickness of PMLCHECK(cudaSetDevice(source_gpu_index));
+      int t_PML = std::ceil(h_PML / _dx);
+      set_FDTD_matrices_3D_structure(_Cax, _Cbx, _Cay, _Cby, _Caz, _Cbz,
+                                     _Dax, _Dbx, _Day, _Dby, _Daz, _Dbz,
+                                     Nx, Ny, Nz, _dx, dt, mask, eps_air, eps_Si,
+                                     slab_k_min, slab_k_max, SOURCE_OMEGA, t_PML);
 
-      std::cout << "randomly initialize E and H, initialize J, M, Ca, Cb, Da, Db all as 1\n";
+
+      std::cerr << "finish initialization\n";
+      free(mask);
     }
 
     // run FDTD in cpu single thread
@@ -64,6 +73,8 @@ class gDiamond {
     bool check_correctness_gpu();
     bool check_correctness_omp();
     bool check_correctness_omp_dt();
+    
+    void print_results();
 
   private:
 
@@ -102,6 +113,8 @@ class gDiamond {
     size_t _Nx;
     size_t _Ny;
     size_t _Nz;
+
+    size_t _source_idx;
 
     // E and H (initial field)
     std::vector<float> _Ex;
@@ -166,30 +179,39 @@ class gDiamond {
     std::vector<float> _Dby;
     std::vector<float> _Dbz;
 
-    // spacial sample rate
-    float _dx = 1;
+    // FDTD parameters 
+    const float um = 1.0f;
+    const float nm = um / 1.0e3;
+    const float SOURCE_WAVELENGTH = 1 * um;
+    const float SOURCE_FREQUENCY = c0 / SOURCE_WAVELENGTH;  // frequency of the source
+    const float SOURCE_OMEGA = 2 * PI * SOURCE_FREQUENCY;
+    const float _dx = SOURCE_WAVELENGTH / 30;
+    const float dt = 0.56f * _dx / c0;  // courant factor: c * dt < dx / sqrt(3)
+    float J_source_amp = 5e4;
+    float M_source_amp = J_source_amp * std::pow(eta0, 3.0);
+    float freq_sigma = 0.02 * SOURCE_FREQUENCY;
+    float t_sigma = 1 / freq_sigma / (2 * PI); // used to calculate Gaussian pulse width
+    float t_peak = 5 * t_sigma;
 };  
 
 void gDiamond::update_FDTD_seq(size_t num_timesteps) {
 
   // create temporary E and H for experiments
-  std::vector<float> Ex_temp(_Nx * _Ny * _Nz);
-  std::vector<float> Ey_temp(_Nx * _Ny * _Nz);
-  std::vector<float> Ez_temp(_Nx * _Ny * _Nz);
-  std::vector<float> Hx_temp(_Nx * _Ny * _Nz);
-  std::vector<float> Hy_temp(_Nx * _Ny * _Nz);
-  std::vector<float> Hz_temp(_Nx * _Ny * _Nz);
-  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    Ex_temp[i] = _Ex[i];
-    Ey_temp[i] = _Ey[i];
-    Ez_temp[i] = _Ez[i];
-    Hx_temp[i] = _Hx[i];
-    Hy_temp[i] = _Hy[i];
-    Hz_temp[i] = _Hz[i];
-  }
+  std::vector<float> Ex_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Ey_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Ez_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Hx_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Hy_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Hz_temp(_Nx * _Ny * _Nz, 0);
+
+  // clear source Mz for experiments
+  _Mz.clear();
 
   auto start = std::chrono::high_resolution_clock::now();
   for(size_t t=0; t<num_timesteps; t++) {
+
+    float Mz_value = M_source_amp * std::sin(SOURCE_OMEGA * t * dt);
+    _Mz[_source_idx] = Mz_value;
 
     // update E
     for(size_t k=1; k<_Nz-1; k++) {
@@ -220,6 +242,34 @@ void gDiamond::update_FDTD_seq(size_t num_timesteps) {
         }
       }
     }
+
+    /*
+    // Record the field using a monitor, once in a while
+    if (t % (num_timesteps/10) == 0)
+    {
+      printf("Iter: %ld / %ld \n", t, num_timesteps);
+
+      float *H_time_monitor_xy;
+      H_time_monitor_xy = (float *)malloc(_Nx * _Ny * sizeof(float));
+      memset(H_time_monitor_xy, 0, _Nx * _Ny * sizeof(float));
+
+      // ------------ plotting time domain
+      // File name initialization
+      char field_filename[50];
+      size_t k = _Nz / 2;  // Assuming you want the middle slice
+      for(size_t i=0; i<_Nx; i++) {
+        for(size_t j=0; j<_Ny; j++) {
+          H_time_monitor_xy[i + j*_Nx] = Hz_temp[i + j*_Nz + k*_Nx*_Ny];
+        }
+      }
+
+      snprintf(field_filename, sizeof(field_filename), "figures/Hz_seq_%04ld.png", t);
+      save_field_png(H_time_monitor_xy, field_filename, _Nx, _Ny, 1.0 / sqrt(mu0 / eps0));
+
+      free(H_time_monitor_xy);
+    }
+    */
+
   }
   auto end = std::chrono::high_resolution_clock::now();
   std::cout << "seq runtime: " << std::chrono::duration<double>(end-start).count() << "s\n"; 
@@ -449,6 +499,82 @@ std::vector<int> gDiamond::_set_ranges(size_t t, size_t xx, size_t yy, size_t zz
   }
 
   return results;
+}
+
+void gDiamond::print_results() {
+
+  std::cout << "Ex_seq = ";
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    std::cout << _Ex_seq[i] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "Ex_gpu = ";
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    std::cout << _Ex_gpu[i] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "Ey_seq = ";
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    std::cout << _Ey_seq[i] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "Ey_gpu = ";
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    std::cout << _Ey_gpu[i] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "Ez_seq = ";
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    std::cout << _Ez_seq[i] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "Ez_gpu = ";
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    std::cout << _Ez_gpu[i] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "Hx_seq = ";
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    std::cout << _Hx_seq[i] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "Hx_gpu = ";
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    std::cout << _Hx_gpu[i] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "Hy_seq = ";
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    std::cout << _Hy_seq[i] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "Hy_gpu = ";
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    std::cout << _Hy_gpu[i] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "Hz_seq = ";
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    std::cout << _Hz_seq[i] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "Hz_gpu = ";
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    std::cout << _Hz_gpu[i] << " ";
+  }
+  std::cout << "\n";
+
 }
 
 } // end of namespace gdiamond
