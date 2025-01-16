@@ -8,7 +8,7 @@ int main() {
   size_t num_timesteps = 100;
   gdiamond::gDiamond exp(Nx, Ny, Nz); 
 
-  exp.update_FDTD_seq(num_timesteps);
+  exp.update_FDTD_seq_test(num_timesteps);
   exp.update_FDTD_omp(num_timesteps);
 
   if(!exp.check_correctness_omp()) {

@@ -59,6 +59,7 @@ class gDiamond {
 
     // run FDTD in cpu single thread
     void update_FDTD_seq(size_t num_timesteps);
+    void update_FDTD_seq_test(size_t num_timesteps);
 
     // run FDTD in openmp
     void update_FDTD_omp(size_t num_timesteps);
@@ -86,8 +87,14 @@ class gDiamond {
                                  std::vector<std::vector<size_t>>& valley_ranges
                                  );
 
-    // set ranges according to phases
-    std::vector<int> _set_ranges(size_t t, size_t xx, size_t yy, size_t zz, size_t phase);
+    // set tile ranges according to phases (the range of a specific mountain/valley)
+    std::vector<int> _set_ranges(size_t row, size_t xx, size_t yy, size_t zz, size_t phase);
+    std::vector<size_t> _set_ranges_X(size_t row, size_t xx, size_t phase);
+    std::vector<size_t> _set_ranges_Y(size_t row, size_t yy, size_t phase);
+    std::vector<size_t> _set_ranges_Z(size_t row, size_t zz, size_t phase);
+
+    // set number of tiles according to phases (the number of mountains/valleys)
+    std::vector<int> _set_num_tiles(size_t row, size_t phase);
 
     // diamond tiles
     // mountain indices in different time steps
@@ -109,6 +116,27 @@ class gDiamond {
     std::vector<std::vector<size_t>> _valley_ranges_X;
     std::vector<std::vector<size_t>> _valley_ranges_Y;
     std::vector<std::vector<size_t>> _valley_ranges_Z;
+
+    // ntiles for 8 phases
+    // 1st dimension is BLT
+    // 2nd dimension is phases
+    std::vector<std::vector<size_t>> _Entiles_phases_X;
+    std::vector<std::vector<size_t>> _Entiles_phases_Y;
+    std::vector<std::vector<size_t>> _Entiles_phases_Z;
+    std::vector<std::vector<size_t>> _Hntiles_phases_X;
+    std::vector<std::vector<size_t>> _Hntiles_phases_Y;
+    std::vector<std::vector<size_t>> _Hntiles_phases_Z;
+    
+    // ranges for 8 phases
+    // 1st dimension is xx (which mountains)
+    // 2nd dimension is BLT, pair<head, tail>
+    // 3rd dimension is phases
+    std::vector<std::vector<std::vector<std::pair<size_t, size_t>>>> _Eranges_phases_X;
+    std::vector<std::vector<std::vector<std::pair<size_t, size_t>>>> _Eranges_phases_Y;
+    std::vector<std::vector<std::vector<std::pair<size_t, size_t>>>> _Eranges_phases_Z;
+    std::vector<std::vector<std::vector<std::pair<size_t, size_t>>>> _Hranges_phases_X;
+    std::vector<std::vector<std::vector<std::pair<size_t, size_t>>>> _Hranges_phases_Y;
+    std::vector<std::vector<std::vector<std::pair<size_t, size_t>>>> _Hranges_phases_Z;
 
     size_t _Nx;
     size_t _Ny;
@@ -211,6 +239,7 @@ void gDiamond::update_FDTD_seq(size_t num_timesteps) {
   for(size_t t=0; t<num_timesteps; t++) {
 
     float Mz_value = M_source_amp * std::sin(SOURCE_OMEGA * t * dt);
+    // std::cout << "seq: Mz_value = " << Mz_value << "\n";
     _Mz[_source_idx] = Mz_value;
 
     // update E
@@ -283,6 +312,73 @@ void gDiamond::update_FDTD_seq(size_t num_timesteps) {
     _Hz_seq[i] = Hz_temp[i];
   }
 }
+
+void gDiamond::update_FDTD_seq_test(size_t num_timesteps) {
+
+  // create temporary E and H for experiments
+  std::vector<float> Ex_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Ey_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Ez_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Hx_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Hy_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Hz_temp(_Nx * _Ny * _Nz, 0);
+
+  // clear source Mz for experiments
+  _Mz.clear();
+
+  auto start = std::chrono::high_resolution_clock::now();
+  size_t BLT = 10;
+  for(size_t tt=0; tt<num_timesteps/BLT; tt++) {
+    for(size_t t=0; t<BLT; t+=1) { 
+
+      float Mz_value = M_source_amp * std::sin(SOURCE_OMEGA * (t+tt*BLT) * dt);
+      _Mz[_source_idx] = Mz_value;
+
+      // update E
+      for(size_t k=1; k<_Nz-1; k++) {
+        for(size_t j=1; j<_Ny-1; j++) {
+          for(size_t i=1; i<_Nx-1; i++) {
+            size_t idx = i + j*_Nx + k*(_Nx*_Ny);
+            Ex_temp[idx] = _Cax[idx] * Ex_temp[idx] + _Cbx[idx] *
+              ((Hz_temp[idx] - Hz_temp[idx - _Nx]) - (Hy_temp[idx] - Hy_temp[idx - _Nx * _Ny]) - _Jx[idx] * _dx);
+            Ey_temp[idx] = _Cay[idx] * Ey_temp[idx] + _Cby[idx] *
+              ((Hx_temp[idx] - Hx_temp[idx - _Nx * _Ny]) - (Hz_temp[idx] - Hz_temp[idx - 1]) - _Jy[idx] * _dx);
+            Ez_temp[idx] = _Caz[idx] * Ez_temp[idx] + _Cbz[idx] *
+              ((Hy_temp[idx] - Hy_temp[idx - 1]) - (Hx_temp[idx] - Hx_temp[idx - _Nx]) - _Jz[idx] * _dx);
+          }
+        }
+      }
+
+      // update H
+      for(size_t k=1; k<_Nz-1; k++) {
+        for(size_t j=1; j<_Ny-1; j++) {
+          for(size_t i=1; i<_Nx-1; i++) {
+            size_t idx = i + j*_Nx + k*(_Nx*_Ny);
+            Hx_temp[idx] = _Dax[idx] * Hx_temp[idx] + _Dbx[idx] *
+              ((Ey_temp[idx + _Nx * _Ny] - Ey_temp[idx]) - (Ez_temp[idx + _Nx] - Ez_temp[idx]) - _Mx[idx] * _dx);
+            Hy_temp[idx] = _Day[idx] * Hy_temp[idx] + _Dby[idx] *
+              ((Ez_temp[idx + 1] - Ez_temp[idx]) - (Ex_temp[idx + _Nx * _Ny] - Ex_temp[idx]) - _My[idx] * _dx);
+            Hz_temp[idx] = _Daz[idx] * Hz_temp[idx] + _Dbz[idx] *
+              ((Ex_temp[idx + _Nx] - Ex_temp[idx]) - (Ey_temp[idx + 1] - Ey_temp[idx]) - _Mz[idx] * _dx);
+          }
+        }
+      }
+    }
+  }
+  auto end = std::chrono::high_resolution_clock::now();
+  std::cout << "seq test runtime: " << std::chrono::duration<double>(end-start).count() << "s\n"; 
+
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    _Ex_seq[i] = Ex_temp[i];
+    _Ey_seq[i] = Ey_temp[i];
+    _Ez_seq[i] = Ez_temp[i];
+    _Hx_seq[i] = Hx_temp[i];
+    _Hy_seq[i] = Hy_temp[i];
+    _Hz_seq[i] = Hz_temp[i];
+  }
+}
+
+
 
 bool gDiamond::check_correctness_gpu() {
   bool correct = true;
@@ -404,96 +500,198 @@ void gDiamond::_get_indices_and_ranges(size_t BLX, size_t BLT, size_t Nx,
 
 }
 
-std::vector<int> gDiamond::_set_ranges(size_t t, size_t xx, size_t yy, size_t zz, size_t phase) {
+std::vector<size_t> gDiamond::_set_ranges_X(size_t row, size_t xx, size_t phase) {
+
+  // results = {x_head, x_tail}
+  std::vector<size_t> results(2); 
+  if(phase == 0 || phase == 2 || phase == 3 || phase == 6) {
+    results[0] = std::max(_mountain_indices_X[row][xx], static_cast<size_t>(1));
+    results[1] = std::min(_mountain_indices_X[row][xx] + _mountain_ranges_X[row][xx] - 1, _Nx-2);
+  }
+  else if(phase == 1 || phase == 4 || phase == 5 || phase == 7) {
+    results[0] = std::max(_valley_indices_X[row][xx], static_cast<size_t>(1));
+    results[1] = std::min(_valley_indices_X[row][xx] + _valley_ranges_X[row][xx] - 1, _Nx-2);
+  }
+  else {
+    std::cerr << "error: phase wrong\n";
+    std::exit(EXIT_FAILURE);
+  }
+
+  return results;
+}
+
+std::vector<size_t> gDiamond::_set_ranges_Y(size_t row, size_t yy, size_t phase) {
+
+  // results = {y_head, y_tail}
+  std::vector<size_t> results(2); 
+  if(phase == 0 || phase == 1 || phase == 3 || phase == 5) {
+    results[0] = std::max(_mountain_indices_Y[row][yy], static_cast<size_t>(1));
+    results[1] = std::min(_mountain_indices_Y[row][yy] + _mountain_ranges_Y[row][yy] - 1, _Ny-2);
+  }
+  else if(phase == 2 || phase == 4 || phase == 6 || phase == 7) {
+    results[0] = std::max(_valley_indices_Y[row][yy], static_cast<size_t>(1));
+    results[1] = std::min(_valley_indices_Y[row][yy] + _valley_ranges_Y[row][yy] - 1, _Ny-2);
+  }
+  else {
+    std::cerr << "error: phase wrong\n";
+    std::exit(EXIT_FAILURE);
+  }
+
+  return results;
+}
+
+std::vector<size_t> gDiamond::_set_ranges_Z(size_t row, size_t zz, size_t phase) {
+
+  // results = {z_head, z_tail}
+  std::vector<size_t> results(2); 
+  if(phase == 0 || phase == 1 || phase == 2 || phase == 4) {
+    results[0] = std::max(_mountain_indices_Z[row][zz], static_cast<size_t>(1));
+    results[1] = std::min(_mountain_indices_Z[row][zz] + _mountain_ranges_Z[row][zz] - 1, _Nz-2);
+  }
+  else if(phase == 3 || phase == 5 || phase == 6 || phase == 7) {
+    results[0] = std::max(_valley_indices_Z[row][zz], static_cast<size_t>(1));
+    results[1] = std::min(_valley_indices_Z[row][zz] + _valley_ranges_Z[row][zz] - 1, _Nz-2);
+  }
+  else {
+    std::cerr << "error: phase wrong\n";
+    std::exit(EXIT_FAILURE);
+  }
+
+  return results;
+}
+
+std::vector<int> gDiamond::_set_ranges(size_t row, size_t xx, size_t yy, size_t zz, size_t phase) {
  
   // results = {x_head, x_tail, y_head, y_tail, z_head, z_tail}
   std::vector<int> results(6, -1); 
   switch(phase) {
     case 0: // phase 1: mountains on X, mountains on Y, mountains on Z
-      results[0] = (_mountain_indices_X[t][xx] >= 1)? _mountain_indices_X[t][xx]:1;
-      results[1] = (results[0] + _mountain_ranges_X[t][xx] - 1 <= _Nx-2)? 
-                      results[0] + _mountain_ranges_X[t][xx] - 1:_Nx-2;
-      results[2] = (_mountain_indices_Y[t][yy] >= 1)? _mountain_indices_Y[t][yy]:1;
-      results[3] = (results[2] + _mountain_ranges_Y[t][yy] - 1 <= _Ny-2)? 
-                      results[2] + _mountain_ranges_Y[t][yy] - 1:_Ny-2;
-      results[4] = (_mountain_indices_Z[t][zz] >= 1)? _mountain_indices_Z[t][zz]:1;
-      results[5] = (results[4] + _mountain_ranges_Z[t][zz] - 1 <= _Nz-2)? 
-                      results[4] + _mountain_ranges_Z[t][zz] - 1:_Nz-2;
+      results[0] = std::max(_mountain_indices_X[row][xx], static_cast<size_t>(1));
+      results[1] = std::min(_mountain_indices_X[row][xx] + _mountain_ranges_X[row][xx] - 1, _Nx-2);
+      results[2] = std::max(_mountain_indices_Y[row][yy], static_cast<size_t>(1));
+      results[3] = std::min(_mountain_indices_Y[row][yy] + _mountain_ranges_Y[row][yy] - 1, _Ny-2);
+      results[4] = std::max(_mountain_indices_Z[row][zz], static_cast<size_t>(1));
+      results[5] = std::min(_mountain_indices_Z[row][zz] + _mountain_ranges_Z[row][zz] - 1, _Nz-2);
+      break;
     case 1: // phase 2: valleys on X, mountains on Y, mountains on Z
-      results[0] = (_valley_indices_X[t][xx] >= 1)? _valley_indices_X[t][xx]:1;
-      results[1] = (results[0] + _valley_ranges_X[t][xx] - 1 <= _Nx-2)? 
-                      results[0] + _valley_ranges_X[t][xx] - 1:_Nx-2;
-      results[2] = (_mountain_indices_Y[t][yy] >= 1)? _mountain_indices_Y[t][yy]:1;
-      results[3] = (results[2] + _mountain_ranges_Y[t][yy] - 1 <= _Ny-2)? 
-                      results[2] + _mountain_ranges_Y[t][yy] - 1:_Ny-2;
-      results[4] = (_mountain_indices_Z[t][zz] >= 1)? _mountain_indices_Z[t][zz]:1;
-      results[5] = (results[4] + _mountain_ranges_Z[t][zz] - 1 <= _Nz-2)? 
-                      results[4] + _mountain_ranges_Z[t][zz] - 1:_Nz-2;
+      results[0] = std::max(_valley_indices_X[row][xx], static_cast<size_t>(1));
+      results[1] = std::min(_valley_indices_X[row][xx] + _valley_ranges_X[row][xx] - 1, _Nx-2);
+      results[2] = std::max(_mountain_indices_Y[row][yy], static_cast<size_t>(1));
+      results[3] = std::min(_mountain_indices_Y[row][yy] + _mountain_ranges_Y[row][yy] - 1, _Ny-2);
+      results[4] = std::max(_mountain_indices_Z[row][zz], static_cast<size_t>(1));
+      results[5] = std::min(_mountain_indices_Z[row][zz] + _mountain_ranges_Z[row][zz] - 1, _Nz-2);
+      break;
     case 2: // phase 3: mountains on X, valleys on Y, mountains on Z
-      results[0] = (_mountain_indices_X[t][xx] >= 1)? _mountain_indices_X[t][xx]:1;
-      results[1] = (results[0] + _mountain_ranges_X[t][xx] - 1 <= _Nx-2)? 
-                      results[0] + _mountain_ranges_X[t][xx] - 1:_Nx-2;
-      results[2] = (_valley_indices_Y[t][yy] >= 1)? _valley_indices_Y[t][yy]:1;
-      results[3] = (results[2] + _valley_ranges_Y[t][yy] - 1 <= _Ny-2)? 
-                      results[2] + _valley_ranges_Y[t][yy] - 1:_Ny-2;
-      results[4] = (_mountain_indices_Z[t][zz] >= 1)? _mountain_indices_Z[t][zz]:1;
-      results[5] = (results[4] + _mountain_ranges_Z[t][zz] - 1 <= _Nz-2)? 
-                      results[4] + _mountain_ranges_Z[t][zz] - 1:_Nz-2;
+      results[0] = std::max(_mountain_indices_X[row][xx], static_cast<size_t>(1));
+      results[1] = std::min(_mountain_indices_X[row][xx] + _mountain_ranges_X[row][xx] - 1, _Nx-2);
+      results[2] = std::max(_valley_indices_Y[row][yy], static_cast<size_t>(1));
+      results[3] = std::min(_valley_indices_Y[row][yy] + _valley_ranges_Y[row][yy] - 1, _Ny-2);
+      results[4] = std::max(_mountain_indices_Z[row][zz], static_cast<size_t>(1));
+      results[5] = std::min(_mountain_indices_Z[row][zz] + _mountain_ranges_Z[row][zz] - 1, _Nz-2);
+      break;
     case 3: // phase 4: mountains on X, mountains on Y, valleys on Z
-      results[0] = (_mountain_indices_X[t][xx] >= 1)? _mountain_indices_X[t][xx]:1;
-      results[1] = (results[0] + _mountain_ranges_X[t][xx] - 1 <= _Nx-2)? 
-                      results[0] + _mountain_ranges_X[t][xx] - 1:_Nx-2;
-      results[2] = (_mountain_indices_Y[t][yy] >= 1)? _mountain_indices_Y[t][yy]:1;
-      results[3] = (results[2] + _mountain_ranges_Y[t][yy] - 1 <= _Ny-2)? 
-                      results[2] + _mountain_ranges_Y[t][yy] - 1:_Ny-2;
-      results[4] = (_valley_indices_Z[t][zz] >= 1)? _valley_indices_Z[t][zz]:1;
-      results[5] = (results[4] + _valley_ranges_Z[t][zz] - 1 <= _Nz-2)? 
-                      results[4] + _valley_ranges_Z[t][zz] - 1:_Nz-2;
+      results[0] = std::max(_mountain_indices_X[row][xx], static_cast<size_t>(1));
+      results[1] = std::min(_mountain_indices_X[row][xx] + _mountain_ranges_X[row][xx] - 1, _Nx-2);
+      results[2] = std::max(_mountain_indices_Y[row][yy], static_cast<size_t>(1));
+      results[3] = std::min(_mountain_indices_Y[row][yy] + _mountain_ranges_Y[row][yy] - 1, _Ny-2);
+      results[4] = std::max(_valley_indices_Z[row][zz], static_cast<size_t>(1));
+      results[5] = std::min(_valley_indices_Z[row][zz] + _valley_ranges_Z[row][zz] - 1, _Nz-2);
+      break;
     case 4: // phase 5: valleys on X, valleys on Y, mountains on Z
-      results[0] = (_valley_indices_X[t][xx] >= 1)? _valley_indices_X[t][xx]:1;
-      results[1] = (results[0] + _valley_ranges_X[t][xx] - 1 <= _Nx-2)? 
-                      results[0] + _valley_ranges_X[t][xx] - 1:_Nx-2;
-      results[2] = (_valley_indices_Y[t][yy] >= 1)? _valley_indices_Y[t][yy]:1;
-      results[3] = (results[2] + _valley_ranges_Y[t][yy] - 1 <= _Ny-2)? 
-                      results[2] + _valley_ranges_Y[t][yy] - 1:_Ny-2;
-      results[4] = (_mountain_indices_Z[t][zz] >= 1)? _mountain_indices_Z[t][zz]:1;
-      results[5] = (results[4] + _mountain_ranges_Z[t][zz] - 1 <= _Nz-2)? 
-                      results[4] + _mountain_ranges_Z[t][zz] - 1:_Nz-2;
+      results[0] = std::max(_valley_indices_X[row][xx], static_cast<size_t>(1));
+      results[1] = std::min(_valley_indices_X[row][xx] + _valley_ranges_X[row][xx] - 1, _Nx-2);
+      results[2] = std::max(_valley_indices_Y[row][yy], static_cast<size_t>(1));
+      results[3] = std::min(_valley_indices_Y[row][yy] + _valley_ranges_Y[row][yy] - 1, _Ny-2);
+      results[4] = std::max(_mountain_indices_Z[row][zz], static_cast<size_t>(1));
+      results[5] = std::min(_mountain_indices_Z[row][zz] + _mountain_ranges_Z[row][zz] - 1, _Nz-2);
+      break;
     case 5: // phase 6: valleys on X, mountains on Y, valleys on Z
-      results[0] = (_valley_indices_X[t][xx] >= 1)? _valley_indices_X[t][xx]:1;
-      results[1] = (results[0] + _valley_ranges_X[t][xx] - 1 <= _Nx-2)? 
-                      results[0] + _valley_ranges_X[t][xx] - 1:_Nx-2;
-      results[2] = (_mountain_indices_Y[t][yy] >= 1)? _mountain_indices_Y[t][yy]:1;
-      results[3] = (results[2] + _mountain_ranges_Y[t][yy] - 1 <= _Ny-2)? 
-                      results[2] + _mountain_ranges_Y[t][yy] - 1:_Ny-2;
-      results[4] = (_valley_indices_Z[t][zz] >= 1)? _valley_indices_Z[t][zz]:1;
-      results[5] = (results[4] + _valley_ranges_Z[t][zz] - 1 <= _Nz-2)? 
-                      results[4] + _valley_ranges_Z[t][zz] - 1:_Nz-2;
+      results[0] = std::max(_valley_indices_X[row][xx], static_cast<size_t>(1));
+      results[1] = std::min(_valley_indices_X[row][xx] + _valley_ranges_X[row][xx] - 1, _Nx-2);
+      results[2] = std::max(_mountain_indices_Y[row][yy], static_cast<size_t>(1));
+      results[3] = std::min(_mountain_indices_Y[row][yy] + _mountain_ranges_Y[row][yy] - 1, _Ny-2);
+      results[4] = std::max(_valley_indices_Z[row][zz], static_cast<size_t>(1));
+      results[5] = std::min(_valley_indices_Z[row][zz] + _valley_ranges_Z[row][zz] - 1, _Nz-2);
+      break;
     case 6: // phase 7: mountains on X, valleys on Y, valleys on Z
-      results[0] = (_mountain_indices_X[t][xx] >= 1)? _mountain_indices_X[t][xx]:1;
-      results[1] = (results[0] + _mountain_ranges_X[t][xx] - 1 <= _Nx-2)? 
-                      results[0] + _mountain_ranges_X[t][xx] - 1:_Nx-2;
-      results[2] = (_valley_indices_Y[t][yy] >= 1)? _valley_indices_Y[t][yy]:1;
-      results[3] = (results[2] + _valley_ranges_Y[t][yy] - 1 <= _Ny-2)? 
-                      results[2] + _valley_ranges_Y[t][yy] - 1:_Ny-2;
-      results[4] = (_valley_indices_Z[t][zz] >= 1)? _valley_indices_Z[t][zz]:1;
-      results[5] = (results[4] + _valley_ranges_Z[t][zz] - 1 <= _Nz-2)? 
-                      results[4] + _valley_ranges_Z[t][zz] - 1:_Nz-2;
+      results[0] = std::max(_mountain_indices_X[row][xx], static_cast<size_t>(1));
+      results[1] = std::min(_mountain_indices_X[row][xx] + _mountain_ranges_X[row][xx] - 1, _Nx-2);
+      results[2] = std::max(_valley_indices_Y[row][yy], static_cast<size_t>(1));
+      results[3] = std::min(_valley_indices_Y[row][yy] + _valley_ranges_Y[row][yy] - 1, _Ny-2);
+      results[4] = std::max(_valley_indices_Z[row][zz], static_cast<size_t>(1));
+      results[5] = std::min(_valley_indices_Z[row][zz] + _valley_ranges_Z[row][zz] - 1, _Nz-2);
+      break;
     case 7: // phase 8: valleys on X, valleys on Y, valleys on Z
-      results[0] = (_valley_indices_X[t][xx] >= 1)? _valley_indices_X[t][xx]:1;
-      results[1] = (results[0] + _valley_ranges_X[t][xx] - 1 <= _Nx-2)? 
-                      results[0] + _valley_ranges_X[t][xx] - 1:_Nx-2;
-      results[2] = (_valley_indices_Y[t][yy] >= 1)? _valley_indices_Y[t][yy]:1;
-      results[3] = (results[2] + _valley_ranges_Y[t][yy] - 1 <= _Ny-2)? 
-                      results[2] + _valley_ranges_Y[t][yy] - 1:_Ny-2;
-      results[4] = (_valley_indices_Z[t][zz] >= 1)? _valley_indices_Z[t][zz]:1;
-      results[5] = (results[4] + _valley_ranges_Z[t][zz] - 1 <= _Nz-2)? 
-                      results[4] + _valley_ranges_Z[t][zz] - 1:_Nz-2;
+      results[0] = std::max(_valley_indices_X[row][xx], static_cast<size_t>(1));
+      results[1] = std::min(_valley_indices_X[row][xx] + _valley_ranges_X[row][xx] - 1, _Nx-2);
+      results[2] = std::max(_valley_indices_Y[row][yy], static_cast<size_t>(1));
+      results[3] = std::min(_valley_indices_Y[row][yy] + _valley_ranges_Y[row][yy] - 1, _Ny-2);
+      results[4] = std::max(_valley_indices_Z[row][zz], static_cast<size_t>(1));
+      results[5] = std::min(_valley_indices_Z[row][zz] + _valley_ranges_Z[row][zz] - 1, _Nz-2);
+      break;
   }
 
   for(size_t i=0; i<6; i++) {
     if(results[i] < 0) {
       std::cerr << "error: x_head/x_tail wrong\n";
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
+  return results;
+}
+
+std::vector<int> gDiamond::_set_num_tiles(size_t row, size_t phase) {
+
+  // results = {x_ntiles, y_ntiles, z_tiles}
+  std::vector<int> results(3, -1); 
+
+  switch(phase) {
+    case 0: // phase 1: mountains on X, mountains on Y, mountains on Z
+      results[0] = _mountain_indices_X[row].size(); 
+      results[1] = _mountain_indices_Y[row].size(); 
+      results[2] = _mountain_indices_Z[row].size(); 
+      break;
+    case 1: // phase 2: valleys on X, mountains on Y, mountains on Z
+      results[0] = _valley_indices_X[row].size(); 
+      results[1] = _mountain_indices_Y[row].size(); 
+      results[2] = _mountain_indices_Z[row].size(); 
+      break;
+    case 2: // phase 3: mountains on X, valleys on Y, mountains on Z
+      results[0] = _mountain_indices_X[row].size(); 
+      results[1] = _valley_indices_Y[row].size(); 
+      results[2] = _mountain_indices_Z[row].size(); 
+      break;
+    case 3: // phase 4: mountains on X, mountains on Y, valleys on Z
+      results[0] = _mountain_indices_X[row].size(); 
+      results[1] = _mountain_indices_Y[row].size(); 
+      results[2] = _valley_indices_Z[row].size(); 
+      break;
+    case 4: // phase 5: valleys on X, valleys on Y, mountains on Z
+      results[0] = _valley_indices_X[row].size(); 
+      results[1] = _valley_indices_Y[row].size(); 
+      results[2] = _mountain_indices_Z[row].size(); 
+      break;
+    case 5: // phase 6: valleys on X, mountains on Y, valleys on Z
+      results[0] = _valley_indices_X[row].size(); 
+      results[1] = _mountain_indices_Y[row].size(); 
+      results[2] = _valley_indices_Z[row].size(); 
+      break;
+    case 6: // phase 7: mountains on X, valleys on Y, valleys on Z
+      results[0] = _mountain_indices_X[row].size(); 
+      results[1] = _valley_indices_Y[row].size(); 
+      results[2] = _valley_indices_Z[row].size(); 
+      break;
+    case 7: // phase 8: valleys on X, valleys on Y, valleys on Z
+      results[0] = _valley_indices_X[row].size(); 
+      results[1] = _valley_indices_Y[row].size(); 
+      results[2] = _valley_indices_Z[row].size(); 
+      break;
+  }
+
+  for(size_t i=0; i<3; i++) {
+    if(results[i] < 0) {
+      std::cerr << "error: number of tiles wrong\n";
       std::exit(EXIT_FAILURE);
     }
   }
