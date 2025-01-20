@@ -1,7 +1,7 @@
 #ifndef KERNELS_CUH
 #define KERNELS_CUH
 
-__global__ void updateE(float * __restrict__ Ex, float * __restrict__ Ey, float * __restrict__ Ez,
+__global__ void updateE_2Dmap(float * __restrict__ Ex, float * __restrict__ Ey, float * __restrict__ Ez,
                         float * __restrict__ Hx, float * __restrict__ Hy, float * __restrict__ Hz,
                         float * __restrict__ Cax, float * __restrict__ Cbx, float * __restrict__ Cay,
                         float * __restrict__ Cby, float * __restrict__ Caz, float * __restrict__ Cbz,
@@ -30,7 +30,7 @@ __global__ void updateE(float * __restrict__ Ex, float * __restrict__ Ey, float 
   }
 }
 
-__global__ void updateH(float * __restrict__ Ex, float * __restrict__ Ey, float * __restrict__ Ez,
+__global__ void updateH_2Dmap(float * __restrict__ Ex, float * __restrict__ Ey, float * __restrict__ Ez,
                         float * __restrict__ Hx, float * __restrict__ Hy, float * __restrict__ Hz,
                         float * __restrict__ Dax, float * __restrict__ Dbx,
                         float * __restrict__ Day, float * __restrict__ Dby,

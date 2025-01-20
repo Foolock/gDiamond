@@ -100,8 +100,8 @@ void gDiamond::update_FDTD_gpu(size_t num_timesteps) {
   CUDACHECK(cudaMemcpy(Dbz, _Dbz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
 
   // set block and grid
-  dim3 blockSize(BLOCK_SIZE, 1);
-  dim3 gridSize((_Nx + blockSize.x - 1) / blockSize.x, _Ny);
+  dim3 blockSize_2D(BLOCK_SIZE, 1);
+  dim3 gridSize_2D((_Nx + blockSize_2D.x - 1) / blockSize_2D.x, _Ny);
 
   // size_t plot_interval = num_timesteps / 10;
 
@@ -113,12 +113,12 @@ void gDiamond::update_FDTD_gpu(size_t num_timesteps) {
     CUDACHECK(cudaMemcpy(Mz + _source_idx, &Mz_value, sizeof(float), cudaMemcpyHostToDevice));
     
     // update E
-    updateE<<<gridSize, blockSize, 0>>>(Ex, Ey, Ez,
+    updateE_2Dmap<<<gridSize_2D, blockSize_2D, 0>>>(Ex, Ey, Ez,
           Hx, Hy, Hz, Cax, Cbx, Cay, Cby, Caz, Cbz,
           Jx, Jy, Jz, _dx, _Nx, _Ny, _Nz);
 
     // update H
-    updateH<<<gridSize, blockSize, 0>>>(Ex, Ey, Ez,
+    updateH_2Dmap<<<gridSize_2D, blockSize_2D, 0>>>(Ex, Ey, Ez,
           Hx, Hy, Hz, Dax, Dbx, Day, Dby, Daz, Dbz,
           Mx, My, Mz, _dx, _Nx, _Ny, _Nz);
 
