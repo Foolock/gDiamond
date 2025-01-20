@@ -67,8 +67,9 @@ class gDiamond {
     // run FDTD in openmp with diamond tiling
     void update_FDTD_omp_dt(size_t BLX, size_t BLY, size_t BLZ, size_t BLT, size_t num_timesteps);
 
-    // run FDTD in gpu without diamond tiling 
-    void update_FDTD_gpu(size_t num_timesteps);
+    // run FDTD in gpu  
+    void update_FDTD_gpu_2D(size_t num_timesteps); // 2-D mapping, without diamond tiling, no pipeline
+    void update_FDTD_gpu_3D(size_t num_timesteps); // 3-D mapping, without diamond tiling, no pipeline
 
     // check correctness
     bool check_correctness_gpu();
