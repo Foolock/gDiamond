@@ -9,7 +9,7 @@ int main() {
   gdiamond::gDiamond exp(Nx, Ny, Nz); 
 
   exp.update_FDTD_seq(num_timesteps);
-  exp.update_FDTD_gpu_3D(num_timesteps);
+  exp.update_FDTD_gpu_3D_warp_underutilization_fix(num_timesteps);
 
   if(!exp.check_correctness_gpu()) {
     std::cerr << "error: results not match\n";

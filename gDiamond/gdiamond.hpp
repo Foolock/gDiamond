@@ -69,7 +69,8 @@ class gDiamond {
 
     // run FDTD in gpu  
     void update_FDTD_gpu_2D(size_t num_timesteps); // 2-D mapping, without diamond tiling, no pipeline
-    void update_FDTD_gpu_3D(size_t num_timesteps); // 3-D mapping, without diamond tiling, no pipeline
+    void update_FDTD_gpu_3D_warp_underutilization(size_t num_timesteps); // 3-D mapping, has warp underutilization issue 
+    void update_FDTD_gpu_3D_warp_underutilization_fix(size_t num_timesteps); // 3-D mapping, fix warp underutilization issue 
 
     // check correctness
     bool check_correctness_gpu();
