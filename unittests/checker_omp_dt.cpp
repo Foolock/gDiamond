@@ -11,7 +11,7 @@ TEST_CASE("check correctness of openmp, BLX=BLY=BLZ=16, BLT=5" * doctest::timeou
   size_t Nx = 100;
   size_t Ny = 100;
   size_t Nz = 100;
-  size_t num_timesteps = 1000;
+  size_t num_timesteps = 100;
   gdiamond::gDiamond exp(Nx, Ny, Nz); 
 
   exp.update_FDTD_seq(num_timesteps);

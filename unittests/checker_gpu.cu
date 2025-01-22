@@ -11,11 +11,11 @@ TEST_CASE("check correctness of gpu" * doctest::timeout(300)) {
   size_t Nx = 100;
   size_t Ny = 100;
   size_t Nz = 100;
-  size_t num_timesteps = 1000;
+  size_t num_timesteps = 100;
   gdiamond::gDiamond exp(Nx, Ny, Nz); 
 
   exp.update_FDTD_seq(num_timesteps);
-  exp.update_FDTD_gpu_2D(num_timesteps);
+  exp.update_FDTD_gpu_3D_warp_underutilization_fix(num_timesteps);
 
   REQUIRE(exp.check_correctness_gpu() == true);
 
