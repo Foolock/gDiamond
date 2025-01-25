@@ -1,11 +1,13 @@
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/examples)
 add_executable(gpu ${GDIAMOND_EXAMPLE_DIR}/gpu.cu)
+add_executable(gpu_dt ${GDIAMOND_EXAMPLE_DIR}/gpu_dt.cu)
 add_executable(omp ${GDIAMOND_EXAMPLE_DIR}/omp.cpp)
 add_executable(omp_dt ${GDIAMOND_EXAMPLE_DIR}/omp_dt.cpp)
 add_executable(seq ${GDIAMOND_EXAMPLE_DIR}/seq.cpp)
 
 list(APPEND GDIAMOND_EXAMPLES
   gpu
+  gpu_dt
   omp
   omp_dt
   seq

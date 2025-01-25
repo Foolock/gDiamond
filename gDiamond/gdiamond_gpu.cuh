@@ -440,6 +440,7 @@ void gDiamond::update_FDTD_gpu_3D_warp_underutilization_fix(size_t num_timesteps
 
   auto end = std::chrono::high_resolution_clock::now();
   std::cout << "gpu runtime (3-D mapping): " << std::chrono::duration<double>(end-start).count() << "s\n"; 
+  std::cout << "gpu performance: " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / std::chrono::duration<double>(end-start).count() << "Mcells/s\n";
 
   CUDACHECK(cudaFree(Ex));
   CUDACHECK(cudaFree(Ey));
@@ -467,6 +468,18 @@ void gDiamond::update_FDTD_gpu_3D_warp_underutilization_fix(size_t num_timesteps
   CUDACHECK(cudaFree(Dbz));
 }
 
+void gDiamond::update_FDTD_gpu_fuse_kernel(size_t num_timesteps) { // 3-D mapping, using diamond tiling to fuse kernels
+
+  // get the size of shared memory
+  int device;
+  cudaGetDevice(&device); // Get the currently active device
+  int sharedMemoryPerBlock;
+  cudaDeviceGetAttribute(&sharedMemoryPerBlock, cudaDevAttrMaxSharedMemoryPerBlock, device);
+  std::cout << "maximum shared memory per block: " << sharedMemoryPerBlock << " bytes" << std::endl;
+  std::cout << "maximum num of floats in shared memory: " << sharedMemoryPerBlock / sizeof(float) << "\n";
+
+
+}
 
 
 } // end of namespace gdiamond

@@ -71,6 +71,7 @@ class gDiamond {
     void update_FDTD_gpu_2D(size_t num_timesteps); // 2-D mapping, without diamond tiling, no pipeline
     void update_FDTD_gpu_3D_warp_underutilization(size_t num_timesteps); // 3-D mapping, has warp underutilization issue 
     void update_FDTD_gpu_3D_warp_underutilization_fix(size_t num_timesteps); // 3-D mapping, fix warp underutilization issue 
+    void update_FDTD_gpu_fuse_kernel(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels
 
     // check correctness
     bool check_correctness_gpu();
@@ -304,6 +305,7 @@ void gDiamond::update_FDTD_seq(size_t num_timesteps) {
   }
   auto end = std::chrono::high_resolution_clock::now();
   std::cout << "seq runtime: " << std::chrono::duration<double>(end-start).count() << "s\n"; 
+  std::cout << "seq performance: " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / std::chrono::duration<double>(end-start).count() << "Mcells/s\n";
 
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
     _Ex_seq[i] = Ex_temp[i];
