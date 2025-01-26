@@ -478,6 +478,23 @@ void gDiamond::update_FDTD_gpu_fuse_kernel(size_t num_timesteps) { // 3-D mappin
   std::cout << "maximum shared memory per block: " << sharedMemoryPerBlock << " bytes" << std::endl;
   std::cout << "maximum num of floats in shared memory: " << sharedMemoryPerBlock / sizeof(float) << "\n";
 
+  /*
+    let’s actually consider updateE and updateH together.
+    To calculate just one mountain,
+    We will need Ca, Cb, J, Da, Db, M, in 3 dimensions, that is 3*6 = 18 constant arrays.
+    For E and H in 3 dimensions, which is 2*3 = 6 arrays, we will also need them in shared memory.
+    So that is 18 + 6 =  24 arrays in total. We need to store 24 arrays in shared memory.
+    Note that we are not storing the total length, which is Nx*Ny*Nz, of these arrays, we are storing
+    Just the amount to calculate each mountains.
+    If our mountain bottom length in X, Y, Z dimensions are BLX, BLY, and BLZ. 
+    Then for each of these 24 arrays, we will need to store BLX*BLY*BLZ of them.
+    That is 24*BLX*BLY*BLZ <= NUM_FLOATS_SHARED_MEM
+
+    NUM_FLOATS_SHARED_MEM in our GPU (A4000) is 12288.
+    12288 / 24 = 512. So BLX*BLY*BLZ <= 512.
+    If we set BLX = BLY = BLZ, then BLX = BLY = BLZ = 8.
+  */
+
 
 }
 
