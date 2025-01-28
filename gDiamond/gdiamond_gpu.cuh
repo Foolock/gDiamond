@@ -825,16 +825,20 @@ void gDiamond::update_FDTD_gpu_fuse_kernel(size_t num_timesteps) { // 3-D mappin
 
   // set block size 
   size_t block_size = BLX_GPU * BLY_GPU * BLZ_GPU;
-  size_t grid_size;
-  size_t shared_memory_size = BLX_GPU * BLY_GPU * BLZ_GPU * 12 +
-                              (BLX_GPU + 1) * (BLY_GPU + 1) * (BLZ_GPU + 1) * 6;  
+  size_t grid_size = num_mountains_X * num_mountains_Y * num_mountains_Z;
+  // size_t shared_memory_size = (BLX_GPU * BLY_GPU * BLZ_GPU * 12 +
+  //                             (BLX_GPU + 1) * (BLY_GPU + 1) * (BLZ_GPU + 1) * 6) * 4;  
+  size_t shared_memory_size = BLX_EH * BLY_EH * BLZ_EH * 6 * sizeof(float);  
+  std::cout << "grid_size = " << grid_size << "\n";
+  std::cout << "block_size = " << block_size << "\n";
+  std::cout << "shared_memory_size = " << shared_memory_size << "\n";
 
   for(size_t t=0; t<num_timesteps/BLT_GPU; t++) {
     // grid size is changing for each phase
 
     // phase 1: (m, m, m)
     grid_size = num_mountains_X * num_mountains_Y * num_mountains_Z;
-    updateEH_phase<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
+    updateEH_phase_EH_shared_only<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
                                    Hx, Hy, Hz,
                                    Cax, Cbx,
                                    Cay, Cby,
@@ -851,9 +855,14 @@ void gDiamond::update_FDTD_gpu_fuse_kernel(size_t num_timesteps) { // 3-D mappin
                                    mountain_heads_Y_d, 
                                    mountain_heads_Z_d);
 
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+      std::cerr << "phase 1 kernel launch error: " << cudaGetErrorString(err) << std::endl;
+    }
+
     // phase 2: (v, m, m) 
     grid_size = num_valleys_X * num_mountains_Y * num_mountains_Z;
-    updateEH_phase<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
+    updateEH_phase_EH_shared_only<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
                                    Hx, Hy, Hz,
                                    Cax, Cbx,
                                    Cay, Cby,
@@ -870,9 +879,14 @@ void gDiamond::update_FDTD_gpu_fuse_kernel(size_t num_timesteps) { // 3-D mappin
                                    mountain_heads_Y_d, 
                                    mountain_heads_Z_d);
 
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+      std::cerr << "phase 2 kernel launch error: " << cudaGetErrorString(err) << std::endl;
+    }
+
     // phase 3: (m, v, m)
     grid_size = num_mountains_X * num_valleys_Y * num_mountains_Z;
-    updateEH_phase<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
+    updateEH_phase_EH_shared_only<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
                                    Hx, Hy, Hz,
                                    Cax, Cbx,
                                    Cay, Cby,
@@ -888,10 +902,14 @@ void gDiamond::update_FDTD_gpu_fuse_kernel(size_t num_timesteps) { // 3-D mappin
                                    mountain_heads_X_d, 
                                    valley_heads_Y_d, 
                                    mountain_heads_Z_d);
+   err = cudaGetLastError();
+   if (err != cudaSuccess) {
+     std::cerr << "phase 3 kernel launch error: " << cudaGetErrorString(err) << std::endl;
+   }
 
   // phase 4: (m, m, v)
   grid_size = num_mountains_X * num_mountains_Y * num_valleys_Z;
-  updateEH_phase<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
+  updateEH_phase_EH_shared_only<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
                                    Hx, Hy, Hz,
                                    Cax, Cbx,
                                    Cay, Cby,
@@ -907,10 +925,14 @@ void gDiamond::update_FDTD_gpu_fuse_kernel(size_t num_timesteps) { // 3-D mappin
                                    mountain_heads_X_d,
                                    mountain_heads_Y_d,
                                    valley_heads_Z_d);
+   err = cudaGetLastError();
+   if (err != cudaSuccess) {
+     std::cerr << "phase 4 kernel launch error: " << cudaGetErrorString(err) << std::endl;
+   }
 
   // phase 5: (v, v, m)
   grid_size = num_valleys_X * num_valleys_Y * num_mountains_Z;
-  updateEH_phase<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
+  updateEH_phase_EH_shared_only<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
                                    Hx, Hy, Hz,
                                    Cax, Cbx,
                                    Cay, Cby,
@@ -926,10 +948,14 @@ void gDiamond::update_FDTD_gpu_fuse_kernel(size_t num_timesteps) { // 3-D mappin
                                    valley_heads_X_d,
                                    valley_heads_Y_d,
                                    mountain_heads_Z_d);
+   err = cudaGetLastError();
+   if (err != cudaSuccess) {
+     std::cerr << "phase 5 kernel launch error: " << cudaGetErrorString(err) << std::endl;
+   }
 
   // phase 6: (v, m, v)
   grid_size = num_valleys_X * num_mountains_Y * num_valleys_Z;
-  updateEH_phase<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
+  updateEH_phase_EH_shared_only<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
                                    Hx, Hy, Hz,
                                    Cax, Cbx,
                                    Cay, Cby,
@@ -945,10 +971,14 @@ void gDiamond::update_FDTD_gpu_fuse_kernel(size_t num_timesteps) { // 3-D mappin
                                    valley_heads_X_d,
                                    mountain_heads_Y_d,
                                    valley_heads_Z_d);
+   err = cudaGetLastError();
+   if (err != cudaSuccess) {
+     std::cerr << "phase 6 kernel launch error: " << cudaGetErrorString(err) << std::endl;
+   }
 
   // phase 7: (m, v, v)
   grid_size = num_mountains_X * num_valleys_Y * num_valleys_Z;
-  updateEH_phase<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
+  updateEH_phase_EH_shared_only<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
                                    Hx, Hy, Hz,
                                    Cax, Cbx,
                                    Cay, Cby,
@@ -964,10 +994,14 @@ void gDiamond::update_FDTD_gpu_fuse_kernel(size_t num_timesteps) { // 3-D mappin
                                    mountain_heads_X_d,
                                    valley_heads_Y_d,
                                    valley_heads_Z_d);
+   err = cudaGetLastError();
+   if (err != cudaSuccess) {
+     std::cerr << "phase 7 kernel launch error: " << cudaGetErrorString(err) << std::endl;
+   }
 
   // phase 8: (v, v, v)
   grid_size = num_valleys_X * num_valleys_Y * num_valleys_Z;
-  updateEH_phase<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
+  updateEH_phase_EH_shared_only<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
                                    Hx, Hy, Hz,
                                    Cax, Cbx,
                                    Cay, Cby,
@@ -983,6 +1017,10 @@ void gDiamond::update_FDTD_gpu_fuse_kernel(size_t num_timesteps) { // 3-D mappin
                                    valley_heads_X_d,
                                    valley_heads_Y_d,
                                    valley_heads_Z_d);
+   err = cudaGetLastError();
+   if (err != cudaSuccess) {
+     std::cerr << "phase 8 kernel launch error: " << cudaGetErrorString(err) << std::endl;
+   }
   }
   cudaDeviceSynchronize();
 
