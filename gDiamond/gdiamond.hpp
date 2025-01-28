@@ -74,6 +74,7 @@ class gDiamond {
     void update_FDTD_gpu_3D_warp_underutilization_fix(size_t num_timesteps); // 3-D mapping, fix warp underutilization issue 
     void update_FDTD_gpu_fuse_kernel(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels
     void update_FDTD_gpu_check_result(size_t num_timesteps); // only use for result checking
+    void update_FDTD_gpu_simulation(size_t num_timesteps); // simulation of gpu threads
 
     // check correctness
     bool check_correctness_gpu();
@@ -1145,6 +1146,7 @@ void gDiamond::_setup_diamond_tiling_gpu(size_t BLX, size_t BLY, size_t BLZ, siz
     _Hranges_phases_Z.push_back(Hranges_onephase_Z); 
   }
 
+  /*
   std::cout << "_Entiles_phases_X = \n";
   std::cout << "phase 1 = [";
   for(auto n : _Entiles_phases_X[0]) {
@@ -1180,6 +1182,7 @@ void gDiamond::_setup_diamond_tiling_gpu(size_t BLX, size_t BLY, size_t BLZ, siz
     std::cout << "(" << range.first << ", " << range.second << ") ";
   }
   std::cout << "]\n";
+  */
 }
 
 

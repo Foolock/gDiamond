@@ -826,13 +826,163 @@ void gDiamond::update_FDTD_gpu_fuse_kernel(size_t num_timesteps) { // 3-D mappin
   // set block size 
   size_t block_size = BLX_GPU * BLY_GPU * BLZ_GPU;
   size_t grid_size;
+  size_t shared_memory_size = BLX_GPU * BLY_GPU * BLZ_GPU * 12 +
+                              (BLX_GPU + 1) * (BLY_GPU + 1) * (BLZ_GPU + 1) * 6;  
 
-  for(size_t t=0; t<num_timesteps; t++) {
+  for(size_t t=0; t<num_timesteps/BLT_GPU; t++) {
     // grid size is changing for each phase
 
     // phase 1: (m, m, m)
     grid_size = num_mountains_X * num_mountains_Y * num_mountains_Z;
+    updateEH_phase<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
+                                   Hx, Hy, Hz,
+                                   Cax, Cbx,
+                                   Cay, Cby,
+                                   Caz, Cbz,
+                                   Dax, Dbx,
+                                   Day, Dby,
+                                   Daz, Dbz,
+                                   Jx, Jy, Jz,
+                                   Mx, My, Mz,
+                                   _dx, 
+                                   _Nx, _Ny, _Nz,
+                                   num_mountains_X, num_mountains_Y, num_mountains_Z, // number of tiles in each dimensions
+                                   mountain_heads_X_d, 
+                                   mountain_heads_Y_d, 
+                                   mountain_heads_Z_d);
 
+    // phase 2: (v, m, m) 
+    grid_size = num_valleys_X * num_mountains_Y * num_mountains_Z;
+    updateEH_phase<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
+                                   Hx, Hy, Hz,
+                                   Cax, Cbx,
+                                   Cay, Cby,
+                                   Caz, Cbz,
+                                   Dax, Dbx,
+                                   Day, Dby,
+                                   Daz, Dbz,
+                                   Jx, Jy, Jz,
+                                   Mx, My, Mz,
+                                   _dx, 
+                                   _Nx, _Ny, _Nz,
+                                   num_valleys_X, num_mountains_Y, num_mountains_Z, // number of tiles in each dimensions
+                                   valley_heads_X_d, 
+                                   mountain_heads_Y_d, 
+                                   mountain_heads_Z_d);
+
+    // phase 3: (m, v, m)
+    grid_size = num_mountains_X * num_valleys_Y * num_mountains_Z;
+    updateEH_phase<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
+                                   Hx, Hy, Hz,
+                                   Cax, Cbx,
+                                   Cay, Cby,
+                                   Caz, Cbz,
+                                   Dax, Dbx,
+                                   Day, Dby,
+                                   Daz, Dbz,
+                                   Jx, Jy, Jz,
+                                   Mx, My, Mz,
+                                   _dx, 
+                                   _Nx, _Ny, _Nz,
+                                   num_mountains_X, num_valleys_Y, num_mountains_Z, // number of tiles in each dimensions
+                                   mountain_heads_X_d, 
+                                   valley_heads_Y_d, 
+                                   mountain_heads_Z_d);
+
+  // phase 4: (m, m, v)
+  grid_size = num_mountains_X * num_mountains_Y * num_valleys_Z;
+  updateEH_phase<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
+                                   Hx, Hy, Hz,
+                                   Cax, Cbx,
+                                   Cay, Cby,
+                                   Caz, Cbz,
+                                   Dax, Dbx,
+                                   Day, Dby,
+                                   Daz, Dbz,
+                                   Jx, Jy, Jz,
+                                   Mx, My, Mz,
+                                   _dx,
+                                   _Nx, _Ny, _Nz,
+                                   num_mountains_X, num_mountains_Y, num_valleys_Z, // number of tiles in each dimensions
+                                   mountain_heads_X_d,
+                                   mountain_heads_Y_d,
+                                   valley_heads_Z_d);
+
+  // phase 5: (v, v, m)
+  grid_size = num_valleys_X * num_valleys_Y * num_mountains_Z;
+  updateEH_phase<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
+                                   Hx, Hy, Hz,
+                                   Cax, Cbx,
+                                   Cay, Cby,
+                                   Caz, Cbz,
+                                   Dax, Dbx,
+                                   Day, Dby,
+                                   Daz, Dbz,
+                                   Jx, Jy, Jz,
+                                   Mx, My, Mz,
+                                   _dx,
+                                   _Nx, _Ny, _Nz,
+                                   num_valleys_X, num_valleys_Y, num_mountains_Z, // number of tiles in each dimensions
+                                   valley_heads_X_d,
+                                   valley_heads_Y_d,
+                                   mountain_heads_Z_d);
+
+  // phase 6: (v, m, v)
+  grid_size = num_valleys_X * num_mountains_Y * num_valleys_Z;
+  updateEH_phase<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
+                                   Hx, Hy, Hz,
+                                   Cax, Cbx,
+                                   Cay, Cby,
+                                   Caz, Cbz,
+                                   Dax, Dbx,
+                                   Day, Dby,
+                                   Daz, Dbz,
+                                   Jx, Jy, Jz,
+                                   Mx, My, Mz,
+                                   _dx,
+                                   _Nx, _Ny, _Nz,
+                                   num_valleys_X, num_mountains_Y, num_valleys_Z, // number of tiles in each dimensions
+                                   valley_heads_X_d,
+                                   mountain_heads_Y_d,
+                                   valley_heads_Z_d);
+
+  // phase 7: (m, v, v)
+  grid_size = num_mountains_X * num_valleys_Y * num_valleys_Z;
+  updateEH_phase<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
+                                   Hx, Hy, Hz,
+                                   Cax, Cbx,
+                                   Cay, Cby,
+                                   Caz, Cbz,
+                                   Dax, Dbx,
+                                   Day, Dby,
+                                   Daz, Dbz,
+                                   Jx, Jy, Jz,
+                                   Mx, My, Mz,
+                                   _dx,
+                                   _Nx, _Ny, _Nz,
+                                   num_mountains_X, num_valleys_Y, num_valleys_Z, // number of tiles in each dimensions
+                                   mountain_heads_X_d,
+                                   valley_heads_Y_d,
+                                   valley_heads_Z_d);
+
+  // phase 8: (v, v, v)
+  grid_size = num_valleys_X * num_valleys_Y * num_valleys_Z;
+  updateEH_phase<<<grid_size, block_size, shared_memory_size>>>(Ex, Ey, Ez,
+                                   Hx, Hy, Hz,
+                                   Cax, Cbx,
+                                   Cay, Cby,
+                                   Caz, Cbz,
+                                   Dax, Dbx,
+                                   Day, Dby,
+                                   Daz, Dbz,
+                                   Jx, Jy, Jz,
+                                   Mx, My, Mz,
+                                   _dx,
+                                   _Nx, _Ny, _Nz,
+                                   num_valleys_X, num_valleys_Y, num_valleys_Z, // number of tiles in each dimensions
+                                   valley_heads_X_d,
+                                   valley_heads_Y_d,
+                                   valley_heads_Z_d);
   }
   cudaDeviceSynchronize();
 
@@ -888,6 +1038,103 @@ void gDiamond::update_FDTD_gpu_fuse_kernel(size_t num_timesteps) { // 3-D mappin
 
 }
 
+/*
+void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation of gpu threads
+
+  // we don't care about different ranges within BLT
+  // cuz for GPU, if we don't calculate, threads will be idling anyways
+  // find ranges for mountains in X dimension
+  size_t max_phases = 8;
+  std::vector<int> mountain_heads_X;
+  std::vector<int> mountain_tails_X;
+  std::vector<int> mountain_heads_Y;
+  std::vector<int> mountain_tails_Y;
+  std::vector<int> mountain_heads_Z;
+  std::vector<int> mountain_tails_Z;
+  std::vector<int> valley_heads_X;
+  std::vector<int> valley_tails_X;
+  std::vector<int> valley_heads_Y;
+  std::vector<int> valley_tails_Y;
+  std::vector<int> valley_heads_Z;
+  std::vector<int> valley_tails_Z;
+  _setup_diamond_tiling_gpu(BLX_GPU, BLY_GPU, BLZ_GPU, BLT_GPU, max_phases);
+
+  for(auto range : _Eranges_phases_X[0][0]) { 
+    mountain_heads_X.push_back(range.first);
+    mountain_tails_X.push_back(range.second);
+  }
+  for(auto range : _Eranges_phases_Y[0][0]) { 
+    mountain_heads_Y.push_back(range.first);
+    mountain_tails_Y.push_back(range.second);
+  }
+  for(auto range : _Eranges_phases_Z[0][0]) { 
+    mountain_heads_Z.push_back(range.first);
+    mountain_tails_Z.push_back(range.second);
+  }
+  for(auto range : _Hranges_phases_X[1][BLT_GPU-1]) { 
+    valley_heads_X.push_back(range.first);
+    valley_tails_X.push_back(range.second);
+  }
+  for(auto range : _Hranges_phases_Y[1][BLT_GPU-1]) { 
+    valley_heads_Y.push_back(range.first);
+    valley_tails_Y.push_back(range.second);
+  }
+  for(auto range : _Hranges_phases_Z[1][BLT_GPU-1]) { 
+    valley_heads_Z.push_back(range.first);
+    valley_tails_Z.push_back(range.second);
+  }
+
+  size_t num_mountains_X = mountain_heads_X.size();
+  size_t num_mountains_Y = mountain_heads_Y.size();
+  size_t num_mountains_Z = mountain_heads_Z.size();
+  size_t num_valleys_X = valley_heads_X.size();
+  size_t num_valleys_Y = valley_heads_Y.size();
+  size_t num_valleys_Z = valley_heads_Z.size();
+
+  // phase 1, (m, m, m)
+  std::cout << "mountain_heads_X = [";
+  for(auto index : mountain_heads_X) {
+    std::cout << index << " ";
+  }
+  std::cout << "]\n";
+  std::cout << "mountain_tails_X = [";
+  for(auto index : mountain_tails_X) {
+    std::cout << index << " ";
+  }
+  std::cout << "]\n";
+  
+  // simulate thread id
+  std::vector<float> globalmem(_Nx * _Ny * _Nz, 0);
+  for(size_t bid=0; bid<num_mountains_X*num_mountains_Y*num_mountains_Z; bid++) {
+
+    int xx = bid % num_mountains_X;
+    int yy = (bid % (num_mountains_X * num_mountains_Y)) / num_mountains_X;
+    int zz = bid / (num_mountains_X * num_mountains_Y);
+
+    std::vector<float> shmem(BLX_GPU * BLY_GPU * BLZ_GPU);
+
+    for(size_t tid=0; tid<512; tid++) {
+      int local_x = tid % BLX_GPU;                     // X coordinate within the tile
+      int local_y = (tid / BLX_GPU) % BLY_GPU;     // Y coordinate within the tile
+      int local_z = tid / (BLX_GPU * BLY_GPU);     // Z coordinate within the tile
+
+      int global_x = mountain_heads_X[xx] + local_x; // Global X coordinate
+      int global_y = mountain_heads_Y[yy] + local_y; // Global Y coordinate
+      int global_z = mountain_heads_Z[zz] + local_z; // Global Z coordinate
+
+      int global_idx = global_x + global_y * _Nx + global_z * _Nx * _Ny;
+      int local_idx = local_x + local_y * _Nx + local_z * _Nx * _Ny;
+
+      if(global_x >= 0 && global_x < _Nx && global_y >= 0 && global_y < _Ny && global_z >= 0 && global_z < _Nz) {
+        std::cout << "(xx, yy, zz) = " << "(" << xx << ", " << yy << ", " << zz << ")\n";  
+        std::cout << "(local_x, local_y, local_z) = " << "(" << local_x << ", " << local_y << ", " << local_z << ")\n";  
+        std::cout << "(global_x, global_y, global_z) = " << "(" << global_x << ", " << global_y << ", " << global_z << ")\n";  
+      }
+    }
+  }
+
+}
+*/
 
 } // end of namespace gdiamond
 
