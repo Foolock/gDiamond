@@ -73,6 +73,7 @@ class gDiamond {
     void update_FDTD_gpu_3D_warp_underutilization(size_t num_timesteps); // 3-D mapping, has warp underutilization issue 
     void update_FDTD_gpu_3D_warp_underutilization_fix(size_t num_timesteps); // 3-D mapping, fix warp underutilization issue 
     void update_FDTD_gpu_fuse_kernel(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels
+    void update_FDTD_gpu_fuse_kernel_testing(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels
     void update_FDTD_gpu_check_result(size_t num_timesteps); // only use for result checking
     void update_FDTD_gpu_simulation(size_t num_timesteps); // simulation of gpu threads
 
@@ -84,6 +85,45 @@ class gDiamond {
     void print_results();
 
   private:
+
+    // for update_FDTD_gpu_simulation
+    void _updateEH_phase_E_only_seq(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
+                               std::vector<float>& Hx, std::vector<float>& Hy, std::vector<float>& Hz,
+                               std::vector<float>& Cax, std::vector<float>& Cbx,
+                               std::vector<float>& Cay, std::vector<float>& Cby,
+                               std::vector<float>& Caz, std::vector<float>& Cbz,
+                               std::vector<float>& Jx, std::vector<float>& Jy, std::vector<float>& Jz,
+                               float dx, 
+                               int Nx, int Ny, int Nz,
+                               int xx_num, int yy_num, int zz_num, // number of tiles in each dimensions
+                               std::vector<int> xx_heads, 
+                               std::vector<int> yy_heads, 
+                               std::vector<int> zz_heads,
+                               std::vector<int> xx_tails, 
+                               std::vector<int> yy_tails, 
+                               std::vector<int> zz_tails,
+                               size_t block_size,
+                               size_t grid_size
+                               ); 
+
+    void _updateEH_phase_H_only_seq(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
+                               std::vector<float>& Hx, std::vector<float>& Hy, std::vector<float>& Hz,
+                               std::vector<float>& Dax, std::vector<float>& Dbx,
+                               std::vector<float>& Day, std::vector<float>& Dby,
+                               std::vector<float>& Daz, std::vector<float>& Dbz,
+                               std::vector<float>& Mx, std::vector<float>& My, std::vector<float>& Mz,
+                               float dx, 
+                               int Nx, int Ny, int Nz,
+                               int xx_num, int yy_num, int zz_num, // number of tiles in each dimensions
+                               std::vector<int> xx_heads, 
+                               std::vector<int> yy_heads, 
+                               std::vector<int> zz_heads,
+                               std::vector<int> xx_tails, 
+                               std::vector<int> yy_tails, 
+                               std::vector<int> zz_tails,
+                               size_t block_size,
+                               size_t grid_size
+                               ); 
 
     // fill up indices and ranges vector for mountains and valleys
     void _get_indices_and_ranges(size_t BLX, size_t BLT, size_t Nx,
@@ -1201,6 +1241,7 @@ void gDiamond::print_results() {
   }
   std::cout << "\n";
 
+  /*
   std::cout << "Ey_seq = ";
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
     std::cout << _Ey_seq[i] << " ";
@@ -1260,7 +1301,7 @@ void gDiamond::print_results() {
     std::cout << _Hz_gpu[i] << " ";
   }
   std::cout << "\n";
-
+  */
 }
 
 } // end of namespace gdiamond

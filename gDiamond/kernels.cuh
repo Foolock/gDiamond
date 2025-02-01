@@ -399,7 +399,10 @@ __global__ void updateEH_phase_EH_shared_only(float *Ex, float *Ey, float *Ez,
                                int xx_num, int yy_num, int zz_num, // number of tiles in each dimensions
                                int *xx_heads, 
                                int *yy_heads, 
-                               int *zz_heads 
+                               int *zz_heads, 
+                               int *xx_tails, 
+                               int *yy_tails, 
+                               int *zz_tails 
                                ) 
 {
   // first we map each (xx, yy, zz) to a block
@@ -433,7 +436,10 @@ __global__ void updateEH_phase_EH_shared_only(float *Ex, float *Ey, float *Ez,
 
   int shared_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH;
 
-  if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz) {
+  if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz &&
+     local_x >= xx_heads[xx] && local_x <= xx_tails[xx] && 
+     local_y >= yy_heads[yy] && local_y <= yy_tails[yy] && 
+     local_z >= zz_heads[zz] && local_z <= zz_tails[zz]) {
     Hx_shmem[shared_H_idx] = Hx[global_idx];
     Hy_shmem[shared_H_idx] = Hy[global_idx];
     Hz_shmem[shared_H_idx] = Hz[global_idx];
@@ -462,7 +468,11 @@ __global__ void updateEH_phase_EH_shared_only(float *Ex, float *Ey, float *Ez,
 
   int shared_E_idx = shared_E_x + shared_E_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH;
 
-  if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz) {
+  // if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz) {
+  if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz &&
+     local_x >= xx_heads[xx] && local_x <= xx_tails[xx] && 
+     local_y >= yy_heads[yy] && local_y <= yy_tails[yy] && 
+     local_z >= zz_heads[zz] && local_z <= zz_tails[zz]) {
 
     Ex_shmem[shared_E_idx] = Ex[global_idx];
     Ey_shmem[shared_E_idx] = Ey[global_idx];
@@ -485,7 +495,11 @@ __global__ void updateEH_phase_EH_shared_only(float *Ex, float *Ey, float *Ez,
 
   __syncthreads();
 
-  if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
+  // if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
+  if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
+     local_x >= xx_heads[xx] && local_x <= xx_tails[xx] && 
+     local_y >= yy_heads[yy] && local_y <= yy_tails[yy] && 
+     local_z >= zz_heads[zz] && local_z <= zz_tails[zz]) {
     for(int t=0; t<BLT_GPU; t++) { // we will do BLT_GPU time steps in one kernel 
       int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
       int s_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH; // shared memory idx for H
@@ -514,7 +528,11 @@ __global__ void updateEH_phase_EH_shared_only(float *Ex, float *Ey, float *Ez,
   }
 
   // store E, H to global memory, no HALO needed
-  if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz) {
+  // if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz) {
+  if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
+     local_x >= xx_heads[xx] && local_x <= xx_tails[xx] && 
+     local_y >= yy_heads[yy] && local_y <= yy_tails[yy] && 
+     local_z >= zz_heads[zz] && local_z <= zz_tails[zz]) {
      Ex[global_idx] = Ex_shmem[shared_E_idx]; 
      Ey[global_idx] = Ey_shmem[shared_E_idx];
      Ez[global_idx] = Ez_shmem[shared_E_idx];
@@ -523,6 +541,101 @@ __global__ void updateEH_phase_EH_shared_only(float *Ex, float *Ey, float *Ez,
      Hz[global_idx] = Hz_shmem[shared_H_idx];
   }
 }
+
+__global__ void updateEH_phase_E_only(float *Ex, float *Ey, float *Ez,
+                               float *Hx, float *Hy, float *Hz,
+                               float *Cax, float *Cbx,
+                               float *Cay, float *Cby,
+                               float *Caz, float *Cbz,
+                               float *Dax, float *Dbx,
+                               float *Day, float *Dby,
+                               float *Daz, float *Dbz,
+                               float *Jx, float *Jy, float *Jz,
+                               float *Mx, float *My, float *Mz,
+                               float dx, 
+                               int Nx, int Ny, int Nz,
+                               int xx_num, int yy_num, int zz_num, // number of tiles in each dimensions
+                               int *xx_heads, 
+                               int *yy_heads, 
+                               int *zz_heads 
+                               ) 
+{
+  // first we map each (xx, yy, zz) to a block
+  int xx = blockIdx.x % xx_num;
+  int yy = (blockIdx.x % (xx_num * yy_num)) / xx_num;
+  int zz = blockIdx.x / (xx_num * yy_num);
+
+  // map each thread in the block to a global index
+  int local_x = threadIdx.x % BLX_GPU;                     // X coordinate within the tile
+  int local_y = (threadIdx.x / BLX_GPU) % BLY_GPU;     // Y coordinate within the tile
+  int local_z = threadIdx.x / (BLX_GPU * BLY_GPU);     // Z coordinate within the tile
+
+  int global_x = xx_heads[xx] + local_x; // Global X coordinate
+  int global_y = yy_heads[yy] + local_y; // Global Y coordinate
+  int global_z = zz_heads[zz] + local_z; // Global Z coordinate
+
+  if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
+    for(int t=0; t<1; t++) { // we will do 1 time steps in one kernel, just to verify 
+      int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
+
+      // update E
+      Ex[g_idx] = Cax[g_idx] * Ex[g_idx] + Cbx[g_idx] *
+                ((Hz[g_idx] - Hz[g_idx - Nx]) - (Hy[g_idx] - Hy[g_idx - Nx * Ny]) - Jx[g_idx] * dx);
+      Ey[g_idx] = Cay[g_idx] * Ey[g_idx] + Cby[g_idx] *
+                ((Hx[g_idx] - Hx[g_idx - Nx * Ny]) - (Hz[g_idx] - Hz[g_idx - 1]) - Jy[g_idx] * dx);
+      Ez[g_idx] = Caz[g_idx] * Ez[g_idx] + Cbz[g_idx] *
+                ((Hy[g_idx] - Hy[g_idx - 1]) - (Hx[g_idx] - Hx[g_idx - Nx]) - Jz[g_idx] * dx);
+    }
+  }
+}
+
+__global__ void updateEH_phase_H_only(float *Ex, float *Ey, float *Ez,
+                               float *Hx, float *Hy, float *Hz,
+                               float *Cax, float *Cbx,
+                               float *Cay, float *Cby,
+                               float *Caz, float *Cbz,
+                               float *Dax, float *Dbx,
+                               float *Day, float *Dby,
+                               float *Daz, float *Dbz,
+                               float *Jx, float *Jy, float *Jz,
+                               float *Mx, float *My, float *Mz,
+                               float dx, 
+                               int Nx, int Ny, int Nz,
+                               int xx_num, int yy_num, int zz_num, // number of tiles in each dimensions
+                               int *xx_heads, 
+                               int *yy_heads, 
+                               int *zz_heads 
+                               ) 
+{
+  // first we map each (xx, yy, zz) to a block
+  int xx = blockIdx.x % xx_num;
+  int yy = (blockIdx.x % (xx_num * yy_num)) / xx_num;
+  int zz = blockIdx.x / (xx_num * yy_num);
+
+  // map each thread in the block to a global index
+  int local_x = threadIdx.x % BLX_GPU;                     // X coordinate within the tile
+  int local_y = (threadIdx.x / BLX_GPU) % BLY_GPU;     // Y coordinate within the tile
+  int local_z = threadIdx.x / (BLX_GPU * BLY_GPU);     // Z coordinate within the tile
+
+  int global_x = xx_heads[xx] + local_x; // Global X coordinate
+  int global_y = yy_heads[yy] + local_y; // Global Y coordinate
+  int global_z = zz_heads[zz] + local_z; // Global Z coordinate
+
+  if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
+    for(int t=0; t<1; t++) { // we will do 1 time steps in one kernel, just to verify 
+      int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
+
+      // update H
+      Hx[g_idx] = Dax[g_idx] * Hx[g_idx] + Dbx[g_idx] *
+                ((Ey[g_idx + Nx * Ny] - Ey[g_idx]) - (Ez[g_idx + Nx] - Ez[g_idx]) - Mx[g_idx] * dx);
+      Hy[g_idx] = Day[g_idx] * Hy[g_idx] + Dby[g_idx] *
+                ((Ez[g_idx + 1] - Ez[g_idx]) - (Ex[g_idx + Nx * Ny] - Ex[g_idx]) - My[g_idx] * dx);
+      Hz[g_idx] = Daz[g_idx] * Hz[g_idx] + Dbz[g_idx] *
+                ((Ex[g_idx + Nx] - Ex[g_idx]) - (Ey[g_idx + 1] - Ey[g_idx]) - Mz[g_idx] * dx);
+    }
+  }
+}
+
 
 
 
