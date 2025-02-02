@@ -9,11 +9,11 @@ int main() {
   gdiamond::gDiamond exp(Nx, Ny, Nz); 
 
   exp.update_FDTD_seq_check_result(num_timesteps);
-  exp.update_FDTD_gpu_fuse_kernel(num_timesteps);
+  exp.update_FDTD_gpu_simulation_1_D(num_timesteps);
 
   // exp.print_results();
 
-  if(!exp.check_correctness_gpu()) {
+  if(!exp.check_correctness_simu()) {
     std::cerr << "error: results not match\n";
     std::exit(EXIT_FAILURE);
   }

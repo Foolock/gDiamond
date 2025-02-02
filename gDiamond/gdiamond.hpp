@@ -19,6 +19,8 @@ class gDiamond {
                                                _Hx_seq(Nx * Ny * Nz), _Hy_seq(Nx * Ny * Nz), _Hz_seq(Nx * Ny * Nz),
                                                _Ex_gpu(Nx * Ny * Nz), _Ey_gpu(Nx * Ny * Nz), _Ez_gpu(Nx * Ny * Nz),
                                                _Hx_gpu(Nx * Ny * Nz), _Hy_gpu(Nx * Ny * Nz), _Hz_gpu(Nx * Ny * Nz),
+                                               _Ex_simu(Nx * Ny * Nz), _Ey_simu(Nx * Ny * Nz), _Ez_simu(Nx * Ny * Nz),
+                                               _Hx_simu(Nx * Ny * Nz), _Hy_simu(Nx * Ny * Nz), _Hz_simu(Nx * Ny * Nz),
                                                _Ex_omp(Nx * Ny * Nz), _Ey_omp(Nx * Ny * Nz), _Ez_omp(Nx * Ny * Nz),
                                                _Hx_omp(Nx * Ny * Nz), _Hy_omp(Nx * Ny * Nz), _Hz_omp(Nx * Ny * Nz),
                                                _Ex_omp_dt(Nx * Ny * Nz), _Ey_omp_dt(Nx * Ny * Nz), _Ez_omp_dt(Nx * Ny * Nz),
@@ -76,11 +78,13 @@ class gDiamond {
     void update_FDTD_gpu_fuse_kernel_testing(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels
     void update_FDTD_gpu_check_result(size_t num_timesteps); // only use for result checking
     void update_FDTD_gpu_simulation(size_t num_timesteps); // simulation of gpu threads
+    void update_FDTD_gpu_simulation_1_D(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow 
 
     // check correctness
     bool check_correctness_gpu();
     bool check_correctness_omp();
     bool check_correctness_omp_dt();
+    bool check_correctness_simu();
     
     void print_results();
 
@@ -236,6 +240,14 @@ class gDiamond {
     std::vector<float> _Hx_gpu;
     std::vector<float> _Hy_gpu;
     std::vector<float> _Hz_gpu;
+
+    // E and H (result from seq GPU simulation)
+    std::vector<float> _Ex_simu;
+    std::vector<float> _Ey_simu;
+    std::vector<float> _Ez_simu;
+    std::vector<float> _Hx_simu;
+    std::vector<float> _Hy_simu;
+    std::vector<float> _Hz_simu;
 
     // J and M (source)
     std::vector<float> _Jx;
@@ -554,6 +566,26 @@ bool gDiamond::check_correctness_omp_dt() {
 
   return correct;
 } 
+
+bool gDiamond::check_correctness_simu() {
+  bool correct = true;
+
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    if(fabs(_Ex_seq[i] - _Ex_simu[i]) >= 1e-8 ||
+       fabs(_Ey_seq[i] - _Ey_simu[i]) >= 1e-8 ||
+       fabs(_Ez_seq[i] - _Ez_simu[i]) >= 1e-8 ||
+       fabs(_Hx_seq[i] - _Hx_simu[i]) >= 1e-8 ||
+       fabs(_Hy_seq[i] - _Hy_simu[i]) >= 1e-8 ||
+       fabs(_Hz_seq[i] - _Hz_simu[i]) >= 1e-8
+    ) {
+      correct = false;
+      break;
+    }
+  }
+
+  return correct;
+} 
+
 
 void gDiamond::_get_indices_and_ranges(size_t BLX, size_t BLT, size_t Nx,
                                        std::vector<std::vector<size_t>>& mountain_indices,
@@ -1234,10 +1266,11 @@ void gDiamond::print_results() {
     std::cout << _Ex_seq[i] << " ";
   }
   std::cout << "\n";
+  std::cout << "\n";
 
-  std::cout << "Ex_gpu = ";
+  std::cout << "Ex_simu = ";
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    std::cout << _Ex_gpu[i] << " ";
+    std::cout << _Ex_simu[i] << " ";
   }
   std::cout << "\n";
 
