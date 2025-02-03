@@ -1710,6 +1710,13 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
   }
 
   size_t max_phases = 8;
+
+  // tile indices are per-phase and per-t (in BLT) and per-xx (the xx-th tile)
+  // so they should be 3-D vector 
+  // for GPU, we do it in 1-D
+  // the 3rd dimension is phase
+  // the 2nd dimension is t
+  // the 1st dimension is xx 
   std::vector<int> mountain_heads_X;
   std::vector<int> mountain_tails_X;
   std::vector<int> mountain_heads_Y;
@@ -1722,302 +1729,49 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
   std::vector<int> valley_tails_Y;
   std::vector<int> valley_heads_Z;
   std::vector<int> valley_tails_Z;
+
+  // tile number are per-phase and per-t (in BLT)
+  // so they should be 2-D vector
+  // for GPU, we set it as 1-D
+  // the 2nd dimension is phase
+  // the 1st dimension is t
+  std::vector<int> num_mountains_X;
+  std::vector<int> num_mountains_Y;
+  std::vector<int> num_mountains_Z;
+  std::vector<int> num_valleys_X;
+  std::vector<int> num_valleys_Y;
+  std::vector<int> num_valleys_Z;
+
+  // e.g., In X-dimension, to get the head and tail index of a specify mountain (xx-th) in a specify (t) in a specify phase
+  // first we need to know the number of mountains 
+  // num_mountains = 
+  // size_t head = mountain_heads_X[phase][t][xx]
+  //             = mountain_heads_X[xx + t*]
+
   _setup_diamond_tiling_gpu(BLX_GPU, BLY_GPU, BLZ_GPU, BLT_GPU, max_phases);
-
-  for(auto range : _Eranges_phases_X[0][0]) { 
-    mountain_heads_X.push_back(range.first);
-    mountain_tails_X.push_back(range.second);
-  }
-  for(auto range : _Eranges_phases_Y[0][0]) { 
-    mountain_heads_Y.push_back(range.first);
-    mountain_tails_Y.push_back(range.second);
-  }
-  for(auto range : _Eranges_phases_Z[0][0]) { 
-    mountain_heads_Z.push_back(range.first);
-    mountain_tails_Z.push_back(range.second);
-  }
-  for(auto range : _Hranges_phases_X[1][BLT_GPU-1]) { 
-    valley_heads_X.push_back(range.first);
-    valley_tails_X.push_back(range.second);
-  }
-  for(auto range : _Hranges_phases_Y[1][BLT_GPU-1]) { 
-    valley_heads_Y.push_back(range.first);
-    valley_tails_Y.push_back(range.second);
-  }
-  for(auto range : _Hranges_phases_Z[1][BLT_GPU-1]) { 
-    valley_heads_Z.push_back(range.first);
-    valley_tails_Z.push_back(range.second);
-  }
-
-  size_t num_mountains_X = mountain_heads_X.size();
-  size_t num_mountains_Y = mountain_heads_Y.size();
-  size_t num_mountains_Z = mountain_heads_Z.size();
-  size_t num_valleys_X = valley_heads_X.size();
-  size_t num_valleys_Y = valley_heads_Y.size();
-  size_t num_valleys_Z = valley_heads_Z.size();
- 
-  // simulate GPU workflow
-  size_t block_size = BLX_GPU * BLY_GPU * BLZ_GPU;
-  size_t grid_size;
-
-  auto start = std::chrono::high_resolution_clock::now();
-  for(size_t tt=0; tt<num_timesteps/BLT_GPU; tt++) {
-    
-    // phase 1: (m, m, m)
-    grid_size = num_mountains_X * num_mountains_Y * num_mountains_Z;
-    for(size_t t=0; t<BLT_GPU; t++) {
-      _updateEH_phase_E_only_seq(Ex_temp, Ey_temp, Ez_temp,
-                                 Hx_temp, Hy_temp, Hz_temp,
-                                 _Cax, _Cbx,
-                                 _Cay, _Cby,
-                                 _Caz, _Cbz,
-                                 _Jx, _Jy, _Jz,
-                                 _dx, 
-                                 _Nx, _Ny, _Nz,
-                                 num_mountains_X, num_mountains_Y, num_mountains_Z, 
-                                 mountain_heads_X, mountain_heads_Y, mountain_heads_Z,
-                                 mountain_tails_X, mountain_tails_Y, mountain_tails_Z,
-                                 block_size, grid_size);
-      _updateEH_phase_H_only_seq(Ex_temp, Ey_temp, Ez_temp,
-                                 Hx_temp, Hy_temp, Hz_temp,
-                                 _Dax, _Dbx,
-                                 _Day, _Dby,
-                                 _Daz, _Dbz,
-                                 _Mx, _My, _Mz,
-                                 _dx, 
-                                 _Nx, _Ny, _Nz,
-                                 num_mountains_X, num_mountains_Y, num_mountains_Z, 
-                                 mountain_heads_X, mountain_heads_Y, mountain_heads_Z,
-                                 mountain_tails_X, mountain_tails_Y, mountain_tails_Z,
-                                 block_size, grid_size);
-    }
-
-    // phase 2: (v, m, m)
-    grid_size = num_valleys_X * num_mountains_Y * num_mountains_Z;
-    for(size_t t=0; t<BLT_GPU; t++) {
-      _updateEH_phase_E_only_seq(Ex_temp, Ey_temp, Ez_temp,
-                                 Hx_temp, Hy_temp, Hz_temp,
-                                 _Cax, _Cbx,
-                                 _Cay, _Cby,
-                                 _Caz, _Cbz,
-                                 _Jx, _Jy, _Jz,
-                                 _dx, 
-                                 _Nx, _Ny, _Nz,
-                                 num_valleys_X, num_mountains_Y, num_mountains_Z, 
-                                 valley_heads_X, mountain_heads_Y, mountain_heads_Z,
-                                 valley_tails_X, mountain_tails_Y, mountain_tails_Z,
-                                 block_size, grid_size);
-      _updateEH_phase_H_only_seq(Ex_temp, Ey_temp, Ez_temp,
-                                 Hx_temp, Hy_temp, Hz_temp,
-                                 _Dax, _Dbx,
-                                 _Day, _Dby,
-                                 _Daz, _Dbz,
-                                 _Mx, _My, _Mz,
-                                 _dx, 
-                                 _Nx, _Ny, _Nz,
-                                 num_valleys_X, num_mountains_Y, num_mountains_Z, 
-                                 valley_heads_X, mountain_heads_Y, mountain_heads_Z,
-                                 valley_tails_X, mountain_tails_Y, mountain_tails_Z,
-                                 block_size, grid_size);
-    }
-
-    // phase 3: (m, v, m)
-    grid_size = num_mountains_X * num_valleys_Y * num_mountains_Z;
-    for(size_t t=0; t<BLT_GPU; t++) {
-      _updateEH_phase_E_only_seq(Ex_temp, Ey_temp, Ez_temp,
-                                 Hx_temp, Hy_temp, Hz_temp,
-                                 _Cax, _Cbx,
-                                 _Cay, _Cby,
-                                 _Caz, _Cbz,
-                                 _Jx, _Jy, _Jz,
-                                 _dx, 
-                                 _Nx, _Ny, _Nz,
-                                 num_mountains_X, num_valleys_Y, num_mountains_Z, 
-                                 mountain_heads_X, valley_heads_Y, mountain_heads_Z,
-                                 mountain_tails_X, valley_tails_Y, mountain_tails_Z,
-                                 block_size, grid_size);
-      _updateEH_phase_H_only_seq(Ex_temp, Ey_temp, Ez_temp,
-                                 Hx_temp, Hy_temp, Hz_temp,
-                                 _Dax, _Dbx,
-                                 _Day, _Dby,
-                                 _Daz, _Dbz,
-                                 _Mx, _My, _Mz,
-                                 _dx, 
-                                 _Nx, _Ny, _Nz,
-                                 num_mountains_X, num_valleys_Y, num_mountains_Z, 
-                                 mountain_heads_X, valley_heads_Y, mountain_heads_Z,
-                                 mountain_tails_X, valley_tails_Y, mountain_tails_Z,
-                                 block_size, grid_size);
-    }
-
-    // phase 4: (m, m, v)
-    grid_size = num_mountains_X * num_mountains_Y * num_valleys_Z;
-    for(size_t t=0; t<BLT_GPU; t++) {
-      _updateEH_phase_E_only_seq(Ex_temp, Ey_temp, Ez_temp,
-                                 Hx_temp, Hy_temp, Hz_temp,
-                                 _Cax, _Cbx,
-                                 _Cay, _Cby,
-                                 _Caz, _Cbz,
-                                 _Jx, _Jy, _Jz,
-                                 _dx,
-                                 _Nx, _Ny, _Nz,
-                                 num_mountains_X, num_mountains_Y, num_valleys_Z,
-                                 mountain_heads_X, mountain_heads_Y, valley_heads_Z,
-                                 mountain_tails_X, mountain_tails_Y, valley_tails_Z,
-                                 block_size, grid_size);
-      _updateEH_phase_H_only_seq(Ex_temp, Ey_temp, Ez_temp,
-                                 Hx_temp, Hy_temp, Hz_temp,
-                                 _Dax, _Dbx,
-                                 _Day, _Dby,
-                                 _Daz, _Dbz,
-                                 _Mx, _My, _Mz,
-                                 _dx,
-                                 _Nx, _Ny, _Nz,
-                                 num_mountains_X, num_mountains_Y, num_valleys_Z,
-                                 mountain_heads_X, mountain_heads_Y, valley_heads_Z,
-                                 mountain_tails_X, mountain_tails_Y, valley_tails_Z,
-                                 block_size, grid_size);
-    }
-
-    // phase 5: (v, v, m)
-    grid_size = num_valleys_X * num_valleys_Y * num_mountains_Z;
-    for(size_t t=0; t<BLT_GPU; t++) {
-      _updateEH_phase_E_only_seq(Ex_temp, Ey_temp, Ez_temp,
-                                 Hx_temp, Hy_temp, Hz_temp,
-                                 _Cax, _Cbx,
-                                 _Cay, _Cby,
-                                 _Caz, _Cbz,
-                                 _Jx, _Jy, _Jz,
-                                 _dx,
-                                 _Nx, _Ny, _Nz,
-                                 num_valleys_X, num_valleys_Y, num_mountains_Z,
-                                 valley_heads_X, valley_heads_Y, mountain_heads_Z,
-                                 valley_tails_X, valley_tails_Y, mountain_tails_Z,
-                                 block_size, grid_size);
-      _updateEH_phase_H_only_seq(Ex_temp, Ey_temp, Ez_temp,
-                                 Hx_temp, Hy_temp, Hz_temp,
-                                 _Dax, _Dbx,
-                                 _Day, _Dby,
-                                 _Daz, _Dbz,
-                                 _Mx, _My, _Mz,
-                                 _dx,
-                                 _Nx, _Ny, _Nz,
-                                 num_valleys_X, num_valleys_Y, num_mountains_Z,
-                                 valley_heads_X, valley_heads_Y, mountain_heads_Z,
-                                 valley_tails_X, valley_tails_Y, mountain_tails_Z,
-                                 block_size, grid_size);
-    }
-
-    // phase 6: (v, m, v)
-    grid_size = num_valleys_X * num_mountains_Y * num_valleys_Z;
-    for(size_t t=0; t<BLT_GPU; t++) {
-      _updateEH_phase_E_only_seq(Ex_temp, Ey_temp, Ez_temp,
-                                 Hx_temp, Hy_temp, Hz_temp,
-                                 _Cax, _Cbx,
-                                 _Cay, _Cby,
-                                 _Caz, _Cbz,
-                                 _Jx, _Jy, _Jz,
-                                 _dx,
-                                 _Nx, _Ny, _Nz,
-                                 num_valleys_X, num_mountains_Y, num_valleys_Z,
-                                 valley_heads_X, mountain_heads_Y, valley_heads_Z,
-                                 valley_tails_X, mountain_tails_Y, valley_tails_Z,
-                                 block_size, grid_size);
-      _updateEH_phase_H_only_seq(Ex_temp, Ey_temp, Ez_temp,
-                                 Hx_temp, Hy_temp, Hz_temp,
-                                 _Dax, _Dbx,
-                                 _Day, _Dby,
-                                 _Daz, _Dbz,
-                                 _Mx, _My, _Mz,
-                                 _dx,
-                                 _Nx, _Ny, _Nz,
-                                 num_valleys_X, num_mountains_Y, num_valleys_Z,
-                                 valley_heads_X, mountain_heads_Y, valley_heads_Z,
-                                 valley_tails_X, mountain_tails_Y, valley_tails_Z,
-                                 block_size, grid_size);
-    }
-
-    // phase 7: (m, v, v)
-    grid_size = num_mountains_X * num_valleys_Y * num_valleys_Z;
-    for(size_t t=0; t<BLT_GPU; t++) {
-      _updateEH_phase_E_only_seq(Ex_temp, Ey_temp, Ez_temp,
-                                 Hx_temp, Hy_temp, Hz_temp,
-                                 _Cax, _Cbx,
-                                 _Cay, _Cby,
-                                 _Caz, _Cbz,
-                                 _Jx, _Jy, _Jz,
-                                 _dx,
-                                 _Nx, _Ny, _Nz,
-                                 num_mountains_X, num_valleys_Y, num_valleys_Z,
-                                 mountain_heads_X, valley_heads_Y, valley_heads_Z,
-                                 mountain_tails_X, valley_tails_Y, valley_tails_Z,
-                                 block_size, grid_size);
-      _updateEH_phase_H_only_seq(Ex_temp, Ey_temp, Ez_temp,
-                                 Hx_temp, Hy_temp, Hz_temp,
-                                 _Dax, _Dbx,
-                                 _Day, _Dby,
-                                 _Daz, _Dbz,
-                                 _Mx, _My, _Mz,
-                                 _dx,
-                                 _Nx, _Ny, _Nz,
-                                 num_mountains_X, num_valleys_Y, num_valleys_Z,
-                                 mountain_heads_X, valley_heads_Y, valley_heads_Z,
-                                 mountain_tails_X, valley_tails_Y, valley_tails_Z,
-                                 block_size, grid_size);
-    }
-
-    // phase 8: (v, v, v)
-    grid_size = num_valleys_X * num_valleys_Y * num_valleys_Z;
-    for(size_t t=0; t<BLT_GPU; t++) {
-      _updateEH_phase_E_only_seq(Ex_temp, Ey_temp, Ez_temp,
-                                 Hx_temp, Hy_temp, Hz_temp,
-                                 _Cax, _Cbx,
-                                 _Cay, _Cby,
-                                 _Caz, _Cbz,
-                                 _Jx, _Jy, _Jz,
-                                 _dx,
-                                 _Nx, _Ny, _Nz,
-                                 num_valleys_X, num_valleys_Y, num_valleys_Z,
-                                 valley_heads_X, valley_heads_Y, valley_heads_Z,
-                                 valley_tails_X, valley_tails_Y, valley_tails_Z,
-                                 block_size, grid_size);
-      _updateEH_phase_H_only_seq(Ex_temp, Ey_temp, Ez_temp,
-                                 Hx_temp, Hy_temp, Hz_temp,
-                                 _Dax, _Dbx,
-                                 _Day, _Dby,
-                                 _Daz, _Dbz,
-                                 _Mx, _My, _Mz,
-                                 _dx,
-                                 _Nx, _Ny, _Nz,
-                                 num_valleys_X, num_valleys_Y, num_valleys_Z,
-                                 valley_heads_X, valley_heads_Y, valley_heads_Z,
-                                 valley_tails_X, valley_tails_Y, valley_tails_Z,
-                                 block_size, grid_size);
-    }
-
-  }
-
-  auto end = std::chrono::high_resolution_clock::now();
-  std::cout << "simu runtime: " << std::chrono::duration<double>(end-start).count() << "s\n"; 
-  std::cout << "simu performance: " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / std::chrono::duration<double>(end-start).count() << "Mcells/s\n";
-
-  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    _Ex_simu[i] = Ex_temp[i];
-    _Ey_simu[i] = Ey_temp[i];
-    _Ez_simu[i] = Ez_temp[i];
-    _Hx_simu[i] = Hx_temp[i];
-    _Hy_simu[i] = Hy_temp[i];
-    _Hz_simu[i] = Hz_temp[i];
-  }
-
-  
 
 } 
 
 void gDiamond::update_FDTD_gpu_simulation_1_D(size_t num_timesteps) { // CPU single thread 1-D simulation of GPU workflow 
 
   size_t max_phases = 8;
+  std::vector<int> mountain_heads_X;
+  std::vector<int> mountain_tails_X;
+  std::vector<int> valley_heads_X;
+  std::vector<int> valley_tails_X;
   _setup_diamond_tiling_gpu(BLX_GPU, BLY_GPU, BLZ_GPU, BLT_GPU, max_phases);
+
+  for(auto range : _Eranges_phases_X[0][0]) { 
+    mountain_heads_X.push_back(range.first);
+    mountain_tails_X.push_back(range.second);
+  }
+  for(auto range : _Hranges_phases_X[1][BLT_GPU-1]) { 
+    valley_heads_X.push_back(range.first);
+    valley_tails_X.push_back(range.second);
+  }
+  
+  size_t num_mountains_X = mountain_heads_X.size();
+  size_t num_valleys_X = valley_heads_X.size();
 
   // write 1 dimension just to check
   std::vector<float> E_simu(_Nx, 1);
@@ -2047,67 +1801,169 @@ void gDiamond::update_FDTD_gpu_simulation_1_D(size_t num_timesteps) { // CPU sin
   }
 
   // tiling version
+  int mountain_or_valley;
+  // 1, mountain, 0, valley
+  int Nx = _Nx;
   for(size_t tt=0; tt<total_timesteps/BLT_GPU; tt++) {
 
     // phase 1. moutains 
+    mountain_or_valley = 1;
     for(size_t t=0; t<BLT_GPU; t++) {
 
-      // update E
-      for(size_t xx=0; xx<_Entiles_phases_X[0][0]; xx++) {
-        if(xx < _Entiles_phases_X[0][t]) {
-          size_t head = _Eranges_phases_X[0][t][xx].first;
-          size_t tail = _Eranges_phases_X[0][t][xx].second;
-          std::cout << "phase 1, E, t = " << t << ", head = " << head << ", tail = " << tail << "\n";
-          for(size_t x=head; x<=tail; x++) {
-            if(x>=1 && x<_Nx-1) {
-              E_simu[x] = H_simu[x-1] + H_simu[x] * 2; 
-            }
-          } 
-        } 
-      }
+      for(size_t xx=0; xx<num_mountains_X; xx++) {
 
-      // update H
-      for(size_t xx=0; xx<_Hntiles_phases_X[0][0]; xx++) {
-        if(xx < _Hntiles_phases_X[0][t]) {
-          size_t head = _Hranges_phases_X[0][t][xx].first;
-          size_t tail = _Hranges_phases_X[0][t][xx].second;
-          for(size_t x=head; x<=tail; x++) {
-            if(x>=1 && x<_Nx-1) {
-              H_simu[x] = E_simu[x+1] + E_simu[x] * 2; 
-            }
-          } 
-        } 
+        int calculate_E = 1; // calculate this E tile or not
+        int calculate_H = 1; // calculate this H tile or not
+
+        int Ehead = mountain_heads_X[xx]; 
+        int Etail = mountain_tails_X[xx];
+        int Hhead = mountain_heads_X[xx]; 
+        int Htail = mountain_tails_X[xx];
+
+        if(mountain_or_valley == 0 && xx == 0 && t == 0) { // skip the first valley in t = 0, since it does not exist 
+          calculate_E = 0;
+          calculate_H = 0;
+        }
+
+        // adjust Ehead according to t
+        if(mountain_or_valley != 0 || xx != 0) { // the 1st valley, head should not change
+          Ehead = (mountain_or_valley == 1)? Ehead + t : Ehead + (BLT_GPU - t - 1) + 1;
+        }
+        if(Ehead > Nx - 1) { // it means this mountain/valley does not exist in t
+          calculate_E = 0;
+        }
+
+        // adjust Etail according to t
+        if(mountain_or_valley == 1) { // handle the mountains 
+          int temp = Ehead + (BLX_GPU - 2 * t) - 1;
+          Etail = (temp > Nx - 1)? Nx - 1 : temp;
+        }
+        else if(mountain_or_valley == 0 && xx == 0) { // the 1st valley, tail should be handled differently 
+          Etail = Ehead + t - 1;
+        }
+        else { // handle the valleys
+          int temp = Ehead + (BLX_GPU - 2 * (BLT_GPU - t - 1)) - 2;
+          Etail = (temp > Nx - 1)? Nx - 1 : temp;
+        }
+
+        if(mountain_or_valley != 0 || xx != 0) { // the 1st valley, head should not change
+          Hhead = (mountain_or_valley == 1)? Hhead + t : Hhead + (BLT_GPU - t - 1);
+        }
+        
+        if(Hhead > Nx - 1) { // it means this mountain does not exist in t
+          calculate_H = 0;
+        }
+        if(mountain_or_valley == 1) { // handle the mountains 
+          int temp = Hhead + (BLX_GPU - 2 * t) - 2;
+          Htail = (temp > Nx - 1)? Nx - 1 : temp;
+        }
+        else if(mountain_or_valley == 0 && xx == 0) { // the 1st valley, tail should be handled differently 
+          Htail = Hhead + t - 1;
+        }
+        else { // handle the valleys
+          int temp = Hhead + (BLX_GPU - 2 * (BLT_GPU - t - 1)) - 1;
+          Htail = (temp > Nx - 1)? Nx - 1 : temp;
+        }
+
+        // update E
+        for(int x=Ehead; x<=Etail; x++) {
+          if(x>=1 && x<=Nx-2 && calculate_E) {
+            E_simu[x] = H_simu[x-1] + H_simu[x] * 2; 
+          }
+        }
+
+        // update H
+        for(int x=Hhead; x<=Htail; x++) {
+          if(x>=1 && x<=Nx-2 && calculate_H) {
+            H_simu[x] = E_simu[x+1] + E_simu[x] * 2; 
+          }
+        }
       }
     }
 
     // phase 2. valleys
+    mountain_or_valley = 0;
     for(size_t t=0; t<BLT_GPU; t++) {
 
-      // update E
-      for(size_t xx=0; xx<_Entiles_phases_X[1][BLT_GPU-1]; xx++) {
-        if(xx < _Entiles_phases_X[1][t]) {
-          size_t head = _Eranges_phases_X[1][t][xx].first;
-          size_t tail = _Eranges_phases_X[1][t][xx].second;
-          for(size_t x=head; x<=tail; x++) {
-            if(x>=1 && x<_Nx-1) {
-              E_simu[x] = H_simu[x-1] + H_simu[x] * 2; 
-            }
-          } 
-        } 
+      for(size_t xx=0; xx<num_valleys_X; xx++) {
+
+        int calculate_E = 1; // calculate this E tile or not
+        int calculate_H = 1; // calculate this H tile or not
+
+        int Ehead = valley_heads_X[xx]; 
+        int Etail = valley_tails_X[xx];
+        int Hhead = valley_heads_X[xx]; 
+        int Htail = valley_tails_X[xx];
+
+        if(mountain_or_valley == 0 && xx == 0 && t == 0) { // skip the first valley in t = 0, since it does not exist 
+          calculate_E = 0;
+          calculate_H = 0;
+        }
+
+        // adjust Ehead according to t
+        if(mountain_or_valley != 0 || xx != 0) { // the 1st valley, head should not change
+          Ehead = (mountain_or_valley == 1)? Ehead + t : Ehead + (BLT_GPU - t - 1) + 1;
+        }
+        if(Ehead > Nx - 1) { // it means this valley/valley does not exist in t
+          calculate_E = 0;
+        }
+
+        // adjust Etail according to t
+        if(mountain_or_valley == 1) { // handle the valleys 
+          int temp = Ehead + (BLX_GPU - 2 * t) - 1;
+          Etail = (temp > Nx - 1)? Nx - 1 : temp;
+        }
+        else if(mountain_or_valley == 0 && xx == 0) { // the 1st valley, tail should be handled differently 
+          Etail = Ehead + t - 1;
+        }
+        else { // handle the valleys
+          int temp = Ehead + (BLX_GPU - 2 * (BLT_GPU - t - 1)) - 2;
+          Etail = (temp > Nx - 1)? Nx - 1 : temp;
+        }
+
+        // check head and tail
+        if(calculate_E) {
+          std::cout << "valleys, t = " << t << ", (Ehead, Etail) = " << Ehead << ", " << Etail << ")" << "\n";
+        }
+
+        if(mountain_or_valley != 0 || xx != 0) { // the 1st valley, head should not change
+          Hhead = (mountain_or_valley == 1)? Hhead + t : Hhead + (BLT_GPU - t - 1);
+        }
+        
+        if(Hhead > Nx - 1) { // it means this valley does not exist in t
+          calculate_H = 0;
+        }
+        if(mountain_or_valley == 1) { // handle the valleys 
+          int temp = Hhead + (BLX_GPU - 2 * t) - 2;
+          Htail = (temp > Nx - 1)? Nx - 1 : temp;
+        }
+        else if(mountain_or_valley == 0 && xx == 0) { // the 1st valley, tail should be handled differently 
+          Htail = Hhead + t - 1;
+        }
+        else { // handle the valleys
+          int temp = Hhead + (BLX_GPU - 2 * (BLT_GPU - t - 1)) - 1;
+          Htail = (temp > Nx - 1)? Nx - 1 : temp;
+        }
+
+        // if(calculate_H) {
+        //   std::cout << "valleys, t = " << t << ", (Hhead, Htail) = " << Hhead << ", " << Htail << ")" << "\n";
+        // }
+
+        // update E
+        for(int x=Ehead; x<=Etail; x++) {
+          if(x>=1 && x<=Nx-2 && calculate_E) {
+            E_simu[x] = H_simu[x-1] + H_simu[x] * 2; 
+          }
+        }
+
+        // update H
+        for(int x=Hhead; x<=Htail; x++) {
+          if(x>=1 && x<=Nx-2 && calculate_H) {
+            H_simu[x] = E_simu[x+1] + E_simu[x] * 2; 
+          }
+        }
       }
 
-      // update H
-      for(size_t xx=0; xx<_Hntiles_phases_X[1][BLT_GPU-1]; xx++) {
-        if(xx < _Hntiles_phases_X[1][t]) {
-          size_t head = _Hranges_phases_X[1][t][xx].first;
-          size_t tail = _Hranges_phases_X[1][t][xx].second;
-          for(size_t x=head; x<=tail; x++) {
-            if(x>=1 && x<_Nx-1) {
-              H_simu[x] = E_simu[x+1] + E_simu[x] * 2; 
-            }
-          } 
-        } 
-      }
     } 
   }
 
