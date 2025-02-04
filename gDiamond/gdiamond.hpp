@@ -91,6 +91,29 @@ class gDiamond {
   private:
 
     // for update_FDTD_gpu_simulation
+    void _updateEH_phase_seq(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
+                             std::vector<float>& Hx, std::vector<float>& Hy, std::vector<float>& Hz,
+                             std::vector<float>& Cax, std::vector<float>& Cbx,
+                             std::vector<float>& Cay, std::vector<float>& Cby,
+                             std::vector<float>& Caz, std::vector<float>& Cbz,
+                             std::vector<float>& Dax, std::vector<float>& Dbx,
+                             std::vector<float>& Day, std::vector<float>& Dby,
+                             std::vector<float>& Daz, std::vector<float>& Dbz,
+                             std::vector<float>& Jx, std::vector<float>& Jy, std::vector<float>& Jz,
+                             std::vector<float>& Mx, std::vector<float>& My, std::vector<float>& Mz,
+                             float dx, 
+                             int Nx, int Ny, int Nz,
+                             int xx_num, int yy_num, int zz_num, // number of tiles in each dimensions
+                             std::vector<int> xx_heads, 
+                             std::vector<int> yy_heads, 
+                             std::vector<int> zz_heads,
+                             std::vector<int> xx_tails, 
+                             std::vector<int> yy_tails, 
+                             std::vector<int> zz_tails,
+                             int m_or_v_X, int m_or_v_Y, int m_or_v_Z,
+                             size_t block_size,
+                             size_t grid_size);
+
     void _updateEH_phase_E_only_seq(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
                                std::vector<float>& Hx, std::vector<float>& Hy, std::vector<float>& Hz,
                                std::vector<float>& Cax, std::vector<float>& Cbx,
@@ -128,6 +151,14 @@ class gDiamond {
                                size_t block_size,
                                size_t grid_size
                                ); 
+
+    // return {Ehead, Etail, Hhead, Htail}
+    std::vector<int> _get_head_tail(size_t BLX, size_t BLT,
+                                    std::vector<int> xx_heads, std::vector<int> xx_tails,
+                                    size_t xx, size_t t,
+                                    int mountain_or_valley,
+                                    int Nx,
+                                    int *calculate_E, int *calculate_H);
 
     // fill up indices and ranges vector for mountains and valleys
     void _get_indices_and_ranges(size_t BLX, size_t BLT, size_t Nx,

@@ -1710,13 +1710,6 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
   }
 
   size_t max_phases = 8;
-
-  // tile indices are per-phase and per-t (in BLT) and per-xx (the xx-th tile)
-  // so they should be 3-D vector 
-  // for GPU, we do it in 1-D
-  // the 3rd dimension is phase
-  // the 2nd dimension is t
-  // the 1st dimension is xx 
   std::vector<int> mountain_heads_X;
   std::vector<int> mountain_tails_X;
   std::vector<int> mountain_heads_Y;
@@ -1729,26 +1722,41 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
   std::vector<int> valley_tails_Y;
   std::vector<int> valley_heads_Z;
   std::vector<int> valley_tails_Z;
-
-  // tile number are per-phase and per-t (in BLT)
-  // so they should be 2-D vector
-  // for GPU, we set it as 1-D
-  // the 2nd dimension is phase
-  // the 1st dimension is t
-  std::vector<int> num_mountains_X;
-  std::vector<int> num_mountains_Y;
-  std::vector<int> num_mountains_Z;
-  std::vector<int> num_valleys_X;
-  std::vector<int> num_valleys_Y;
-  std::vector<int> num_valleys_Z;
-
-  // e.g., In X-dimension, to get the head and tail index of a specify mountain (xx-th) in a specify (t) in a specify phase
-  // first we need to know the number of mountains 
-  // num_mountains = 
-  // size_t head = mountain_heads_X[phase][t][xx]
-  //             = mountain_heads_X[xx + t*]
-
   _setup_diamond_tiling_gpu(BLX_GPU, BLY_GPU, BLZ_GPU, BLT_GPU, max_phases);
+
+  for(auto range : _Eranges_phases_X[0][0]) { 
+    mountain_heads_X.push_back(range.first);
+    mountain_tails_X.push_back(range.second);
+  }
+  for(auto range : _Eranges_phases_Y[0][0]) { 
+    mountain_heads_Y.push_back(range.first);
+    mountain_tails_Y.push_back(range.second);
+  }
+  for(auto range : _Eranges_phases_Z[0][0]) { 
+    mountain_heads_Z.push_back(range.first);
+    mountain_tails_Z.push_back(range.second);
+  }
+  for(auto range : _Hranges_phases_X[1][BLT_GPU-1]) { 
+    valley_heads_X.push_back(range.first);
+    valley_tails_X.push_back(range.second);
+  }
+  for(auto range : _Hranges_phases_Y[1][BLT_GPU-1]) { 
+    valley_heads_Y.push_back(range.first);
+    valley_tails_Y.push_back(range.second);
+  }
+  for(auto range : _Hranges_phases_Z[1][BLT_GPU-1]) { 
+    valley_heads_Z.push_back(range.first);
+    valley_tails_Z.push_back(range.second);
+  }
+
+  size_t num_mountains_X = mountain_heads_X.size();
+  size_t num_mountains_Y = mountain_heads_Y.size();
+  size_t num_mountains_Z = mountain_heads_Z.size();
+  size_t num_valleys_X = valley_heads_X.size();
+  size_t num_valleys_Y = valley_heads_Y.size();
+  size_t num_valleys_Z = valley_heads_Z.size();
+
+
 
 } 
 
@@ -1815,65 +1823,22 @@ void gDiamond::update_FDTD_gpu_simulation_1_D(size_t num_timesteps) { // CPU sin
         int calculate_E = 1; // calculate this E tile or not
         int calculate_H = 1; // calculate this H tile or not
 
-        int Ehead = mountain_heads_X[xx]; 
-        int Etail = mountain_tails_X[xx];
-        int Hhead = mountain_heads_X[xx]; 
-        int Htail = mountain_tails_X[xx];
-
-        if(mountain_or_valley == 0 && xx == 0 && t == 0) { // skip the first valley in t = 0, since it does not exist 
-          calculate_E = 0;
-          calculate_H = 0;
-        }
-
-        // adjust Ehead according to t
-        if(mountain_or_valley != 0 || xx != 0) { // the 1st valley, head should not change
-          Ehead = (mountain_or_valley == 1)? Ehead + t : Ehead + (BLT_GPU - t - 1) + 1;
-        }
-        if(Ehead > Nx - 1) { // it means this mountain/valley does not exist in t
-          calculate_E = 0;
-        }
-
-        // adjust Etail according to t
-        if(mountain_or_valley == 1) { // handle the mountains 
-          int temp = Ehead + (BLX_GPU - 2 * t) - 1;
-          Etail = (temp > Nx - 1)? Nx - 1 : temp;
-        }
-        else if(mountain_or_valley == 0 && xx == 0) { // the 1st valley, tail should be handled differently 
-          Etail = Ehead + t - 1;
-        }
-        else { // handle the valleys
-          int temp = Ehead + (BLX_GPU - 2 * (BLT_GPU - t - 1)) - 2;
-          Etail = (temp > Nx - 1)? Nx - 1 : temp;
-        }
-
-        if(mountain_or_valley != 0 || xx != 0) { // the 1st valley, head should not change
-          Hhead = (mountain_or_valley == 1)? Hhead + t : Hhead + (BLT_GPU - t - 1);
-        }
-        
-        if(Hhead > Nx - 1) { // it means this mountain does not exist in t
-          calculate_H = 0;
-        }
-        if(mountain_or_valley == 1) { // handle the mountains 
-          int temp = Hhead + (BLX_GPU - 2 * t) - 2;
-          Htail = (temp > Nx - 1)? Nx - 1 : temp;
-        }
-        else if(mountain_or_valley == 0 && xx == 0) { // the 1st valley, tail should be handled differently 
-          Htail = Hhead + t - 1;
-        }
-        else { // handle the valleys
-          int temp = Hhead + (BLX_GPU - 2 * (BLT_GPU - t - 1)) - 1;
-          Htail = (temp > Nx - 1)? Nx - 1 : temp;
-        }
+        std::vector<int> indices = _get_head_tail(BLX_GPU, BLT_GPU,
+                                                  mountain_heads_X, mountain_tails_X,
+                                                  xx, t,
+                                                  mountain_or_valley,
+                                                  Nx,
+                                                  &calculate_E, &calculate_H);
 
         // update E
-        for(int x=Ehead; x<=Etail; x++) {
+        for(int x=indices[0]; x<=indices[1]; x++) {
           if(x>=1 && x<=Nx-2 && calculate_E) {
             E_simu[x] = H_simu[x-1] + H_simu[x] * 2; 
           }
         }
 
         // update H
-        for(int x=Hhead; x<=Htail; x++) {
+        for(int x=indices[2]; x<=indices[3]; x++) {
           if(x>=1 && x<=Nx-2 && calculate_H) {
             H_simu[x] = E_simu[x+1] + E_simu[x] * 2; 
           }
@@ -1889,75 +1854,23 @@ void gDiamond::update_FDTD_gpu_simulation_1_D(size_t num_timesteps) { // CPU sin
 
         int calculate_E = 1; // calculate this E tile or not
         int calculate_H = 1; // calculate this H tile or not
-
-        int Ehead = valley_heads_X[xx]; 
-        int Etail = valley_tails_X[xx];
-        int Hhead = valley_heads_X[xx]; 
-        int Htail = valley_tails_X[xx];
-
-        if(mountain_or_valley == 0 && xx == 0 && t == 0) { // skip the first valley in t = 0, since it does not exist 
-          calculate_E = 0;
-          calculate_H = 0;
-        }
-
-        // adjust Ehead according to t
-        if(mountain_or_valley != 0 || xx != 0) { // the 1st valley, head should not change
-          Ehead = (mountain_or_valley == 1)? Ehead + t : Ehead + (BLT_GPU - t - 1) + 1;
-        }
-        if(Ehead > Nx - 1) { // it means this valley/valley does not exist in t
-          calculate_E = 0;
-        }
-
-        // adjust Etail according to t
-        if(mountain_or_valley == 1) { // handle the valleys 
-          int temp = Ehead + (BLX_GPU - 2 * t) - 1;
-          Etail = (temp > Nx - 1)? Nx - 1 : temp;
-        }
-        else if(mountain_or_valley == 0 && xx == 0) { // the 1st valley, tail should be handled differently 
-          Etail = Ehead + t - 1;
-        }
-        else { // handle the valleys
-          int temp = Ehead + (BLX_GPU - 2 * (BLT_GPU - t - 1)) - 2;
-          Etail = (temp > Nx - 1)? Nx - 1 : temp;
-        }
-
-        // check head and tail
-        if(calculate_E) {
-          std::cout << "valleys, t = " << t << ", (Ehead, Etail) = " << Ehead << ", " << Etail << ")" << "\n";
-        }
-
-        if(mountain_or_valley != 0 || xx != 0) { // the 1st valley, head should not change
-          Hhead = (mountain_or_valley == 1)? Hhead + t : Hhead + (BLT_GPU - t - 1);
-        }
         
-        if(Hhead > Nx - 1) { // it means this valley does not exist in t
-          calculate_H = 0;
-        }
-        if(mountain_or_valley == 1) { // handle the valleys 
-          int temp = Hhead + (BLX_GPU - 2 * t) - 2;
-          Htail = (temp > Nx - 1)? Nx - 1 : temp;
-        }
-        else if(mountain_or_valley == 0 && xx == 0) { // the 1st valley, tail should be handled differently 
-          Htail = Hhead + t - 1;
-        }
-        else { // handle the valleys
-          int temp = Hhead + (BLX_GPU - 2 * (BLT_GPU - t - 1)) - 1;
-          Htail = (temp > Nx - 1)? Nx - 1 : temp;
-        }
-
-        // if(calculate_H) {
-        //   std::cout << "valleys, t = " << t << ", (Hhead, Htail) = " << Hhead << ", " << Htail << ")" << "\n";
-        // }
+        std::vector<int> indices = _get_head_tail(BLX_GPU, BLT_GPU,
+                                                  valley_heads_X, valley_tails_X,
+                                                  xx, t,
+                                                  mountain_or_valley,
+                                                  Nx,
+                                                  &calculate_E, &calculate_H);
 
         // update E
-        for(int x=Ehead; x<=Etail; x++) {
+        for(int x=indices[0]; x<=indices[1]; x++) {
           if(x>=1 && x<=Nx-2 && calculate_E) {
             E_simu[x] = H_simu[x-1] + H_simu[x] * 2; 
           }
         }
 
         // update H
-        for(int x=Hhead; x<=Htail; x++) {
+        for(int x=indices[2]; x<=indices[3]; x++) {
           if(x>=1 && x<=Nx-2 && calculate_H) {
             H_simu[x] = E_simu[x+1] + E_simu[x] * 2; 
           }
@@ -1985,6 +1898,106 @@ void gDiamond::update_FDTD_gpu_simulation_1_D(size_t num_timesteps) { // CPU sin
       std::exit(EXIT_FAILURE);
     }
   }
+}
+
+std::vector<int> gDiamond::_get_head_tail(size_t BLX, size_t BLT,
+                                          std::vector<int> xx_heads, std::vector<int> xx_tails,
+                                          size_t xx, size_t t,
+                                          int mountain_or_valley, // 1 = mountain, 0 = valley
+                                          int Nx,
+                                          int *calculate_E, int *calculate_H) 
+{
+
+  std::vector<int> results(4);
+
+  results[0] = xx_heads[xx]; 
+  results[1] = xx_tails[xx];
+  results[2] = xx_heads[xx]; 
+  results[3] = xx_tails[xx];
+
+  if(mountain_or_valley == 0 && xx == 0 && t == 0) { // skip the first valley in t = 0, since it does not exist 
+    *calculate_E = 0;
+    *calculate_H = 0;
+  }
+
+  // adjust results[0] according to t
+  if(mountain_or_valley != 0 || xx != 0) { // the 1st valley, head should not change
+    results[0] = (mountain_or_valley == 1)? results[0] + t : results[0] + (BLT - t - 1) + 1;
+  }
+  if(results[0] > Nx - 1) { // it means this mountain/valley does not exist in t
+    *calculate_E = 0;
+  }
+
+  // adjust results[1] according to t
+  if(mountain_or_valley == 1) { // handle the mountains 
+    int temp = results[0] + (BLX - 2 * t) - 1;
+    results[1] = (temp > Nx - 1)? Nx - 1 : temp;
+  }
+  else if(mountain_or_valley == 0 && xx == 0) { // the 1st valley, tail should be handled differently 
+    results[1] = results[0] + t - 1;
+  }
+  else { // handle the valleys
+    int temp = results[0] + (BLX - 2 * (BLT - t - 1)) - 2;
+    results[1] = (temp > Nx - 1)? Nx - 1 : temp;
+  }
+
+  if(mountain_or_valley != 0 || xx != 0) { // the 1st valley, head should not change
+    results[2] = (mountain_or_valley == 1)? results[2] + t : results[2] + (BLT - t - 1);
+  }
+  
+  if(results[2] > Nx - 1) { // it means this mountain does not exist in t
+    *calculate_H = 0;
+  }
+  if(mountain_or_valley == 1) { // handle the mountains 
+    int temp = results[2] + (BLX - 2 * t) - 2;
+    results[3] = (temp > Nx - 1)? Nx - 1 : temp;
+  }
+  else if(mountain_or_valley == 0 && xx == 0) { // the 1st valley, tail should be handled differently 
+    results[3] = results[2] + t - 1;
+  }
+  else { // handle the valleys
+    int temp = results[2] + (BLX - 2 * (BLT - t - 1)) - 1;
+    results[3] = (temp > Nx - 1)? Nx - 1 : temp;
+  }
+
+  return results;
+}
+
+void _updateEH_phase_seq(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
+                         std::vector<float>& Hx, std::vector<float>& Hy, std::vector<float>& Hz,
+                         std::vector<float>& Cax, std::vector<float>& Cbx,
+                         std::vector<float>& Cay, std::vector<float>& Cby,
+                         std::vector<float>& Caz, std::vector<float>& Cbz,
+                         std::vector<float>& Dax, std::vector<float>& Dbx,
+                         std::vector<float>& Day, std::vector<float>& Dby,
+                         std::vector<float>& Daz, std::vector<float>& Dbz,
+                         std::vector<float>& Jx, std::vector<float>& Jy, std::vector<float>& Jz,
+                         std::vector<float>& Mx, std::vector<float>& My, std::vector<float>& Mz,
+                         float dx, 
+                         int Nx, int Ny, int Nz,
+                         int xx_num, int yy_num, int zz_num, // number of tiles in each dimensions
+                         std::vector<int> xx_heads, 
+                         std::vector<int> yy_heads, 
+                         std::vector<int> zz_heads,
+                         std::vector<int> xx_tails, 
+                         std::vector<int> yy_tails, 
+                         std::vector<int> zz_tails,
+                         int m_or_v_X, int m_or_v_Y, int m_or_v_Z,
+                         size_t block_size,
+                         size_t grid_size) 
+{
+  for(size_t block_id=0; block_id<grid_size; block_id++) {
+    int xx = block_id % xx_num;
+    int yy = (block_id % (xx_num * yy_num)) / xx_num;
+    int zz = block_id / (xx_num * yy_num);
+    for(size_t thread_id=0; thread_id<block_size; thread_id++) {
+      int local_x = thread_id % BLX_GPU;                     // X coordinate within the tile
+      int local_y = (thread_id / BLX_GPU) % BLY_GPU;     // Y coordinate within the tile
+      int local_z = thread_id / (BLX_GPU * BLY_GPU);     // Z coordinate within the tile
+    }
+  }
+
+
 }
 
 void gDiamond::_updateEH_phase_E_only_seq(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
