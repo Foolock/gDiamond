@@ -1816,9 +1816,9 @@ void gDiamond::update_FDTD_gpu_simulation_1_D(size_t num_timesteps) { // CPU sin
 
     // phase 1. moutains 
     mountain_or_valley = 1;
-    for(size_t t=0; t<BLT_GPU; t++) {
+    for(size_t xx=0; xx<num_mountains_X; xx++) {
 
-      for(size_t xx=0; xx<num_mountains_X; xx++) {
+      for(size_t t=0; t<BLT_GPU; t++) {
 
         int calculate_E = 1; // calculate this E tile or not
         int calculate_H = 1; // calculate this H tile or not
@@ -1848,9 +1848,9 @@ void gDiamond::update_FDTD_gpu_simulation_1_D(size_t num_timesteps) { // CPU sin
 
     // phase 2. valleys
     mountain_or_valley = 0;
-    for(size_t t=0; t<BLT_GPU; t++) {
+    for(size_t xx=0; xx<num_valleys_X; xx++) {
 
-      for(size_t xx=0; xx<num_valleys_X; xx++) {
+      for(size_t t=0; t<BLT_GPU; t++) {
 
         int calculate_E = 1; // calculate this E tile or not
         int calculate_H = 1; // calculate this H tile or not
