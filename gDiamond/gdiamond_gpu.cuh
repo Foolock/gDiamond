@@ -1740,11 +1740,11 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
     valley_heads_X.push_back(range.first);
     valley_tails_X.push_back(range.second);
   }
-  for(auto range : _Hranges_phases_Y[1][BLT_GPU-1]) { 
+  for(auto range : _Hranges_phases_Y[2][BLT_GPU-1]) { 
     valley_heads_Y.push_back(range.first);
     valley_tails_Y.push_back(range.second);
   }
-  for(auto range : _Hranges_phases_Z[1][BLT_GPU-1]) { 
+  for(auto range : _Hranges_phases_Z[3][BLT_GPU-1]) { 
     valley_heads_Z.push_back(range.first);
     valley_tails_Z.push_back(range.second);
   }

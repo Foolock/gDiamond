@@ -90,8 +90,6 @@ void gDiamond::update_FDTD_omp_dt(size_t BLX, size_t BLY, size_t BLZ, size_t BLT
   // clear source Mz for experiments
   _Mz.clear();
 
-  size_t total_cal = 0;
-
   auto start = std::chrono::high_resolution_clock::now();
   for(size_t tt=0; tt<steps; tt++) {
     for(size_t phase=0; phase<max_phases; phase++) {
@@ -102,7 +100,7 @@ void gDiamond::update_FDTD_omp_dt(size_t BLX, size_t BLY, size_t BLZ, size_t BLT
         // std::cout << "omp_dt: Mz_value = " << Mz_value << "\n";
         _Mz[_source_idx] = Mz_value;
 
-        // #pragma omp parallel for collapse(3) schedule(dynamic)
+        #pragma omp parallel for collapse(3) schedule(dynamic)
         for(size_t xx=0; xx<_Entiles_phases_X[phase][t]; xx++) {
           for(size_t yy=0; yy<_Entiles_phases_Y[phase][t]; yy++) {
             for(size_t zz=0; zz<_Entiles_phases_Z[phase][t]; zz++) {
@@ -110,9 +108,6 @@ void gDiamond::update_FDTD_omp_dt(size_t BLX, size_t BLY, size_t BLZ, size_t BLT
               for(size_t x=_Eranges_phases_X[phase][t][xx].first; x<=_Eranges_phases_X[phase][t][xx].second; x++) {
                 for(size_t y=_Eranges_phases_Y[phase][t][yy].first; y<=_Eranges_phases_Y[phase][t][yy].second; y++) {
                   for(size_t z=_Eranges_phases_Z[phase][t][zz].first; z<=_Eranges_phases_Z[phase][t][zz].second; z++) {
-                    if(phase == 0) {
-                      total_cal++;
-                    }
                     size_t idx = x + y*_Nx + z*(_Nx*_Ny);
                     Ex_temp[idx] = _Cax[idx] * Ex_temp[idx] + _Cbx[idx] *
                       ((Hz_temp[idx] - Hz_temp[idx - _Nx]) - (Hy_temp[idx] - Hy_temp[idx - _Nx * _Ny]) - _Jx[idx] * _dx);
@@ -127,7 +122,7 @@ void gDiamond::update_FDTD_omp_dt(size_t BLX, size_t BLY, size_t BLZ, size_t BLT
           }
         }
 
-        // #pragma omp parallel for collapse(3) schedule(dynamic)
+        #pragma omp parallel for collapse(3) schedule(dynamic)
         for(size_t xx=0; xx<_Hntiles_phases_X[phase][t]; xx++) {
           for(size_t yy=0; yy<_Hntiles_phases_Y[phase][t]; yy++) {
             for(size_t zz=0; zz<_Hntiles_phases_Z[phase][t]; zz++) {
@@ -135,9 +130,6 @@ void gDiamond::update_FDTD_omp_dt(size_t BLX, size_t BLY, size_t BLZ, size_t BLT
               for(size_t x=_Hranges_phases_X[phase][t][xx].first; x<=_Hranges_phases_X[phase][t][xx].second; x++) {
                 for(size_t y=_Hranges_phases_Y[phase][t][yy].first; y<=_Hranges_phases_Y[phase][t][yy].second; y++) {
                   for(size_t z=_Hranges_phases_Z[phase][t][zz].first; z<=_Hranges_phases_Z[phase][t][zz].second; z++) {
-                    if(phase == 0) {
-                      total_cal++;
-                    }
                     size_t idx = x + y*_Nx + z*(_Nx*_Ny);
                     Hx_temp[idx] = _Dax[idx] * Hx_temp[idx] + _Dbx[idx] *
                       ((Ey_temp[idx + _Nx * _Ny] - Ey_temp[idx]) - (Ez_temp[idx + _Nx] - Ez_temp[idx]) - _Mx[idx] * _dx);
@@ -156,7 +148,6 @@ void gDiamond::update_FDTD_omp_dt(size_t BLX, size_t BLY, size_t BLZ, size_t BLT
   }
   auto end = std::chrono::high_resolution_clock::now();
   std::cout << "omp_dt runtime: " << std::chrono::duration<double>(end-start).count() << "s\n"; 
-  std::cout << "omp_dt total calculations (phase 1): " << total_cal << "\n";
 
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
     _Ex_omp_dt[i] = Ex_temp[i];
