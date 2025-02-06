@@ -1756,7 +1756,201 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
   size_t num_valleys_Y = valley_heads_Y.size();
   size_t num_valleys_Z = valley_heads_Z.size();
 
+  size_t block_size = BLX_GPU * BLY_GPU * BLZ_GPU;
+  size_t grid_size;
 
+  size_t total_cal = 0;
+
+  for(size_t t=0; t<num_timesteps/BLT_GPU; t++) {
+    
+    // phase 1: (m, m, m)
+    grid_size = num_mountains_X * num_mountains_Y * num_mountains_Z;
+    _updateEH_phase_seq(Ex_temp, Ey_temp, Ez_temp,
+                        Hx_temp, Hy_temp, Hz_temp,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_mountains_X, num_mountains_Y, num_mountains_Z, 
+                        mountain_heads_X, mountain_heads_Y, mountain_heads_Z, 
+                        mountain_tails_X, mountain_tails_Y, mountain_tails_Z, 
+                        1, 1, 1,
+                        total_cal,
+                        block_size,
+                        grid_size);
+
+    // phase 2: (v, m, m)
+    grid_size = num_valleys_X * num_mountains_Y * num_mountains_Z;
+    _updateEH_phase_seq(Ex_temp, Ey_temp, Ez_temp,
+                        Hx_temp, Hy_temp, Hz_temp,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_valleys_X, num_mountains_Y, num_mountains_Z, 
+                        valley_heads_X, mountain_heads_Y, mountain_heads_Z, 
+                        valley_tails_X, mountain_tails_Y, mountain_tails_Z, 
+                        0, 1, 1,
+                        total_cal,
+                        block_size,
+                        grid_size);
+
+    // phase 3: (m, v, m)
+    grid_size = num_mountains_X * num_valleys_Y * num_mountains_Z;
+    _updateEH_phase_seq(Ex_temp, Ey_temp, Ez_temp,
+                        Hx_temp, Hy_temp, Hz_temp,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_mountains_X, num_valleys_Y, num_mountains_Z, 
+                        mountain_heads_X, valley_heads_Y, mountain_heads_Z, 
+                        mountain_tails_X, valley_tails_Y, mountain_tails_Z, 
+                        1, 0, 1,
+                        total_cal,
+                        block_size,
+                        grid_size);
+
+    // phase 4: (m, m, v)
+    grid_size = num_mountains_X * num_mountains_Y * num_valleys_Z;
+    _updateEH_phase_seq(Ex_temp, Ey_temp, Ez_temp,
+                        Hx_temp, Hy_temp, Hz_temp,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_mountains_X, num_mountains_Y, num_valleys_Z, 
+                        mountain_heads_X, mountain_heads_Y, valley_heads_Z, 
+                        mountain_tails_X, mountain_tails_Y, valley_tails_Z, 
+                        1, 1, 0,
+                        total_cal,
+                        block_size,
+                        grid_size);
+
+    // phase 5: (v, v, m)
+    grid_size = num_valleys_X * num_valleys_Y * num_mountains_Z;
+    _updateEH_phase_seq(Ex_temp, Ey_temp, Ez_temp,
+                        Hx_temp, Hy_temp, Hz_temp,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_valleys_X, num_valleys_Y, num_mountains_Z, 
+                        valley_heads_X, valley_heads_Y, mountain_heads_Z, 
+                        valley_tails_X, valley_tails_Y, mountain_tails_Z, 
+                        0, 0, 1,
+                        total_cal,
+                        block_size,
+                        grid_size);
+
+    // phase 6: (v, m, v)
+    grid_size = num_valleys_X * num_mountains_Y * num_valleys_Z;
+    _updateEH_phase_seq(Ex_temp, Ey_temp, Ez_temp,
+                        Hx_temp, Hy_temp, Hz_temp,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_valleys_X, num_mountains_Y, num_valleys_Z, 
+                        valley_heads_X, mountain_heads_Y, valley_heads_Z, 
+                        valley_tails_X, mountain_tails_Y, valley_tails_Z, 
+                        0, 1, 0,
+                        total_cal,
+                        block_size,
+                        grid_size);
+
+    // phase 7: (m, v, v)
+    grid_size = num_mountains_X * num_valleys_Y * num_valleys_Z;
+    _updateEH_phase_seq(Ex_temp, Ey_temp, Ez_temp,
+                        Hx_temp, Hy_temp, Hz_temp,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_mountains_X, num_valleys_Y, num_valleys_Z, 
+                        mountain_heads_X, valley_heads_Y, valley_heads_Z, 
+                        mountain_tails_X, valley_tails_Y, valley_tails_Z, 
+                        1, 0, 0,
+                        total_cal,
+                        block_size,
+                        grid_size);
+
+    // phase 8: (v, v, v)
+    grid_size = num_valleys_X * num_valleys_Y * num_valleys_Z;
+    _updateEH_phase_seq(Ex_temp, Ey_temp, Ez_temp,
+                        Hx_temp, Hy_temp, Hz_temp,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_valleys_X, num_valleys_Y, num_valleys_Z, 
+                        valley_heads_X, valley_heads_Y, valley_heads_Z, 
+                        valley_tails_X, valley_tails_Y, valley_tails_Z, 
+                        0, 0, 0,
+                        total_cal,
+                        block_size,
+                        grid_size);
+
+  }
+
+  std::cout << "gpu simulation total calculatons: " << total_cal << "\n";
+
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    _Ex_simu[i] = Ex_temp[i];
+    _Ey_simu[i] = Ey_temp[i];
+    _Ez_simu[i] = Ez_temp[i];
+    _Hx_simu[i] = Hx_temp[i];
+    _Hy_simu[i] = Hy_temp[i];
+    _Hz_simu[i] = Hz_temp[i];
+  }
 
 } 
 
@@ -1963,7 +2157,7 @@ std::vector<int> gDiamond::_get_head_tail(size_t BLX, size_t BLT,
   return results;
 }
 
-void _updateEH_phase_seq(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
+void gDiamond::_updateEH_phase_seq(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
                          std::vector<float>& Hx, std::vector<float>& Hy, std::vector<float>& Hz,
                          std::vector<float>& Cax, std::vector<float>& Cbx,
                          std::vector<float>& Cay, std::vector<float>& Cby,
@@ -1983,18 +2177,161 @@ void _updateEH_phase_seq(std::vector<float>& Ex, std::vector<float>& Ey, std::ve
                          std::vector<int> yy_tails, 
                          std::vector<int> zz_tails,
                          int m_or_v_X, int m_or_v_Y, int m_or_v_Z,
+                         size_t& total_cal,
                          size_t block_size,
                          size_t grid_size) 
 {
-  for(size_t block_id=0; block_id<grid_size; block_id++) {
-    int xx = block_id % xx_num;
-    int yy = (block_id % (xx_num * yy_num)) / xx_num;
-    int zz = block_id / (xx_num * yy_num);
-    for(size_t thread_id=0; thread_id<block_size; thread_id++) {
-      int local_x = thread_id % BLX_GPU;                     // X coordinate within the tile
-      int local_y = (thread_id / BLX_GPU) % BLY_GPU;     // Y coordinate within the tile
-      int local_z = thread_id / (BLX_GPU * BLY_GPU);     // Z coordinate within the tile
+  // for(size_t block_id=0; block_id<grid_size; block_id++) {
+  //   int xx = block_id % xx_num;
+  //   int yy = (block_id % (xx_num * yy_num)) / xx_num;
+  //   int zz = block_id / (xx_num * yy_num);
+  for(int xx=0; xx<xx_num; xx++) {
+  for(int yy=0; yy<yy_num; yy++) {
+  for(int zz=0; zz<zz_num; zz++) {
+  
+    for(size_t t=0; t<BLT_GPU; t++) {
+      
+      int calculate_Ex = 1; // calculate this E tile or not
+      int calculate_Hx = 1; // calculate this H tile or not
+      int calculate_Ey = 1; 
+      int calculate_Hy = 1; 
+      int calculate_Ez = 1; 
+      int calculate_Hz = 1; 
+  
+      // {Ehead, Etail, Hhead, Htail}
+      std::vector<int> indices_X = _get_head_tail(BLX_GPU, BLT_GPU,
+                                                  xx_heads, xx_tails,
+                                                  xx, t,
+                                                  m_or_v_X,
+                                                  Nx,
+                                                  &calculate_Ex, &calculate_Hx);
+
+      /*
+      if(yy == 0 && zz == 0) {
+        std::cout << "X dimension, xx = " << xx << ", t = " << t << "\n";
+        std::cout << "calculate_Ex = " << calculate_Ex << ", calculate_Hx = " << calculate_Hx << ", ";
+        std::cout << "Ehead = " << indices_X[0] << ", " 
+                  << "Etail = " << indices_X[1] << ", "
+                  << "Hhead = " << indices_X[2] << ", "
+                  << "Htail = " << indices_X[3] << "\n";
+                                      
+      }
+      */
+
+      std::vector<int> indices_Y = _get_head_tail(BLY_GPU, BLT_GPU,
+                                                  yy_heads, yy_tails,
+                                                  yy, t,
+                                                  m_or_v_Y,
+                                                  Ny,
+                                                  &calculate_Ey, &calculate_Hy);
+
+      std::vector<int> indices_Z = _get_head_tail(BLZ_GPU, BLT_GPU,
+                                                  zz_heads, zz_tails,
+                                                  zz, t,
+                                                  m_or_v_Z,
+                                                  Nz,
+                                                  &calculate_Ez, &calculate_Hz);
+
+      // update E
+      if(calculate_Ex & calculate_Ey & calculate_Ez) {
+        for(int x=indices_X[0]; x<=indices_X[1]; x++) {
+          for(int y=indices_Y[0]; y<=indices_Y[1]; y++) {
+            for(int z=indices_Z[0]; z<=indices_Z[1]; z++) {
+              if(x >= 1 && x <= Nx - 2 && y >= 1 && y <= Ny - 2 && z >= 1 && z <= Nz - 2) {
+                total_cal++;
+                int g_idx = x + y * Nx + z * Nx * Ny; // global idx
+
+                Ex[g_idx] = Cax[g_idx] * Ex[g_idx] + Cbx[g_idx] *
+                          ((Hz[g_idx] - Hz[g_idx - Nx]) - (Hy[g_idx] - Hy[g_idx - Nx * Ny]) - Jx[g_idx] * dx);
+                Ey[g_idx] = Cay[g_idx] * Ey[g_idx] + Cby[g_idx] *
+                          ((Hx[g_idx] - Hx[g_idx - Nx * Ny]) - (Hz[g_idx] - Hz[g_idx - 1]) - Jy[g_idx] * dx);
+                Ez[g_idx] = Caz[g_idx] * Ez[g_idx] + Cbz[g_idx] *
+                          ((Hy[g_idx] - Hy[g_idx - 1]) - (Hx[g_idx] - Hx[g_idx - Nx]) - Jz[g_idx] * dx);
+              }
+            }
+          }
+        }
+      }
+
+      // update H
+      if(calculate_Hx & calculate_Hy & calculate_Hz) {
+        for(int x=indices_X[2]; x<=indices_X[3]; x++) {
+          for(int y=indices_Y[2]; y<=indices_Y[3]; y++) {
+            for(int z=indices_Z[2]; z<=indices_Z[3]; z++) {
+              if(x >= 1 && x <= Nx - 2 && y >= 1 && y <= Ny - 2 && z >= 1 && z <= Nz - 2) {
+                total_cal++;
+                int g_idx = x + y * Nx + z * Nx * Ny; // global idx
+
+                Hx[g_idx] = Dax[g_idx] * Hx[g_idx] + Dbx[g_idx] *
+                          ((Ey[g_idx + Nx * Ny] - Ey[g_idx]) - (Ez[g_idx + Nx] - Ez[g_idx]) - Mx[g_idx] * dx);
+                Hy[g_idx] = Day[g_idx] * Hy[g_idx] + Dby[g_idx] *
+                          ((Ez[g_idx + 1] - Ez[g_idx]) - (Ex[g_idx + Nx * Ny] - Ex[g_idx]) - My[g_idx] * dx);
+                Hz[g_idx] = Daz[g_idx] * Hz[g_idx] + Dbz[g_idx] *
+                          ((Ex[g_idx + Nx] - Ex[g_idx]) - (Ey[g_idx + 1] - Ey[g_idx]) - Mz[g_idx] * dx);
+              }
+            }
+          }
+        }
+      }
+
+      /*
+      // update E
+      for(size_t thread_id=0; thread_id<block_size; thread_id++) {
+        int local_x = thread_id % BLX_GPU;                     // X coordinate within the tile
+        int local_y = (thread_id / BLX_GPU) % BLY_GPU;     // Y coordinate within the tile
+        int local_z = thread_id / (BLX_GPU * BLY_GPU);     // Z coordinate within the tile
+
+        // Ehead is offset
+        int global_x = indices_X[0] + local_x; // Global X coordinate
+        int global_y = indices_Y[0] + local_y; // Global Y coordinate
+        int global_z = indices_Z[0] + local_z; // Global Z coordinate
+
+        if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
+          global_x <= indices_X[1] &&
+          global_y <= indices_Y[1] &&
+          global_z <= indices_Z[1]) {
+          int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
+
+          Ex[g_idx] = Cax[g_idx] * Ex[g_idx] + Cbx[g_idx] *
+                    ((Hz[g_idx] - Hz[g_idx - Nx]) - (Hy[g_idx] - Hy[g_idx - Nx * Ny]) - Jx[g_idx] * dx);
+          Ey[g_idx] = Cay[g_idx] * Ey[g_idx] + Cby[g_idx] *
+                    ((Hx[g_idx] - Hx[g_idx - Nx * Ny]) - (Hz[g_idx] - Hz[g_idx - 1]) - Jy[g_idx] * dx);
+          Ez[g_idx] = Caz[g_idx] * Ez[g_idx] + Cbz[g_idx] *
+                    ((Hy[g_idx] - Hy[g_idx - 1]) - (Hx[g_idx] - Hx[g_idx - Nx]) - Jz[g_idx] * dx);
+        }
+      }
+
+      // update H 
+      for(size_t thread_id=0; thread_id<block_size; thread_id++) {
+        int local_x = thread_id % BLX_GPU;                     // X coordinate within the tile
+        int local_y = (thread_id / BLX_GPU) % BLY_GPU;     // Y coordinate within the tile
+        int local_z = thread_id / (BLX_GPU * BLY_GPU);     // Z coordinate within the tile
+
+        // Hhead is offset
+        int global_x = indices_X[2] + local_x; // Global X coordinate
+        int global_y = indices_Y[2] + local_y; // Global Y coordinate
+        int global_z = indices_Z[2] + local_z; // Global Z coordinate
+
+        if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
+          global_x <= indices_X[3] &&
+          global_y <= indices_Y[3] &&
+          global_z <= indices_Z[3]) {
+          int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
+
+          Hx[g_idx] = Dax[g_idx] * Hx[g_idx] + Dbx[g_idx] *
+                    ((Ey[g_idx + Nx * Ny] - Ey[g_idx]) - (Ez[g_idx + Nx] - Ez[g_idx]) - Mx[g_idx] * dx);
+          Hy[g_idx] = Day[g_idx] * Hy[g_idx] + Dby[g_idx] *
+                    ((Ez[g_idx + 1] - Ez[g_idx]) - (Ex[g_idx + Nx * Ny] - Ex[g_idx]) - My[g_idx] * dx);
+          Hz[g_idx] = Daz[g_idx] * Hz[g_idx] + Dbz[g_idx] *
+                    ((Ex[g_idx + Nx] - Ex[g_idx]) - (Ey[g_idx + 1] - Ey[g_idx]) - Mz[g_idx] * dx);
+        }
+      }
+      */
+
+
     }
+  }
+  }
   }
 
 
