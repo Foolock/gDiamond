@@ -1759,8 +1759,6 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
   size_t block_size = BLX_GPU * BLY_GPU * BLZ_GPU;
   size_t grid_size;
 
-  size_t total_cal = 0;
-
   for(size_t t=0; t<num_timesteps/BLT_GPU; t++) {
     
     // phase 1: (m, m, m)
@@ -1781,7 +1779,6 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
                         mountain_heads_X, mountain_heads_Y, mountain_heads_Z, 
                         mountain_tails_X, mountain_tails_Y, mountain_tails_Z, 
                         1, 1, 1,
-                        total_cal,
                         block_size,
                         grid_size);
 
@@ -1803,7 +1800,6 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
                         valley_heads_X, mountain_heads_Y, mountain_heads_Z, 
                         valley_tails_X, mountain_tails_Y, mountain_tails_Z, 
                         0, 1, 1,
-                        total_cal,
                         block_size,
                         grid_size);
 
@@ -1825,7 +1821,6 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
                         mountain_heads_X, valley_heads_Y, mountain_heads_Z, 
                         mountain_tails_X, valley_tails_Y, mountain_tails_Z, 
                         1, 0, 1,
-                        total_cal,
                         block_size,
                         grid_size);
 
@@ -1847,7 +1842,6 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
                         mountain_heads_X, mountain_heads_Y, valley_heads_Z, 
                         mountain_tails_X, mountain_tails_Y, valley_tails_Z, 
                         1, 1, 0,
-                        total_cal,
                         block_size,
                         grid_size);
 
@@ -1869,7 +1863,6 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
                         valley_heads_X, valley_heads_Y, mountain_heads_Z, 
                         valley_tails_X, valley_tails_Y, mountain_tails_Z, 
                         0, 0, 1,
-                        total_cal,
                         block_size,
                         grid_size);
 
@@ -1891,7 +1884,6 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
                         valley_heads_X, mountain_heads_Y, valley_heads_Z, 
                         valley_tails_X, mountain_tails_Y, valley_tails_Z, 
                         0, 1, 0,
-                        total_cal,
                         block_size,
                         grid_size);
 
@@ -1913,7 +1905,6 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
                         mountain_heads_X, valley_heads_Y, valley_heads_Z, 
                         mountain_tails_X, valley_tails_Y, valley_tails_Z, 
                         1, 0, 0,
-                        total_cal,
                         block_size,
                         grid_size);
 
@@ -1935,13 +1926,10 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
                         valley_heads_X, valley_heads_Y, valley_heads_Z, 
                         valley_tails_X, valley_tails_Y, valley_tails_Z, 
                         0, 0, 0,
-                        total_cal,
                         block_size,
                         grid_size);
 
   }
-
-  std::cout << "gpu simulation total calculatons: " << total_cal << "\n";
 
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
     _Ex_simu[i] = Ex_temp[i];
@@ -2177,17 +2165,13 @@ void gDiamond::_updateEH_phase_seq(std::vector<float>& Ex, std::vector<float>& E
                          std::vector<int> yy_tails, 
                          std::vector<int> zz_tails,
                          int m_or_v_X, int m_or_v_Y, int m_or_v_Z,
-                         size_t& total_cal,
                          size_t block_size,
                          size_t grid_size) 
 {
-  // for(size_t block_id=0; block_id<grid_size; block_id++) {
-  //   int xx = block_id % xx_num;
-  //   int yy = (block_id % (xx_num * yy_num)) / xx_num;
-  //   int zz = block_id / (xx_num * yy_num);
-  for(int xx=0; xx<xx_num; xx++) {
-  for(int yy=0; yy<yy_num; yy++) {
-  for(int zz=0; zz<zz_num; zz++) {
+  for(size_t block_id=0; block_id<grid_size; block_id++) {
+    int xx = block_id % xx_num;
+    int yy = (block_id % (xx_num * yy_num)) / xx_num;
+    int zz = block_id / (xx_num * yy_num);
   
     for(size_t t=0; t<BLT_GPU; t++) {
       
@@ -2232,13 +2216,14 @@ void gDiamond::_updateEH_phase_seq(std::vector<float>& Ex, std::vector<float>& E
                                                   Nz,
                                                   &calculate_Ez, &calculate_Hz);
 
+      /*
+
       // update E
       if(calculate_Ex & calculate_Ey & calculate_Ez) {
         for(int x=indices_X[0]; x<=indices_X[1]; x++) {
           for(int y=indices_Y[0]; y<=indices_Y[1]; y++) {
             for(int z=indices_Z[0]; z<=indices_Z[1]; z++) {
               if(x >= 1 && x <= Nx - 2 && y >= 1 && y <= Ny - 2 && z >= 1 && z <= Nz - 2) {
-                total_cal++;
                 int g_idx = x + y * Nx + z * Nx * Ny; // global idx
 
                 Ex[g_idx] = Cax[g_idx] * Ex[g_idx] + Cbx[g_idx] *
@@ -2259,7 +2244,6 @@ void gDiamond::_updateEH_phase_seq(std::vector<float>& Ex, std::vector<float>& E
           for(int y=indices_Y[2]; y<=indices_Y[3]; y++) {
             for(int z=indices_Z[2]; z<=indices_Z[3]; z++) {
               if(x >= 1 && x <= Nx - 2 && y >= 1 && y <= Ny - 2 && z >= 1 && z <= Nz - 2) {
-                total_cal++;
                 int g_idx = x + y * Nx + z * Nx * Ny; // global idx
 
                 Hx[g_idx] = Dax[g_idx] * Hx[g_idx] + Dbx[g_idx] *
@@ -2273,66 +2257,68 @@ void gDiamond::_updateEH_phase_seq(std::vector<float>& Ex, std::vector<float>& E
           }
         }
       }
+      */
 
-      /*
       // update E
-      for(size_t thread_id=0; thread_id<block_size; thread_id++) {
-        int local_x = thread_id % BLX_GPU;                     // X coordinate within the tile
-        int local_y = (thread_id / BLX_GPU) % BLY_GPU;     // Y coordinate within the tile
-        int local_z = thread_id / (BLX_GPU * BLY_GPU);     // Z coordinate within the tile
+      if(calculate_Ex & calculate_Ey & calculate_Ez) {
+        for(size_t thread_id=0; thread_id<block_size; thread_id++) {
+          int local_x = thread_id % BLX_GPU;                     // X coordinate within the tile
+          int local_y = (thread_id / BLX_GPU) % BLY_GPU;     // Y coordinate within the tile
+          int local_z = thread_id / (BLX_GPU * BLY_GPU);     // Z coordinate within the tile
 
-        // Ehead is offset
-        int global_x = indices_X[0] + local_x; // Global X coordinate
-        int global_y = indices_Y[0] + local_y; // Global Y coordinate
-        int global_z = indices_Z[0] + local_z; // Global Z coordinate
+          // Ehead is offset
+          int global_x = indices_X[0] + local_x; // Global X coordinate
+          int global_y = indices_Y[0] + local_y; // Global Y coordinate
+          int global_z = indices_Z[0] + local_z; // Global Z coordinate
 
-        if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
-          global_x <= indices_X[1] &&
-          global_y <= indices_Y[1] &&
-          global_z <= indices_Z[1]) {
-          int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
+          if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
+            global_x <= indices_X[1] &&
+            global_y <= indices_Y[1] &&
+            global_z <= indices_Z[1]) {
+            int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
 
-          Ex[g_idx] = Cax[g_idx] * Ex[g_idx] + Cbx[g_idx] *
-                    ((Hz[g_idx] - Hz[g_idx - Nx]) - (Hy[g_idx] - Hy[g_idx - Nx * Ny]) - Jx[g_idx] * dx);
-          Ey[g_idx] = Cay[g_idx] * Ey[g_idx] + Cby[g_idx] *
-                    ((Hx[g_idx] - Hx[g_idx - Nx * Ny]) - (Hz[g_idx] - Hz[g_idx - 1]) - Jy[g_idx] * dx);
-          Ez[g_idx] = Caz[g_idx] * Ez[g_idx] + Cbz[g_idx] *
-                    ((Hy[g_idx] - Hy[g_idx - 1]) - (Hx[g_idx] - Hx[g_idx - Nx]) - Jz[g_idx] * dx);
+            Ex[g_idx] = Cax[g_idx] * Ex[g_idx] + Cbx[g_idx] *
+                      ((Hz[g_idx] - Hz[g_idx - Nx]) - (Hy[g_idx] - Hy[g_idx - Nx * Ny]) - Jx[g_idx] * dx);
+            Ey[g_idx] = Cay[g_idx] * Ey[g_idx] + Cby[g_idx] *
+                      ((Hx[g_idx] - Hx[g_idx - Nx * Ny]) - (Hz[g_idx] - Hz[g_idx - 1]) - Jy[g_idx] * dx);
+            Ez[g_idx] = Caz[g_idx] * Ez[g_idx] + Cbz[g_idx] *
+                      ((Hy[g_idx] - Hy[g_idx - 1]) - (Hx[g_idx] - Hx[g_idx - Nx]) - Jz[g_idx] * dx);
+          }
         }
       }
 
       // update H 
-      for(size_t thread_id=0; thread_id<block_size; thread_id++) {
-        int local_x = thread_id % BLX_GPU;                     // X coordinate within the tile
-        int local_y = (thread_id / BLX_GPU) % BLY_GPU;     // Y coordinate within the tile
-        int local_z = thread_id / (BLX_GPU * BLY_GPU);     // Z coordinate within the tile
+      if(calculate_Hx & calculate_Hy & calculate_Hz) {
+        for(size_t thread_id=0; thread_id<block_size; thread_id++) {
+          int local_x = thread_id % BLX_GPU;                     // X coordinate within the tile
+          int local_y = (thread_id / BLX_GPU) % BLY_GPU;     // Y coordinate within the tile
+          int local_z = thread_id / (BLX_GPU * BLY_GPU);     // Z coordinate within the tile
 
-        // Hhead is offset
-        int global_x = indices_X[2] + local_x; // Global X coordinate
-        int global_y = indices_Y[2] + local_y; // Global Y coordinate
-        int global_z = indices_Z[2] + local_z; // Global Z coordinate
+          // Hhead is offset
+          int global_x = indices_X[2] + local_x; // Global X coordinate
+          int global_y = indices_Y[2] + local_y; // Global Y coordinate
+          int global_z = indices_Z[2] + local_z; // Global Z coordinate
 
-        if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
-          global_x <= indices_X[3] &&
-          global_y <= indices_Y[3] &&
-          global_z <= indices_Z[3]) {
-          int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
+          if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
+            global_x <= indices_X[3] &&
+            global_y <= indices_Y[3] &&
+            global_z <= indices_Z[3]) {
+            int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
 
-          Hx[g_idx] = Dax[g_idx] * Hx[g_idx] + Dbx[g_idx] *
-                    ((Ey[g_idx + Nx * Ny] - Ey[g_idx]) - (Ez[g_idx + Nx] - Ez[g_idx]) - Mx[g_idx] * dx);
-          Hy[g_idx] = Day[g_idx] * Hy[g_idx] + Dby[g_idx] *
-                    ((Ez[g_idx + 1] - Ez[g_idx]) - (Ex[g_idx + Nx * Ny] - Ex[g_idx]) - My[g_idx] * dx);
-          Hz[g_idx] = Daz[g_idx] * Hz[g_idx] + Dbz[g_idx] *
-                    ((Ex[g_idx + Nx] - Ex[g_idx]) - (Ey[g_idx + 1] - Ey[g_idx]) - Mz[g_idx] * dx);
+            Hx[g_idx] = Dax[g_idx] * Hx[g_idx] + Dbx[g_idx] *
+                      ((Ey[g_idx + Nx * Ny] - Ey[g_idx]) - (Ez[g_idx + Nx] - Ez[g_idx]) - Mx[g_idx] * dx);
+            Hy[g_idx] = Day[g_idx] * Hy[g_idx] + Dby[g_idx] *
+                      ((Ez[g_idx + 1] - Ez[g_idx]) - (Ex[g_idx + Nx * Ny] - Ex[g_idx]) - My[g_idx] * dx);
+            Hz[g_idx] = Daz[g_idx] * Hz[g_idx] + Dbz[g_idx] *
+                      ((Ex[g_idx + Nx] - Ex[g_idx]) - (Ey[g_idx + 1] - Ey[g_idx]) - Mz[g_idx] * dx);
+          }
         }
       }
-      */
-
 
     }
-  }
-  }
-  }
+  } 
+  
+  
 
 
 }

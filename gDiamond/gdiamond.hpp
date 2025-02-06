@@ -111,7 +111,6 @@ class gDiamond {
                              std::vector<int> yy_tails, 
                              std::vector<int> zz_tails,
                              int m_or_v_X, int m_or_v_Y, int m_or_v_Z,
-                             size_t& total_cal,
                              size_t block_size,
                              size_t grid_size);
 
@@ -338,7 +337,6 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
     _Mz[_source_idx] = Mz_value;
   }
 
-  size_t total_cal = 0;
   auto start = std::chrono::high_resolution_clock::now();
   for(size_t t=0; t<num_timesteps; t++) {
 
@@ -346,7 +344,6 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
     for(size_t k=1; k<_Nz-1; k++) {
       for(size_t j=1; j<_Ny-1; j++) {
         for(size_t i=1; i<_Nx-1; i++) {
-          total_cal++;
           size_t idx = i + j*_Nx + k*(_Nx*_Ny);
           Ex_temp[idx] = _Cax[idx] * Ex_temp[idx] + _Cbx[idx] *
             ((Hz_temp[idx] - Hz_temp[idx - _Nx]) - (Hy_temp[idx] - Hy_temp[idx - _Nx * _Ny]) - _Jx[idx] * _dx);
@@ -362,7 +359,6 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
     for(size_t k=1; k<_Nz-1; k++) {
       for(size_t j=1; j<_Ny-1; j++) {
         for(size_t i=1; i<_Nx-1; i++) {
-          total_cal++;
           size_t idx = i + j*_Nx + k*(_Nx*_Ny);
           Hx_temp[idx] = _Dax[idx] * Hx_temp[idx] + _Dbx[idx] *
             ((Ey_temp[idx + _Nx * _Ny] - Ey_temp[idx]) - (Ez_temp[idx + _Nx] - Ez_temp[idx]) - _Mx[idx] * _dx);
@@ -377,7 +373,6 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
   auto end = std::chrono::high_resolution_clock::now();
   std::cout << "seq runtime: " << std::chrono::duration<double>(end-start).count() << "s\n"; 
   std::cout << "seq performance: " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / std::chrono::duration<double>(end-start).count() << "Mcells/s\n";
-  std::cout << "seq total calculations: " << total_cal << "\n";
 
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
     _Ex_seq[i] = Ex_temp[i];
