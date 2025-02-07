@@ -80,6 +80,7 @@ class gDiamond {
     void update_FDTD_gpu_simulation(size_t num_timesteps); // simulation of gpu threads
     void update_FDTD_gpu_simulation_1_D(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow 
     void update_FDTD_gpu_fuse_kernel_globalmem(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels, global memory only
+    void update_FDTD_gpu_fuse_kernel_shmem_EH(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels, put EH in shared memory 
 
     // check correctness
     bool check_correctness_gpu();

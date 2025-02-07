@@ -9,7 +9,7 @@ int main() {
   gdiamond::gDiamond exp(Nx, Ny, Nz); 
 
   exp.update_FDTD_seq_check_result(num_timesteps);
-  exp.update_FDTD_gpu_fuse_kernel_globalmem(num_timesteps);
+  exp.update_FDTD_gpu_fuse_kernel_shmem_EH(num_timesteps);
 
   // exp.print_results();
 

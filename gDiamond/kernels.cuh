@@ -823,6 +823,226 @@ __global__ void updateEH_phase_global_mem(float *Ex, float *Ey, float *Ez,
   }
 } 
   
+__global__ void updateEH_phase_shmem_EH(float *Ex, float *Ey, float *Ez,
+                                        float *Hx, float *Hy, float *Hz,
+                                        float *Cax, float *Cbx,
+                                        float *Cay, float *Cby,
+                                        float *Caz, float *Cbz,
+                                        float *Dax, float *Dbx,
+                                        float *Day, float *Dby,
+                                        float *Daz, float *Dbz,
+                                        float *Jx, float *Jy, float *Jz,
+                                        float *Mx, float *My, float *Mz,
+                                        float dx, 
+                                        int Nx, int Ny, int Nz,
+                                        int xx_num, int yy_num, int zz_num, 
+                                        int *xx_heads, 
+                                        int *yy_heads, 
+                                        int *zz_heads,
+                                        int *xx_tails, 
+                                        int *yy_tails, 
+                                        int *zz_tails,
+                                        int m_or_v_X, int m_or_v_Y, int m_or_v_Z,
+                                        size_t block_size,
+                                        size_t grid_size) 
+{
+  // first we map each (xx, yy, zz) to a block
+  int xx = blockIdx.x % xx_num;
+  int yy = (blockIdx.x % (xx_num * yy_num)) / xx_num;
+  int zz = blockIdx.x / (xx_num * yy_num);
+
+  // map each thread in the block to a global index
+  int tid = threadIdx.x;
+  int local_x = tid % BLX_GPU;                     // X coordinate within the tile
+  int local_y = (tid / BLX_GPU) % BLY_GPU;     // Y coordinate within the tile
+  int local_z = tid / (BLX_GPU * BLY_GPU);     // Z coordinate within the tile
+
+  // E, H array needs extra HALO space since stencil
+  __shared__ float Ex_shmem[BLX_EH * BLY_EH * BLZ_EH];
+  __shared__ float Ey_shmem[BLX_EH * BLY_EH * BLZ_EH];
+  __shared__ float Ez_shmem[BLX_EH * BLY_EH * BLZ_EH];
+  __shared__ float Hx_shmem[BLX_EH * BLY_EH * BLZ_EH];
+  __shared__ float Hy_shmem[BLX_EH * BLY_EH * BLZ_EH];
+  __shared__ float Hz_shmem[BLX_EH * BLY_EH * BLZ_EH];
+
+  int global_x = xx_heads[xx] + local_x; // Global X coordinate
+  int global_y = yy_heads[yy] + local_y; // Global Y coordinate
+  int global_z = zz_heads[zz] + local_z; // Global Z coordinate
+  int global_idx = global_x + global_y * Nx + global_z * Nx * Ny;
+
+  // load H, stencil pattern x-1, y-1, z-1
+  int shared_H_x = local_x + 1;
+  int shared_H_y = local_y + 1;
+  int shared_H_z = local_z + 1;
+  int shared_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH;
+
+  if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz &&
+     global_x <= xx_tails[xx] &&
+     global_y <= yy_tails[yy] &&
+     global_z <= zz_tails[zz]) {
+    Hx_shmem[shared_H_idx] = Hx[global_idx];
+    Hy_shmem[shared_H_idx] = Hy[global_idx];
+    Hz_shmem[shared_H_idx] = Hz[global_idx];
+
+    // load HALO region
+    if(local_x == 0 && global_x > 0) {
+      Hz_shmem[shared_H_x - 1 + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH] = Hz[global_x - 1 + global_y * Nx + global_z * Nx * Ny];
+      Hy_shmem[shared_H_x - 1 + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH] = Hy[global_x - 1 + global_y * Nx + global_z * Nx * Ny];
+    }
+    if(local_y == 0 && global_y > 0) {
+      Hx_shmem[shared_H_x + (shared_H_y - 1) * BLX_EH + shared_H_z * BLX_EH * BLY_EH] = Hx[global_x + (global_y - 1) * Nx + global_z * Nx * Ny];
+      Hz_shmem[shared_H_x + (shared_H_y - 1) * BLX_EH + shared_H_z * BLX_EH * BLY_EH] = Hz[global_x + (global_y - 1) * Nx + global_z * Nx * Ny];
+    }
+    if(local_z == 0 && global_z > 0) {
+      Hx_shmem[shared_H_x + shared_H_y * BLX_EH + (shared_H_z - 1) * BLX_EH * BLY_EH] = Hx[global_x + global_y * Nx + (global_z - 1) * Nx * Ny];
+      Hy_shmem[shared_H_x + shared_H_y * BLX_EH + (shared_H_z - 1) * BLX_EH * BLY_EH] = Hy[global_x + global_y * Nx + (global_z - 1) * Nx * Ny];
+    }
+  }
+
+  // load E, stencil pattern x+1, y+1, z+1
+  // the padding does not affect origins of local idx and shared_E_idx
+  // local idx and shared_E_idx still have the same origin
+  int shared_E_x = local_x;
+  int shared_E_y = local_y;
+  int shared_E_z = local_z;
+
+  int shared_E_idx = shared_E_x + shared_E_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH;
+
+  if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz &&
+     global_x <= xx_tails[xx] &&
+     global_y <= yy_tails[yy] &&
+     global_z <= zz_tails[zz]) {
+
+    Ex_shmem[shared_E_idx] = Ex[global_idx];
+    Ey_shmem[shared_E_idx] = Ey[global_idx];
+    Ez_shmem[shared_E_idx] = Ez[global_idx];
+
+    // load HALO region
+    if(local_x == BLX_GPU - 1 && global_x < Nx - 1) {
+      Ez_shmem[shared_E_x + 1 + shared_E_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH] = Ez[global_x + 1 + global_y * Nx + global_z * Nx * Ny];
+      Ey_shmem[shared_E_x + 1 + shared_E_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH] = Ey[global_x + 1 + global_y * Nx + global_z * Nx * Ny];
+    }
+    if(local_y == BLY_GPU - 1 && global_y < Ny - 1) {
+      Ex_shmem[shared_E_x + (shared_E_y + 1) * BLX_EH + shared_E_z * BLX_EH * BLY_EH] = Ex[global_x + (global_y + 1) * Nx + global_z * Nx * Ny];
+      Ez_shmem[shared_E_x + (shared_E_y + 1) * BLX_EH + shared_E_z * BLX_EH * BLY_EH] = Ez[global_x + (global_y + 1) * Nx + global_z * Nx * Ny];
+    }
+    if(local_z == BLZ_GPU - 1 && global_z < Nz - 1) {
+      Ex_shmem[shared_E_x + shared_E_y * BLX_EH + (shared_E_z + 1) * BLX_EH * BLY_EH] = Ex[global_x + global_y * Nx + (global_z + 1) * Nx * Ny];
+      Ey_shmem[shared_E_x + shared_E_y * BLX_EH + (shared_E_z + 1) * BLX_EH * BLY_EH] = Ey[global_x + global_y * Nx + (global_z + 1) * Nx * Ny];
+    }
+  }
+
+  __syncthreads();
+
+  __shared__ int indices_X[4];
+  __shared__ int indices_Y[4];
+  __shared__ int indices_Z[4];
+
+  for(size_t t=0; t<BLT_GPU; t++) {
+
+    int calculate_Ex = 1; // calculate this E tile or not
+    int calculate_Hx = 1; // calculate this H tile or not
+    int calculate_Ey = 1; 
+    int calculate_Hy = 1; 
+    int calculate_Ez = 1; 
+    int calculate_Hz = 1;
+
+    // first find the range of tile 
+    if(tid == 0) { // 1st thread in warp 0 
+      get_head_tail(BLX_GPU, BLT_GPU,
+                    xx_heads, xx_tails,
+                    xx, t,
+                    m_or_v_X, // 1 = mountain, 0 = valley
+                    Nx,
+                    &calculate_Ex, &calculate_Hx,
+                    indices_X);
+    }
+    if(tid == 32) { // 1st thread in warp 1 
+      get_head_tail(BLY_GPU, BLT_GPU,
+                    yy_heads, yy_tails,
+                    yy, t,
+                    m_or_v_Y, // 1 = mountain, 0 = valley
+                    Ny,
+                    &calculate_Ey, &calculate_Hy,
+                    indices_Y);
+    }
+    if(tid == 64) { // 1st thread in warp 2
+      get_head_tail(BLZ_GPU, BLT_GPU,
+                    zz_heads, zz_tails,
+                    zz, t,
+                    m_or_v_Z, // 1 = mountain, 0 = valley
+                    Nz,
+                    &calculate_Ez, &calculate_Hz,
+                    indices_Z);
+    }
+    __syncthreads();
+
+    // update E
+    if(calculate_Ex & calculate_Ey & calculate_Ez) {
+      // Ehead is offset
+      int g_x = indices_X[0] + local_x; // Global X coordinate
+      int g_y = indices_Y[0] + local_y; // Global Y coordinate
+      int g_z = indices_Z[0] + local_z; // Global Z coordinate
+
+      if(g_x >= 1 && g_x <= Nx-2 && g_y >= 1 && g_y <= Ny-2 && g_z >= 1 && g_z <= Nz-2 &&
+        g_x <= indices_X[1] &&
+        g_y <= indices_Y[1] &&
+        g_z <= indices_Z[1]) {
+        int g_idx = g_x + g_y * Nx + g_z * Nx * Ny; // global idx
+        int s_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH; // shared memory idx for H
+        int s_E_idx = shared_E_x + shared_E_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH; // shared memory idx for E
+
+        Ex_shmem[s_E_idx] = Cax[g_idx] * Ex_shmem[s_E_idx] + Cbx[g_idx] *
+                ((Hz_shmem[s_H_idx] - Hz_shmem[s_H_idx - BLX_EH]) - (Hy_shmem[s_H_idx] - Hy_shmem[s_H_idx - BLX_EH * BLY_EH]) - Jx[g_idx] * dx);
+        Ey_shmem[s_E_idx] = Cay[g_idx] * Ey_shmem[s_E_idx] + Cby[g_idx] *
+                  ((Hx_shmem[s_H_idx] - Hx_shmem[s_H_idx - BLX_EH * BLY_EH]) - (Hz_shmem[s_H_idx] - Hz_shmem[s_H_idx - 1]) - Jy[g_idx] * dx);
+        Ez_shmem[s_E_idx] = Caz[g_idx] * Ez_shmem[s_E_idx] + Cbz[g_idx] *
+                  ((Hy_shmem[s_H_idx] - Hy_shmem[s_H_idx - 1]) - (Hx_shmem[s_H_idx] - Hx_shmem[s_H_idx - BLX_EH]) - Jz[g_idx] * dx);
+      }
+    }
+
+    __syncthreads();
+
+    // update H 
+    if(calculate_Hx & calculate_Hy & calculate_Hz) {
+      // Hhead is offset
+      int g_x = indices_X[2] + local_x; // Global X coordinate
+      int g_y = indices_Y[2] + local_y; // Global Y coordinate
+      int g_z = indices_Z[2] + local_z; // Global Z coordinate
+
+      if(g_x >= 1 && g_x <= Nx-2 && g_y >= 1 && g_y <= Ny-2 && g_z >= 1 && g_z <= Nz-2 &&
+        g_x <= indices_X[3] &&
+        g_y <= indices_Y[3] &&
+        g_z <= indices_Z[3]) {
+        int g_idx = g_x + g_y * Nx + g_z * Nx * Ny; // global idx
+        int s_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH; // shared memory idx for H
+        int s_E_idx = shared_E_x + shared_E_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH; // shared memory idx for E
+
+        Hx_shmem[s_H_idx] = Dax[g_idx] * Hx_shmem[s_H_idx] + Dbx[g_idx] *
+                ((Ey_shmem[s_E_idx + BLX_EH * BLY_EH] - Ey_shmem[s_E_idx]) - (Ez_shmem[s_E_idx + BLX_EH] - Ez_shmem[s_E_idx]) - Mx[g_idx] * dx);
+        Hy_shmem[s_H_idx] = Day[g_idx] * Hy_shmem[s_H_idx] + Dby[g_idx] *
+                  ((Ez_shmem[s_E_idx + 1] - Ez_shmem[s_E_idx]) - (Ex_shmem[s_E_idx + BLX_EH * BLY_EH] - Ex_shmem[s_E_idx]) - My[g_idx] * dx);
+        Hz_shmem[s_H_idx] = Daz[g_idx] * Hz_shmem[s_H_idx] + Dbz[g_idx] *
+                  ((Ex_shmem[s_E_idx + BLX_EH] - Ex_shmem[s_E_idx]) - (Ey_shmem[s_E_idx + 1] - Ey_shmem[s_E_idx]) - Mz[g_idx] * dx);
+      }
+    }
+
+    __syncthreads();
+  }
+
+  // store E, H to global memory, no HALO needed
+  if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
+     global_x <= xx_tails[xx] &&
+     global_y <= yy_tails[yy] &&
+     global_z <= zz_tails[zz]) {
+     Ex[global_idx] = Ex_shmem[shared_E_idx];
+     Ey[global_idx] = Ey_shmem[shared_E_idx];
+     Ez[global_idx] = Ez_shmem[shared_E_idx];
+     Hx[global_idx] = Hx_shmem[shared_H_idx];
+     Hy[global_idx] = Hy_shmem[shared_H_idx];
+     Hz[global_idx] = Hz_shmem[shared_H_idx];
+  }
+} 
   
 
 
