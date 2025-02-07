@@ -636,6 +636,195 @@ __global__ void updateEH_phase_H_only(float *Ex, float *Ey, float *Ez,
   }
 }
 
+__device__ void get_head_tail(size_t BLX, size_t BLT,
+                              int *xx_heads, int *xx_tails,
+                              size_t xx, size_t t,
+                              int mountain_or_valley, // 1 = mountain, 0 = valley
+                              int Nx,
+                              int *calculate_E, int *calculate_H,
+                              int *results) 
+{
+
+  results[0] = xx_heads[xx]; 
+  results[1] = xx_tails[xx];
+  results[2] = xx_heads[xx]; 
+  results[3] = xx_tails[xx];
+
+  if(mountain_or_valley == 0 && xx == 0 && t == 0) { // skip the first valley in t = 0, since it does not exist 
+    *calculate_E = 0;
+    *calculate_H = 0;
+  }
+
+  // adjust results[0] according to t
+  if(mountain_or_valley != 0 || xx != 0) { // the 1st valley, head should not change
+    results[0] = (mountain_or_valley == 1)? results[0] + t : results[0] + (BLT - t - 1) + 1;
+  }
+  if(results[0] > Nx - 1) { // it means this mountain/valley does not exist in t
+    *calculate_E = 0;
+  }
+
+  // adjust results[1] according to t
+  if(mountain_or_valley == 1) { // handle the mountains 
+    int temp = results[0] + (BLX - 2 * t) - 1;
+    results[1] = (temp > Nx - 1)? Nx - 1 : temp;
+  }
+  else if(mountain_or_valley == 0 && xx == 0) { // the 1st valley, tail should be handled differently 
+    results[1] = results[0] + t - 1;
+  }
+  else { // handle the valleys
+    int temp = results[0] + (BLX - 2 * (BLT - t - 1)) - 2;
+    results[1] = (temp > Nx - 1)? Nx - 1 : temp;
+  }
+
+  if(mountain_or_valley != 0 || xx != 0) { // the 1st valley, head should not change
+    results[2] = (mountain_or_valley == 1)? results[2] + t : results[2] + (BLT - t - 1);
+  }
+  
+  if(results[2] > Nx - 1) { // it means this mountain does not exist in t
+    *calculate_H = 0;
+  }
+  if(mountain_or_valley == 1) { // handle the mountains 
+    int temp = results[2] + (BLX - 2 * t) - 2;
+    results[3] = (temp > Nx - 1)? Nx - 1 : temp;
+  }
+  else if(mountain_or_valley == 0 && xx == 0) { // the 1st valley, tail should be handled differently 
+    results[3] = results[2] + t - 1;
+  }
+  else { // handle the valleys
+    int temp = results[2] + (BLX - 2 * (BLT - t - 1)) - 1;
+    results[3] = (temp > Nx - 1)? Nx - 1 : temp;
+  }
+}
+
+__global__ void updateEH_phase_global_mem(float *Ex, float *Ey, float *Ez,
+                                          float *Hx, float *Hy, float *Hz,
+                                          float *Cax, float *Cbx,
+                                          float *Cay, float *Cby,
+                                          float *Caz, float *Cbz,
+                                          float *Dax, float *Dbx,
+                                          float *Day, float *Dby,
+                                          float *Daz, float *Dbz,
+                                          float *Jx, float *Jy, float *Jz,
+                                          float *Mx, float *My, float *Mz,
+                                          float dx, 
+                                          int Nx, int Ny, int Nz,
+                                          int xx_num, int yy_num, int zz_num, 
+                                          int *xx_heads, 
+                                          int *yy_heads, 
+                                          int *zz_heads,
+                                          int *xx_tails, 
+                                          int *yy_tails, 
+                                          int *zz_tails,
+                                          int m_or_v_X, int m_or_v_Y, int m_or_v_Z,
+                                          size_t block_size,
+                                          size_t grid_size) 
+{
+  // first we map each (xx, yy, zz) to a block
+  int xx = blockIdx.x % xx_num;
+  int yy = (blockIdx.x % (xx_num * yy_num)) / xx_num;
+  int zz = blockIdx.x / (xx_num * yy_num);
+
+  // map each thread in the block to a global index
+  int tid = threadIdx.x;
+  int local_x = tid % BLX_GPU;                     // X coordinate within the tile
+  int local_y = (tid / BLX_GPU) % BLY_GPU;     // Y coordinate within the tile
+  int local_z = tid / (BLX_GPU * BLY_GPU);     // Z coordinate within the tile
+
+  __shared__ int indices_X[4];
+  __shared__ int indices_Y[4];
+  __shared__ int indices_Z[4];
+
+  for(size_t t=0; t<BLT_GPU; t++) {
+
+    int calculate_Ex = 1; // calculate this E tile or not
+    int calculate_Hx = 1; // calculate this H tile or not
+    int calculate_Ey = 1; 
+    int calculate_Hy = 1; 
+    int calculate_Ez = 1; 
+    int calculate_Hz = 1;
+
+    // first find the range of tile 
+    if(tid == 0) { // 1st thread in warp 0 
+      get_head_tail(BLX_GPU, BLT_GPU,
+                    xx_heads, xx_tails,
+                    xx, t,
+                    m_or_v_X, // 1 = mountain, 0 = valley
+                    Nx,
+                    &calculate_Ex, &calculate_Hx,
+                    indices_X);
+    }
+    if(tid == 32) { // 1st thread in warp 1 
+      get_head_tail(BLY_GPU, BLT_GPU,
+                    yy_heads, yy_tails,
+                    yy, t,
+                    m_or_v_Y, // 1 = mountain, 0 = valley
+                    Ny,
+                    &calculate_Ey, &calculate_Hy,
+                    indices_Y);
+    }
+    if(tid == 64) { // 1st thread in warp 2
+      get_head_tail(BLZ_GPU, BLT_GPU,
+                    zz_heads, zz_tails,
+                    zz, t,
+                    m_or_v_Z, // 1 = mountain, 0 = valley
+                    Nz,
+                    &calculate_Ez, &calculate_Hz,
+                    indices_Z);
+    }
+    __syncthreads();
+
+    // update E
+    if(calculate_Ex & calculate_Ey & calculate_Ez) {
+      // Ehead is offset
+      int global_x = indices_X[0] + local_x; // Global X coordinate
+      int global_y = indices_Y[0] + local_y; // Global Y coordinate
+      int global_z = indices_Z[0] + local_z; // Global Z coordinate
+
+      if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
+        global_x <= indices_X[1] &&
+        global_y <= indices_Y[1] &&
+        global_z <= indices_Z[1]) {
+        int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
+
+        Ex[g_idx] = Cax[g_idx] * Ex[g_idx] + Cbx[g_idx] *
+                  ((Hz[g_idx] - Hz[g_idx - Nx]) - (Hy[g_idx] - Hy[g_idx - Nx * Ny]) - Jx[g_idx] * dx);
+        Ey[g_idx] = Cay[g_idx] * Ey[g_idx] + Cby[g_idx] *
+                  ((Hx[g_idx] - Hx[g_idx - Nx * Ny]) - (Hz[g_idx] - Hz[g_idx - 1]) - Jy[g_idx] * dx);
+        Ez[g_idx] = Caz[g_idx] * Ez[g_idx] + Cbz[g_idx] *
+                  ((Hy[g_idx] - Hy[g_idx - 1]) - (Hx[g_idx] - Hx[g_idx - Nx]) - Jz[g_idx] * dx);
+      }
+    }
+
+    __syncthreads();
+
+    // update H 
+    if(calculate_Hx & calculate_Hy & calculate_Hz) {
+      // Hhead is offset
+      int global_x = indices_X[2] + local_x; // Global X coordinate
+      int global_y = indices_Y[2] + local_y; // Global Y coordinate
+      int global_z = indices_Z[2] + local_z; // Global Z coordinate
+
+      if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
+        global_x <= indices_X[3] &&
+        global_y <= indices_Y[3] &&
+        global_z <= indices_Z[3]) {
+        int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
+
+        Hx[g_idx] = Dax[g_idx] * Hx[g_idx] + Dbx[g_idx] *
+                  ((Ey[g_idx + Nx * Ny] - Ey[g_idx]) - (Ez[g_idx + Nx] - Ez[g_idx]) - Mx[g_idx] * dx);
+        Hy[g_idx] = Day[g_idx] * Hy[g_idx] + Dby[g_idx] *
+                  ((Ez[g_idx + 1] - Ez[g_idx]) - (Ex[g_idx + Nx * Ny] - Ex[g_idx]) - My[g_idx] * dx);
+        Hz[g_idx] = Daz[g_idx] * Hz[g_idx] + Dbz[g_idx] *
+                  ((Ex[g_idx + Nx] - Ex[g_idx]) - (Ey[g_idx + 1] - Ey[g_idx]) - Mz[g_idx] * dx);
+      }
+    }
+
+    __syncthreads();
+  }
+} 
+  
+  
+
 
 
 
