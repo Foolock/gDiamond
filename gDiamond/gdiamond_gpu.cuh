@@ -1262,169 +1262,169 @@ void gDiamond::update_FDTD_gpu_simulation_shmem_EH(size_t num_timesteps) { // si
                         block_size,
                         grid_size);
 
-    // // phase 2: (v, m, m)
-    // grid_size = num_valleys_X * num_mountains_Y * num_mountains_Z;
-    // _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
-    //                     Hx_temp, Hy_temp, Hz_temp,
-    //                     _Cax, _Cbx,
-    //                     _Cay, _Cby,
-    //                     _Caz, _Cbz,
-    //                     _Dax, _Dbx,
-    //                     _Day, _Dby,
-    //                     _Daz, _Dbz,
-    //                     _Jx, _Jy, _Jz,
-    //                     _Mx, _My, _Mz,
-    //                     _dx, 
-    //                     _Nx, _Ny, _Nz,
-    //                     num_valleys_X, num_mountains_Y, num_mountains_Z, 
-    //                     valley_heads_X, mountain_heads_Y, mountain_heads_Z, 
-    //                     valley_tails_X, mountain_tails_Y, mountain_tails_Z, 
-    //                     0, 1, 1,
-    //                     total_cal,
-    //                     block_size,
-    //                     grid_size);
+    // phase 2: (v, m, m)
+    grid_size = num_valleys_X * num_mountains_Y * num_mountains_Z;
+    _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
+                        Hx_temp, Hy_temp, Hz_temp,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_valleys_X, num_mountains_Y, num_mountains_Z, 
+                        valley_heads_X, mountain_heads_Y, mountain_heads_Z, 
+                        valley_tails_X, mountain_tails_Y, mountain_tails_Z, 
+                        0, 1, 1,
+                        total_cal,
+                        block_size,
+                        grid_size);
 
-    // // phase 3: (m, v, m)
-    // grid_size = num_mountains_X * num_valleys_Y * num_mountains_Z;
-    // _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
-    //                     Hx_temp, Hy_temp, Hz_temp,
-    //                     _Cax, _Cbx,
-    //                     _Cay, _Cby,
-    //                     _Caz, _Cbz,
-    //                     _Dax, _Dbx,
-    //                     _Day, _Dby,
-    //                     _Daz, _Dbz,
-    //                     _Jx, _Jy, _Jz,
-    //                     _Mx, _My, _Mz,
-    //                     _dx, 
-    //                     _Nx, _Ny, _Nz,
-    //                     num_mountains_X, num_valleys_Y, num_mountains_Z, 
-    //                     mountain_heads_X, valley_heads_Y, mountain_heads_Z, 
-    //                     mountain_tails_X, valley_tails_Y, mountain_tails_Z, 
-    //                     1, 0, 1,
-    //                     total_cal,
-    //                     block_size,
-    //                     grid_size);
+    // phase 3: (m, v, m)
+    grid_size = num_mountains_X * num_valleys_Y * num_mountains_Z;
+    _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
+                        Hx_temp, Hy_temp, Hz_temp,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_mountains_X, num_valleys_Y, num_mountains_Z, 
+                        mountain_heads_X, valley_heads_Y, mountain_heads_Z, 
+                        mountain_tails_X, valley_tails_Y, mountain_tails_Z, 
+                        1, 0, 1,
+                        total_cal,
+                        block_size,
+                        grid_size);
 
-    // // phase 4: (m, m, v)
-    // grid_size = num_mountains_X * num_mountains_Y * num_valleys_Z;
-    // _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
-    //                     Hx_temp, Hy_temp, Hz_temp,
-    //                     _Cax, _Cbx,
-    //                     _Cay, _Cby,
-    //                     _Caz, _Cbz,
-    //                     _Dax, _Dbx,
-    //                     _Day, _Dby,
-    //                     _Daz, _Dbz,
-    //                     _Jx, _Jy, _Jz,
-    //                     _Mx, _My, _Mz,
-    //                     _dx, 
-    //                     _Nx, _Ny, _Nz,
-    //                     num_mountains_X, num_mountains_Y, num_valleys_Z, 
-    //                     mountain_heads_X, mountain_heads_Y, valley_heads_Z, 
-    //                     mountain_tails_X, mountain_tails_Y, valley_tails_Z, 
-    //                     1, 1, 0,
-    //                     total_cal,
-    //                     block_size,
-    //                     grid_size);
+    // phase 4: (m, m, v)
+    grid_size = num_mountains_X * num_mountains_Y * num_valleys_Z;
+    _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
+                        Hx_temp, Hy_temp, Hz_temp,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_mountains_X, num_mountains_Y, num_valleys_Z, 
+                        mountain_heads_X, mountain_heads_Y, valley_heads_Z, 
+                        mountain_tails_X, mountain_tails_Y, valley_tails_Z, 
+                        1, 1, 0,
+                        total_cal,
+                        block_size,
+                        grid_size);
 
-    // // phase 5: (v, v, m)
-    // grid_size = num_valleys_X * num_valleys_Y * num_mountains_Z;
-    // _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
-    //                     Hx_temp, Hy_temp, Hz_temp,
-    //                     _Cax, _Cbx,
-    //                     _Cay, _Cby,
-    //                     _Caz, _Cbz,
-    //                     _Dax, _Dbx,
-    //                     _Day, _Dby,
-    //                     _Daz, _Dbz,
-    //                     _Jx, _Jy, _Jz,
-    //                     _Mx, _My, _Mz,
-    //                     _dx, 
-    //                     _Nx, _Ny, _Nz,
-    //                     num_valleys_X, num_valleys_Y, num_mountains_Z, 
-    //                     valley_heads_X, valley_heads_Y, mountain_heads_Z, 
-    //                     valley_tails_X, valley_tails_Y, mountain_tails_Z, 
-    //                     0, 0, 1,
-    //                     total_cal,
-    //                     block_size,
-    //                     grid_size);
+    // phase 5: (v, v, m)
+    grid_size = num_valleys_X * num_valleys_Y * num_mountains_Z;
+    _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
+                        Hx_temp, Hy_temp, Hz_temp,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_valleys_X, num_valleys_Y, num_mountains_Z, 
+                        valley_heads_X, valley_heads_Y, mountain_heads_Z, 
+                        valley_tails_X, valley_tails_Y, mountain_tails_Z, 
+                        0, 0, 1,
+                        total_cal,
+                        block_size,
+                        grid_size);
 
-    // // phase 6: (v, m, v)
-    // grid_size = num_valleys_X * num_mountains_Y * num_valleys_Z;
-    // _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
-    //                     Hx_temp, Hy_temp, Hz_temp,
-    //                     _Cax, _Cbx,
-    //                     _Cay, _Cby,
-    //                     _Caz, _Cbz,
-    //                     _Dax, _Dbx,
-    //                     _Day, _Dby,
-    //                     _Daz, _Dbz,
-    //                     _Jx, _Jy, _Jz,
-    //                     _Mx, _My, _Mz,
-    //                     _dx, 
-    //                     _Nx, _Ny, _Nz,
-    //                     num_valleys_X, num_mountains_Y, num_valleys_Z, 
-    //                     valley_heads_X, mountain_heads_Y, valley_heads_Z, 
-    //                     valley_tails_X, mountain_tails_Y, valley_tails_Z, 
-    //                     0, 1, 0,
-    //                     total_cal,
-    //                     block_size,
-    //                     grid_size);
+    // phase 6: (v, m, v)
+    grid_size = num_valleys_X * num_mountains_Y * num_valleys_Z;
+    _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
+                        Hx_temp, Hy_temp, Hz_temp,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_valleys_X, num_mountains_Y, num_valleys_Z, 
+                        valley_heads_X, mountain_heads_Y, valley_heads_Z, 
+                        valley_tails_X, mountain_tails_Y, valley_tails_Z, 
+                        0, 1, 0,
+                        total_cal,
+                        block_size,
+                        grid_size);
 
-    // // phase 7: (m, v, v)
-    // grid_size = num_mountains_X * num_valleys_Y * num_valleys_Z;
-    // _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
-    //                     Hx_temp, Hy_temp, Hz_temp,
-    //                     _Cax, _Cbx,
-    //                     _Cay, _Cby,
-    //                     _Caz, _Cbz,
-    //                     _Dax, _Dbx,
-    //                     _Day, _Dby,
-    //                     _Daz, _Dbz,
-    //                     _Jx, _Jy, _Jz,
-    //                     _Mx, _My, _Mz,
-    //                     _dx, 
-    //                     _Nx, _Ny, _Nz,
-    //                     num_mountains_X, num_valleys_Y, num_valleys_Z, 
-    //                     mountain_heads_X, valley_heads_Y, valley_heads_Z, 
-    //                     mountain_tails_X, valley_tails_Y, valley_tails_Z, 
-    //                     1, 0, 0,
-    //                     total_cal,
-    //                     block_size,
-    //                     grid_size);
+    // phase 7: (m, v, v)
+    grid_size = num_mountains_X * num_valleys_Y * num_valleys_Z;
+    _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
+                        Hx_temp, Hy_temp, Hz_temp,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_mountains_X, num_valleys_Y, num_valleys_Z, 
+                        mountain_heads_X, valley_heads_Y, valley_heads_Z, 
+                        mountain_tails_X, valley_tails_Y, valley_tails_Z, 
+                        1, 0, 0,
+                        total_cal,
+                        block_size,
+                        grid_size);
 
-    // // phase 8: (v, v, v)
-    // grid_size = num_valleys_X * num_valleys_Y * num_valleys_Z;
-    // _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
-    //                     Hx_temp, Hy_temp, Hz_temp,
-    //                     _Cax, _Cbx,
-    //                     _Cay, _Cby,
-    //                     _Caz, _Cbz,
-    //                     _Dax, _Dbx,
-    //                     _Day, _Dby,
-    //                     _Daz, _Dbz,
-    //                     _Jx, _Jy, _Jz,
-    //                     _Mx, _My, _Mz,
-    //                     _dx, 
-    //                     _Nx, _Ny, _Nz,
-    //                     num_valleys_X, num_valleys_Y, num_valleys_Z, 
-    //                     valley_heads_X, valley_heads_Y, valley_heads_Z, 
-    //                     valley_tails_X, valley_tails_Y, valley_tails_Z, 
-    //                     0, 0, 0,
-    //                     total_cal,
-    //                     block_size,
-    //                     grid_size);
+    // phase 8: (v, v, v)
+    grid_size = num_valleys_X * num_valleys_Y * num_valleys_Z;
+    _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
+                        Hx_temp, Hy_temp, Hz_temp,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_valleys_X, num_valleys_Y, num_valleys_Z, 
+                        valley_heads_X, valley_heads_Y, valley_heads_Z, 
+                        valley_tails_X, valley_tails_Y, valley_tails_Z, 
+                        0, 0, 0,
+                        total_cal,
+                        block_size,
+                        grid_size);
 
   }
 
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    _Ex_simu_sh[i] = Ex_temp[i];
-    _Ey_simu_sh[i] = Ey_temp[i];
-    _Ez_simu_sh[i] = Ez_temp[i];
-    _Hx_simu_sh[i] = Hx_temp[i];
-    _Hy_simu_sh[i] = Hy_temp[i];
-    _Hz_simu_sh[i] = Hz_temp[i];
+    _Ex_simu[i] = Ex_temp[i];
+    _Ey_simu[i] = Ey_temp[i];
+    _Ez_simu[i] = Ez_temp[i];
+    _Hx_simu[i] = Hx_temp[i];
+    _Hy_simu[i] = Hy_temp[i];
+    _Hz_simu[i] = Hz_temp[i];
   }
 
   std::cout << "gpu simulation (shmem EH) total calculations: " << total_cal << "\n"; 
@@ -1750,16 +1750,6 @@ void gDiamond::_updateEH_phase_seq_shmem_EH(std::vector<float>& Ex, std::vector<
         }
       }
 
-      if(m_or_v_X == 1 && m_or_v_Y == 1 && m_or_v_Z == 1 &&
-         local_x == 0 && local_y == 1 && local_z == 1 &&
-         global_x == 1 && global_y == 2 && global_z == 2 &&
-         shared_H_x == 1 && shared_H_y == 2 && shared_H_z == 2) {
-        int s_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH; // shared memory idx for H
-        int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
-
-        std::cerr << "Hy[g_idx - 1] = " << Hy[g_idx - 1] << ", Hy_shmem[s_H_idx - 1] = " << Hy_shmem[s_H_idx - 1] << "\n"; 
-      }
-
       // load E, stencil pattern x+1, y+1, z+1
       // the padding does not affect origins of local idx and shared_E_idx
       // local idx and shared_E_idx still have the same origin
@@ -1852,9 +1842,9 @@ void gDiamond::_updateEH_phase_seq_shmem_EH(std::vector<float>& Ex, std::vector<
             int Hoffset_Y = indices_Y[2] - yy_heads[yy];
             int Hoffset_Z = indices_Z[2] - zz_heads[zz];
 
-            int shared_H_x = local_x + 1 + Hoffset_X;
-            int shared_H_y = local_y + 1 + Hoffset_Y;
-            int shared_H_z = local_z + 1 + Hoffset_Z;
+            int shared_H_x = (m_or_v_X == 0 && xx != 0)? local_x + 1 + Hoffset_X + 1 : local_x + 1 + Hoffset_X;
+            int shared_H_y = (m_or_v_Y == 0 && yy != 0)? local_y + 1 + Hoffset_Y + 1 : local_y + 1 + Hoffset_Y;
+            int shared_H_z = (m_or_v_Z == 0 && zz != 0)? local_z + 1 + Hoffset_Z + 1 : local_z + 1 + Hoffset_Z;
 
             int shared_E_x = local_x + Eoffset_X;
             int shared_E_y = local_y + Eoffset_Y;
@@ -1926,9 +1916,9 @@ void gDiamond::_updateEH_phase_seq_shmem_EH(std::vector<float>& Ex, std::vector<
             int shared_H_y = local_y + 1 + Hoffset_Y;
             int shared_H_z = local_z + 1 + Hoffset_Z;
 
-            int shared_E_x = local_x + Eoffset_X;
-            int shared_E_y = local_y + Eoffset_Y;
-            int shared_E_z = local_z + Eoffset_Z;
+            int shared_E_x = (m_or_v_X == 0 && xx != 0)? local_x + Eoffset_X - 1 : local_x + Eoffset_X;
+            int shared_E_y = (m_or_v_Y == 0 && yy != 0)? local_y + Eoffset_Y - 1 : local_y + Eoffset_Y;
+            int shared_E_z = (m_or_v_Z == 0 && zz != 0)? local_z + Eoffset_Z - 1 : local_z + Eoffset_Z;
 
             int s_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH; // shared memory idx for H
             int s_E_idx = shared_E_x + shared_E_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH; // shared memory idx for E
