@@ -16,6 +16,13 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Wall -O3 --extended-lambda --fmad=fal
 
 # set compilation flags
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+# Add debugging flags for C++ and CUDA
+set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
+set(CMAKE_CUDA_FLAGS_DEBUG "-g -G -O0")
+
+# Ensure that optimization flags (-O3) are only used in Release mode
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+set(CMAKE_CUDA_FLAGS_RELEASE "-O3 -DNDEBUG -Wall -O3 --extended-lambda --fmad=false")
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   message(STATUS "Setting build type to Release ")
   set(
