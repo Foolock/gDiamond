@@ -81,6 +81,7 @@ class gDiamond {
     void update_FDTD_gpu_check_result(size_t num_timesteps); // only use for result checking
     void update_FDTD_gpu_simulation(size_t num_timesteps); // simulation of gpu threads
     void update_FDTD_gpu_simulation_shmem_EH(size_t num_timesteps); // simulation of gpu threads, with shared memory on E, H
+    void update_FDTD_gpu_simulation_check(size_t num_timesteps);
     void update_FDTD_gpu_simulation_1_D(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow 
     void update_FDTD_gpu_simulation_1_D_shmem(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow 
     void update_FDTD_gpu_fuse_kernel_globalmem(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels, global memory only
@@ -142,6 +143,7 @@ class gDiamond {
                                       std::vector<int> zz_tails,
                                       int m_or_v_X, int m_or_v_Y, int m_or_v_Z,
                                       size_t &total_cal,
+                                      size_t current_time,
                                       size_t block_size,
                                       size_t grid_size);
 
@@ -647,12 +649,12 @@ bool gDiamond::check_correctness_simu() {
   bool correct = true;
 
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    if(fabs(_Ex_seq[i] - _Ex_simu[i]) >= 1e-8 ||
-       fabs(_Ey_seq[i] - _Ey_simu[i]) >= 1e-8 ||
-       fabs(_Ez_seq[i] - _Ez_simu[i]) >= 1e-8 ||
-       fabs(_Hx_seq[i] - _Hx_simu[i]) >= 1e-8 ||
-       fabs(_Hy_seq[i] - _Hy_simu[i]) >= 1e-8 ||
-       fabs(_Hz_seq[i] - _Hz_simu[i]) >= 1e-8
+    if(fabs(_Ex_seq[i] - _Ex_simu_sh[i]) >= 1e-8 ||
+       fabs(_Ey_seq[i] - _Ey_simu_sh[i]) >= 1e-8 ||
+       fabs(_Ez_seq[i] - _Ez_simu_sh[i]) >= 1e-8 ||
+       fabs(_Hx_seq[i] - _Hx_simu_sh[i]) >= 1e-8 ||
+       fabs(_Hy_seq[i] - _Hy_simu_sh[i]) >= 1e-8 ||
+       fabs(_Hz_seq[i] - _Hz_simu_sh[i]) >= 1e-8
     ) {
       correct = false;
       break;
@@ -673,6 +675,12 @@ bool gDiamond::check_correctness_simu_shmem() {
        fabs(_Hy_simu_sh[i] - _Hy_simu[i]) >= 1e-8 ||
        fabs(_Hz_simu_sh[i] - _Hz_simu[i]) >= 1e-8
     ) {
+      std::cout << "_Ex_simu_sh[i] = " << _Ex_simu_sh[i] << ", _Ex_simu[i] = " << _Ex_simu[i] << "\n";
+      std::cout << "_Ey_simu_sh[i] = " << _Ey_simu_sh[i] << ", _Ey_simu[i] = " << _Ey_simu[i] << "\n";
+      std::cout << "_Ez_simu_sh[i] = " << _Ez_simu_sh[i] << ", _Ez_simu[i] = " << _Ez_simu[i] << "\n";
+      std::cout << "_Hx_simu_sh[i] = " << _Hx_simu_sh[i] << ", _Hx_simu[i] = " << _Hx_simu[i] << "\n";
+      std::cout << "_Hy_simu_sh[i] = " << _Hy_simu_sh[i] << ", _Hy_simu[i] = " << _Hy_simu[i] << "\n";
+      std::cout << "_Hz_simu_sh[i] = " << _Hz_simu_sh[i] << ", _Hz_simu[i] = " << _Hz_simu[i] << "\n";
       correct = false;
       break;
     }
@@ -1353,9 +1361,9 @@ void gDiamond::_setup_diamond_tiling_gpu(size_t BLX, size_t BLY, size_t BLZ, siz
 
 void gDiamond::print_results() {
 
-  std::cout << "Ex_seq = ";
+  std::cout << "Ex_simu = ";
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    std::cout << _Ex_seq[i] << " ";
+    std::cout << _Ex_simu[i] << " ";
   }
   std::cout << "\n";
   std::cout << "\n";

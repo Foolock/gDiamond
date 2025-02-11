@@ -988,9 +988,28 @@ __global__ void updateEH_phase_shmem_EH(float *Ex, float *Ey, float *Ez,
         g_x <= indices_X[1] &&
         g_y <= indices_Y[1] &&
         g_z <= indices_Z[1]) {
-        int g_idx = g_x + g_y * Nx + g_z * Nx * Ny; // global idx
+
+        // need to recalculate shared indices
+        int Eoffset_X = indices_X[0] - xx_heads[xx];
+        int Eoffset_Y = indices_Y[0] - yy_heads[yy];
+        int Eoffset_Z = indices_Z[0] - zz_heads[zz];
+
+        int Hoffset_X = indices_X[2] - xx_heads[xx];
+        int Hoffset_Y = indices_Y[2] - yy_heads[yy];
+        int Hoffset_Z = indices_Z[2] - zz_heads[zz];
+
+        shared_H_x = (m_or_v_X == 0 && xx != 0)? local_x + 1 + Hoffset_X + 1 : local_x + 1 + Hoffset_X;
+        shared_H_y = (m_or_v_Y == 0 && yy != 0)? local_y + 1 + Hoffset_Y + 1 : local_y + 1 + Hoffset_Y;
+        shared_H_z = (m_or_v_Z == 0 && zz != 0)? local_z + 1 + Hoffset_Z + 1 : local_z + 1 + Hoffset_Z;
+
+        shared_E_x = local_x + Eoffset_X;
+        shared_E_y = local_y + Eoffset_Y;
+        shared_E_z = local_z + Eoffset_Z;
+
         int s_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH; // shared memory idx for H
         int s_E_idx = shared_E_x + shared_E_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH; // shared memory idx for E
+
+        int g_idx = g_x + g_y * Nx + g_z * Nx * Ny; // global idx
 
         Ex_shmem[s_E_idx] = Cax[g_idx] * Ex_shmem[s_E_idx] + Cbx[g_idx] *
                 ((Hz_shmem[s_H_idx] - Hz_shmem[s_H_idx - BLX_EH]) - (Hy_shmem[s_H_idx] - Hy_shmem[s_H_idx - BLX_EH * BLY_EH]) - Jx[g_idx] * dx);
@@ -1015,9 +1034,28 @@ __global__ void updateEH_phase_shmem_EH(float *Ex, float *Ey, float *Ez,
         g_x <= indices_X[3] &&
         g_y <= indices_Y[3] &&
         g_z <= indices_Z[3]) {
-        int g_idx = g_x + g_y * Nx + g_z * Nx * Ny; // global idx
+
+        // need to recalculate shared indices
+        int Eoffset_X = indices_X[0] - xx_heads[xx];
+        int Eoffset_Y = indices_Y[0] - yy_heads[yy];
+        int Eoffset_Z = indices_Z[0] - zz_heads[zz];
+
+        int Hoffset_X = indices_X[2] - xx_heads[xx];
+        int Hoffset_Y = indices_Y[2] - yy_heads[yy];
+        int Hoffset_Z = indices_Z[2] - zz_heads[zz];
+
+        shared_H_x = local_x + 1 + Hoffset_X;
+        shared_H_y = local_y + 1 + Hoffset_Y;
+        shared_H_z = local_z + 1 + Hoffset_Z;
+
+        shared_E_x = (m_or_v_X == 0 && xx != 0)? local_x + Eoffset_X - 1 : local_x + Eoffset_X;
+        shared_E_y = (m_or_v_Y == 0 && yy != 0)? local_y + Eoffset_Y - 1 : local_y + Eoffset_Y;
+        shared_E_z = (m_or_v_Z == 0 && zz != 0)? local_z + Eoffset_Z - 1 : local_z + Eoffset_Z;
+
         int s_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH; // shared memory idx for H
         int s_E_idx = shared_E_x + shared_E_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH; // shared memory idx for E
+
+        int g_idx = g_x + g_y * Nx + g_z * Nx * Ny; // global idx
 
         Hx_shmem[s_H_idx] = Dax[g_idx] * Hx_shmem[s_H_idx] + Dbx[g_idx] *
                 ((Ey_shmem[s_E_idx + BLX_EH * BLY_EH] - Ey_shmem[s_E_idx]) - (Ez_shmem[s_E_idx + BLX_EH] - Ez_shmem[s_E_idx]) - Mx[g_idx] * dx);
@@ -1036,12 +1074,27 @@ __global__ void updateEH_phase_shmem_EH(float *Ex, float *Ey, float *Ez,
      global_x <= xx_tails[xx] &&
      global_y <= yy_tails[yy] &&
      global_z <= zz_tails[zz]) {
-     Ex[global_idx] = Ex_shmem[shared_E_idx];
-     Ey[global_idx] = Ey_shmem[shared_E_idx];
-     Ez[global_idx] = Ez_shmem[shared_E_idx];
-     Hx[global_idx] = Hx_shmem[shared_H_idx];
-     Hy[global_idx] = Hy_shmem[shared_H_idx];
-     Hz[global_idx] = Hz_shmem[shared_H_idx];
+
+
+     shared_H_x = local_x + 1;
+     shared_H_y = local_y + 1;
+     shared_H_z = local_z + 1;
+
+     shared_E_x = local_x;
+     shared_E_y = local_y;
+     shared_E_z = local_z;
+
+     int s_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH; // shared memory idx for H
+     int s_E_idx = shared_E_x + shared_E_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH; // shared memory idx for E
+
+     int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
+
+     Ex[g_idx] = Ex_shmem[s_E_idx];
+     Ey[g_idx] = Ey_shmem[s_E_idx];
+     Ez[g_idx] = Ez_shmem[s_E_idx];
+     Hx[g_idx] = Hx_shmem[s_H_idx];
+     Hy[g_idx] = Hy_shmem[s_H_idx];
+     Hz[g_idx] = Hz_shmem[s_H_idx];
   }
 } 
   

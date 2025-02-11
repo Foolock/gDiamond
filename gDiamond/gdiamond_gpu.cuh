@@ -525,21 +525,20 @@ void gDiamond::update_FDTD_gpu_simulation_1_D_shmem(size_t num_timesteps) { // C
   std::vector<float> H_simu(_Nx, 1);
   std::vector<float> E_seq(_Nx, 1);
   std::vector<float> H_seq(_Nx, 1);
-  size_t total_timesteps = 4;
 
   // seq version
-  for(size_t t=0; t<total_timesteps; t++) {
+  for(size_t t=0; t<num_timesteps; t++) {
 
     // update E
     for(size_t x=1; x<_Nx-1; x++) {
       E_seq[x] = H_seq[x-1] + H_seq[x] * 2; 
     }
 
-    std::cout << "t = " << t << ", E_seq =";
-    for(size_t x=0; x<_Nx; x++) {
-      std::cout << E_seq[x] << " ";
-    }
-    std::cout << "\n";
+    // std::cout << "t = " << t << ", E_seq =";
+    // for(size_t x=0; x<_Nx; x++) {
+    //   std::cout << E_seq[x] << " ";
+    // }
+    // std::cout << "\n";
 
     // update H 
     for(size_t x=1; x<_Nx-1; x++) {
@@ -551,7 +550,7 @@ void gDiamond::update_FDTD_gpu_simulation_1_D_shmem(size_t num_timesteps) { // C
   int mountain_or_valley;
   // 1, mountain, 0, valley
   int Nx = _Nx;
-  for(size_t tt=0; tt<total_timesteps/BLT_GPU; tt++) {
+  for(size_t tt=0; tt<num_timesteps/BLT_GPU; tt++) {
 
     // phase 1. moutains 
     mountain_or_valley = 1;
@@ -610,11 +609,11 @@ void gDiamond::update_FDTD_gpu_simulation_1_D_shmem(size_t num_timesteps) { // C
           }
         }
 
-        std::cout << "t = " << t << ", xx = " << xx << ", E_shmem = ";
-        for(auto e : E_shmem) {
-          std::cout << e << " ";
-        }
-        std::cout << "\n";
+        // std::cout << "t = " << t << ", xx = " << xx << ", E_shmem = ";
+        // for(auto e : E_shmem) {
+        //   std::cout << e << " ";
+        // }
+        // std::cout << "\n";
 
         // update H
         if(calculate_H) {
@@ -916,13 +915,7 @@ void gDiamond::update_FDTD_gpu_simulation_1_D(size_t num_timesteps) { // CPU sin
 
 void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation of gpu threads
 
-  // create temporary E and H for experiments
-  std::vector<float> Ex_temp(_Nx * _Ny * _Nz, 0);
-  std::vector<float> Ey_temp(_Nx * _Ny * _Nz, 0);
-  std::vector<float> Ez_temp(_Nx * _Ny * _Nz, 0);
-  std::vector<float> Hx_temp(_Nx * _Ny * _Nz, 0);
-  std::vector<float> Hy_temp(_Nx * _Ny * _Nz, 0);
-  std::vector<float> Hz_temp(_Nx * _Ny * _Nz, 0);
+  std::cout << "running update_FDTD_gpu_simulation\n";
 
   // clear source Mz for experiments
   _Mz.clear();
@@ -987,8 +980,8 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
     
     // phase 1: (m, m, m)
     grid_size = num_mountains_X * num_mountains_Y * num_mountains_Z;
-    _updateEH_phase_seq(Ex_temp, Ey_temp, Ez_temp,
-                        Hx_temp, Hy_temp, Hz_temp,
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
                         _Cax, _Cbx,
                         _Cay, _Cby,
                         _Caz, _Cbz,
@@ -1008,8 +1001,8 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
 
     // phase 2: (v, m, m)
     grid_size = num_valleys_X * num_mountains_Y * num_mountains_Z;
-    _updateEH_phase_seq(Ex_temp, Ey_temp, Ez_temp,
-                        Hx_temp, Hy_temp, Hz_temp,
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
                         _Cax, _Cbx,
                         _Cay, _Cby,
                         _Caz, _Cbz,
@@ -1029,8 +1022,8 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
 
     // phase 3: (m, v, m)
     grid_size = num_mountains_X * num_valleys_Y * num_mountains_Z;
-    _updateEH_phase_seq(Ex_temp, Ey_temp, Ez_temp,
-                        Hx_temp, Hy_temp, Hz_temp,
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
                         _Cax, _Cbx,
                         _Cay, _Cby,
                         _Caz, _Cbz,
@@ -1050,8 +1043,8 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
 
     // phase 4: (m, m, v)
     grid_size = num_mountains_X * num_mountains_Y * num_valleys_Z;
-    _updateEH_phase_seq(Ex_temp, Ey_temp, Ez_temp,
-                        Hx_temp, Hy_temp, Hz_temp,
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
                         _Cax, _Cbx,
                         _Cay, _Cby,
                         _Caz, _Cbz,
@@ -1071,8 +1064,8 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
 
     // phase 5: (v, v, m)
     grid_size = num_valleys_X * num_valleys_Y * num_mountains_Z;
-    _updateEH_phase_seq(Ex_temp, Ey_temp, Ez_temp,
-                        Hx_temp, Hy_temp, Hz_temp,
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
                         _Cax, _Cbx,
                         _Cay, _Cby,
                         _Caz, _Cbz,
@@ -1092,8 +1085,8 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
 
     // phase 6: (v, m, v)
     grid_size = num_valleys_X * num_mountains_Y * num_valleys_Z;
-    _updateEH_phase_seq(Ex_temp, Ey_temp, Ez_temp,
-                        Hx_temp, Hy_temp, Hz_temp,
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
                         _Cax, _Cbx,
                         _Cay, _Cby,
                         _Caz, _Cbz,
@@ -1113,8 +1106,8 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
 
     // phase 7: (m, v, v)
     grid_size = num_mountains_X * num_valleys_Y * num_valleys_Z;
-    _updateEH_phase_seq(Ex_temp, Ey_temp, Ez_temp,
-                        Hx_temp, Hy_temp, Hz_temp,
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
                         _Cax, _Cbx,
                         _Cay, _Cby,
                         _Caz, _Cbz,
@@ -1134,8 +1127,8 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
 
     // phase 8: (v, v, v)
     grid_size = num_valleys_X * num_valleys_Y * num_valleys_Z;
-    _updateEH_phase_seq(Ex_temp, Ey_temp, Ez_temp,
-                        Hx_temp, Hy_temp, Hz_temp,
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
                         _Cax, _Cbx,
                         _Cay, _Cby,
                         _Caz, _Cbz,
@@ -1152,16 +1145,6 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
                         0, 0, 0,
                         block_size,
                         grid_size);
-
-  }
-
-  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    _Ex_simu[i] = Ex_temp[i];
-    _Ey_simu[i] = Ey_temp[i];
-    _Ez_simu[i] = Ez_temp[i];
-    _Hx_simu[i] = Hx_temp[i];
-    _Hy_simu[i] = Hy_temp[i];
-    _Hz_simu[i] = Hz_temp[i];
   }
 
 } 
@@ -1170,13 +1153,7 @@ void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation 
 
 void gDiamond::update_FDTD_gpu_simulation_shmem_EH(size_t num_timesteps) { // simulation of gpu threads
 
-  // create temporary E and H for experiments
-  std::vector<float> Ex_temp(_Nx * _Ny * _Nz, 0);
-  std::vector<float> Ey_temp(_Nx * _Ny * _Nz, 0);
-  std::vector<float> Ez_temp(_Nx * _Ny * _Nz, 0);
-  std::vector<float> Hx_temp(_Nx * _Ny * _Nz, 0);
-  std::vector<float> Hy_temp(_Nx * _Ny * _Nz, 0);
-  std::vector<float> Hz_temp(_Nx * _Ny * _Nz, 0);
+  std::cout << "running update_FDTD_gpu_simulation_shmem_EH\n"; 
 
   // clear source Mz for experiments
   _Mz.clear();
@@ -1242,8 +1219,285 @@ void gDiamond::update_FDTD_gpu_simulation_shmem_EH(size_t num_timesteps) { // si
     
     // phase 1: (m, m, m)
     grid_size = num_mountains_X * num_mountains_Y * num_mountains_Z;
-    _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
-                        Hx_temp, Hy_temp, Hz_temp,
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_mountains_X, num_mountains_Y, num_mountains_Z, 
+                                 mountain_heads_X, mountain_heads_Y, mountain_heads_Z, 
+                                 mountain_tails_X, mountain_tails_Y, mountain_tails_Z, 
+                                 1, 1, 1,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    // phase 2: (v, m, m)
+    grid_size = num_valleys_X * num_mountains_Y * num_mountains_Z;
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_valleys_X, num_mountains_Y, num_mountains_Z, 
+                                 valley_heads_X, mountain_heads_Y, mountain_heads_Z, 
+                                 valley_tails_X, mountain_tails_Y, mountain_tails_Z, 
+                                 0, 1, 1,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    // phase 3: (m, v, m)
+    grid_size = num_mountains_X * num_valleys_Y * num_mountains_Z;
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_mountains_X, num_valleys_Y, num_mountains_Z, 
+                                 mountain_heads_X, valley_heads_Y, mountain_heads_Z, 
+                                 mountain_tails_X, valley_tails_Y, mountain_tails_Z, 
+                                 1, 0, 1,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    // phase 4: (m, m, v)
+    grid_size = num_mountains_X * num_mountains_Y * num_valleys_Z;
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_mountains_X, num_mountains_Y, num_valleys_Z, 
+                                 mountain_heads_X, mountain_heads_Y, valley_heads_Z, 
+                                 mountain_tails_X, mountain_tails_Y, valley_tails_Z, 
+                                 1, 1, 0,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    // phase 5: (v, v, m)
+    grid_size = num_valleys_X * num_valleys_Y * num_mountains_Z;
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_valleys_X, num_valleys_Y, num_mountains_Z, 
+                                 valley_heads_X, valley_heads_Y, mountain_heads_Z, 
+                                 valley_tails_X, valley_tails_Y, mountain_tails_Z, 
+                                 0, 0, 1,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    // phase 6: (v, m, v)
+    grid_size = num_valleys_X * num_mountains_Y * num_valleys_Z;
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_valleys_X, num_mountains_Y, num_valleys_Z, 
+                                 valley_heads_X, mountain_heads_Y, valley_heads_Z, 
+                                 valley_tails_X, mountain_tails_Y, valley_tails_Z, 
+                                 0, 1, 0,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    // phase 7: (m, v, v)
+    grid_size = num_mountains_X * num_valleys_Y * num_valleys_Z;
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_mountains_X, num_valleys_Y, num_valleys_Z, 
+                                 mountain_heads_X, valley_heads_Y, valley_heads_Z, 
+                                 mountain_tails_X, valley_tails_Y, valley_tails_Z, 
+                                 1, 0, 0,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    // phase 8: (v, v, v)
+    grid_size = num_valleys_X * num_valleys_Y * num_valleys_Z;
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_valleys_X, num_valleys_Y, num_valleys_Z, 
+                                 valley_heads_X, valley_heads_Y, valley_heads_Z, 
+                                 valley_tails_X, valley_tails_Y, valley_tails_Z, 
+                                 0, 0, 0,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+  }
+
+  std::cout << "gpu simulation (shmem EH) total calculations: " << total_cal << "\n"; 
+
+} 
+
+
+void gDiamond::update_FDTD_gpu_simulation_check(size_t num_timesteps) {
+
+  std::cout << "running update_FDTD_gpu_simulation and update_FDTD_gpu_simulation_shmem_EH\n"; 
+
+  // clear source Mz for experiments
+  _Mz.clear();
+
+  // transfer source
+  for(size_t t=0; t<num_timesteps; t++) {
+    float Mz_value = M_source_amp * std::sin(SOURCE_OMEGA * t * dt);
+    _Mz[_source_idx] = Mz_value;
+  }
+
+  size_t max_phases = 8;
+  std::vector<int> mountain_heads_X;
+  std::vector<int> mountain_tails_X;
+  std::vector<int> mountain_heads_Y;
+  std::vector<int> mountain_tails_Y;
+  std::vector<int> mountain_heads_Z;
+  std::vector<int> mountain_tails_Z;
+  std::vector<int> valley_heads_X;
+  std::vector<int> valley_tails_X;
+  std::vector<int> valley_heads_Y;
+  std::vector<int> valley_tails_Y;
+  std::vector<int> valley_heads_Z;
+  std::vector<int> valley_tails_Z;
+  _setup_diamond_tiling_gpu(BLX_GPU, BLY_GPU, BLZ_GPU, BLT_GPU, max_phases);
+
+  for(auto range : _Eranges_phases_X[0][0]) { 
+    mountain_heads_X.push_back(range.first);
+    mountain_tails_X.push_back(range.second);
+  }
+  for(auto range : _Eranges_phases_Y[0][0]) { 
+    mountain_heads_Y.push_back(range.first);
+    mountain_tails_Y.push_back(range.second);
+  }
+  for(auto range : _Eranges_phases_Z[0][0]) { 
+    mountain_heads_Z.push_back(range.first);
+    mountain_tails_Z.push_back(range.second);
+  }
+  for(auto range : _Hranges_phases_X[1][BLT_GPU-1]) { 
+    valley_heads_X.push_back(range.first);
+    valley_tails_X.push_back(range.second);
+  }
+  for(auto range : _Hranges_phases_Y[2][BLT_GPU-1]) { 
+    valley_heads_Y.push_back(range.first);
+    valley_tails_Y.push_back(range.second);
+  }
+  for(auto range : _Hranges_phases_Z[3][BLT_GPU-1]) { 
+    valley_heads_Z.push_back(range.first);
+    valley_tails_Z.push_back(range.second);
+  }
+
+  size_t num_mountains_X = mountain_heads_X.size();
+  size_t num_mountains_Y = mountain_heads_Y.size();
+  size_t num_mountains_Z = mountain_heads_Z.size();
+  size_t num_valleys_X = valley_heads_X.size();
+  size_t num_valleys_Y = valley_heads_Y.size();
+  size_t num_valleys_Z = valley_heads_Z.size();
+
+  size_t block_size = BLX_GPU * BLY_GPU * BLZ_GPU;
+  size_t grid_size;
+
+  size_t total_cal = 0;
+  for(size_t t=0; t<num_timesteps/BLT_GPU; t++) {
+    
+    // phase 1: (m, m, m)
+    grid_size = num_mountains_X * num_mountains_Y * num_mountains_Z;
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_mountains_X, num_mountains_Y, num_mountains_Z, 
+                                 mountain_heads_X, mountain_heads_Y, mountain_heads_Z, 
+                                 mountain_tails_X, mountain_tails_Y, mountain_tails_Z, 
+                                 1, 1, 1,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
                         _Cax, _Cbx,
                         _Cay, _Cby,
                         _Caz, _Cbz,
@@ -1258,14 +1512,40 @@ void gDiamond::update_FDTD_gpu_simulation_shmem_EH(size_t num_timesteps) { // si
                         mountain_heads_X, mountain_heads_Y, mountain_heads_Z, 
                         mountain_tails_X, mountain_tails_Y, mountain_tails_Z, 
                         1, 1, 1,
-                        total_cal,
                         block_size,
                         grid_size);
 
+    if(!check_correctness_simu_shmem()) {
+      std::cout << "phase 1. t = " << t << "\n";
+      std::cerr << "error: results not match\n";
+      std::exit(EXIT_FAILURE);
+    }
+
     // phase 2: (v, m, m)
     grid_size = num_valleys_X * num_mountains_Y * num_mountains_Z;
-    _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
-                        Hx_temp, Hy_temp, Hz_temp,
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_valleys_X, num_mountains_Y, num_mountains_Z, 
+                                 valley_heads_X, mountain_heads_Y, mountain_heads_Z, 
+                                 valley_tails_X, mountain_tails_Y, mountain_tails_Z, 
+                                 0, 1, 1,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
                         _Cax, _Cbx,
                         _Cay, _Cby,
                         _Caz, _Cbz,
@@ -1280,14 +1560,40 @@ void gDiamond::update_FDTD_gpu_simulation_shmem_EH(size_t num_timesteps) { // si
                         valley_heads_X, mountain_heads_Y, mountain_heads_Z, 
                         valley_tails_X, mountain_tails_Y, mountain_tails_Z, 
                         0, 1, 1,
-                        total_cal,
                         block_size,
                         grid_size);
 
+    if(!check_correctness_simu_shmem()) {
+      std::cout << "phase 2. t = " << t << "\n";
+      std::cerr << "error: results not match\n";
+      std::exit(EXIT_FAILURE);
+    }
+
     // phase 3: (m, v, m)
     grid_size = num_mountains_X * num_valleys_Y * num_mountains_Z;
-    _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
-                        Hx_temp, Hy_temp, Hz_temp,
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_mountains_X, num_valleys_Y, num_mountains_Z, 
+                                 mountain_heads_X, valley_heads_Y, mountain_heads_Z, 
+                                 mountain_tails_X, valley_tails_Y, mountain_tails_Z, 
+                                 1, 0, 1,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
                         _Cax, _Cbx,
                         _Cay, _Cby,
                         _Caz, _Cbz,
@@ -1302,14 +1608,40 @@ void gDiamond::update_FDTD_gpu_simulation_shmem_EH(size_t num_timesteps) { // si
                         mountain_heads_X, valley_heads_Y, mountain_heads_Z, 
                         mountain_tails_X, valley_tails_Y, mountain_tails_Z, 
                         1, 0, 1,
-                        total_cal,
                         block_size,
                         grid_size);
 
+    if(!check_correctness_simu_shmem()) {
+      std::cout << "phase 3. t = " << t << "\n";
+      std::cerr << "error: results not match\n";
+      std::exit(EXIT_FAILURE);
+    }
+
     // phase 4: (m, m, v)
     grid_size = num_mountains_X * num_mountains_Y * num_valleys_Z;
-    _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
-                        Hx_temp, Hy_temp, Hz_temp,
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_mountains_X, num_mountains_Y, num_valleys_Z, 
+                                 mountain_heads_X, mountain_heads_Y, valley_heads_Z, 
+                                 mountain_tails_X, mountain_tails_Y, valley_tails_Z, 
+                                 1, 1, 0,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
                         _Cax, _Cbx,
                         _Cay, _Cby,
                         _Caz, _Cbz,
@@ -1324,14 +1656,40 @@ void gDiamond::update_FDTD_gpu_simulation_shmem_EH(size_t num_timesteps) { // si
                         mountain_heads_X, mountain_heads_Y, valley_heads_Z, 
                         mountain_tails_X, mountain_tails_Y, valley_tails_Z, 
                         1, 1, 0,
-                        total_cal,
                         block_size,
                         grid_size);
 
+    if(!check_correctness_simu_shmem()) {
+      std::cout << "phase 4. t = " << t << "\n";
+      std::cerr << "error: results not match\n";
+      std::exit(EXIT_FAILURE);
+    }
+
     // phase 5: (v, v, m)
     grid_size = num_valleys_X * num_valleys_Y * num_mountains_Z;
-    _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
-                        Hx_temp, Hy_temp, Hz_temp,
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_valleys_X, num_valleys_Y, num_mountains_Z, 
+                                 valley_heads_X, valley_heads_Y, mountain_heads_Z, 
+                                 valley_tails_X, valley_tails_Y, mountain_tails_Z, 
+                                 0, 0, 1,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
                         _Cax, _Cbx,
                         _Cay, _Cby,
                         _Caz, _Cbz,
@@ -1346,14 +1704,40 @@ void gDiamond::update_FDTD_gpu_simulation_shmem_EH(size_t num_timesteps) { // si
                         valley_heads_X, valley_heads_Y, mountain_heads_Z, 
                         valley_tails_X, valley_tails_Y, mountain_tails_Z, 
                         0, 0, 1,
-                        total_cal,
                         block_size,
                         grid_size);
 
+    if(!check_correctness_simu_shmem()) {
+      std::cout << "phase 5. t = " << t << "\n";
+      std::cerr << "error: results not match\n";
+      std::exit(EXIT_FAILURE);
+    }
+
     // phase 6: (v, m, v)
     grid_size = num_valleys_X * num_mountains_Y * num_valleys_Z;
-    _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
-                        Hx_temp, Hy_temp, Hz_temp,
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_valleys_X, num_mountains_Y, num_valleys_Z, 
+                                 valley_heads_X, mountain_heads_Y, valley_heads_Z, 
+                                 valley_tails_X, mountain_tails_Y, valley_tails_Z, 
+                                 0, 1, 0,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
                         _Cax, _Cbx,
                         _Cay, _Cby,
                         _Caz, _Cbz,
@@ -1368,14 +1752,40 @@ void gDiamond::update_FDTD_gpu_simulation_shmem_EH(size_t num_timesteps) { // si
                         valley_heads_X, mountain_heads_Y, valley_heads_Z, 
                         valley_tails_X, mountain_tails_Y, valley_tails_Z, 
                         0, 1, 0,
-                        total_cal,
                         block_size,
                         grid_size);
 
+    if(!check_correctness_simu_shmem()) {
+      std::cout << "phase 6. t = " << t << "\n";
+      std::cerr << "error: results not match\n";
+      std::exit(EXIT_FAILURE);
+    }
+
     // phase 7: (m, v, v)
     grid_size = num_mountains_X * num_valleys_Y * num_valleys_Z;
-    _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
-                        Hx_temp, Hy_temp, Hz_temp,
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_mountains_X, num_valleys_Y, num_valleys_Z, 
+                                 mountain_heads_X, valley_heads_Y, valley_heads_Z, 
+                                 mountain_tails_X, valley_tails_Y, valley_tails_Z, 
+                                 1, 0, 0,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
                         _Cax, _Cbx,
                         _Cay, _Cby,
                         _Caz, _Cbz,
@@ -1390,14 +1800,40 @@ void gDiamond::update_FDTD_gpu_simulation_shmem_EH(size_t num_timesteps) { // si
                         mountain_heads_X, valley_heads_Y, valley_heads_Z, 
                         mountain_tails_X, valley_tails_Y, valley_tails_Z, 
                         1, 0, 0,
-                        total_cal,
                         block_size,
                         grid_size);
 
+    if(!check_correctness_simu_shmem()) {
+      std::cout << "phase 7. t = " << t << "\n";
+      std::cerr << "error: results not match\n";
+      std::exit(EXIT_FAILURE);
+    }
+
     // phase 8: (v, v, v)
     grid_size = num_valleys_X * num_valleys_Y * num_valleys_Z;
-    _updateEH_phase_seq_shmem_EH(Ex_temp, Ey_temp, Ez_temp,
-                        Hx_temp, Hy_temp, Hz_temp,
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_valleys_X, num_valleys_Y, num_valleys_Z, 
+                                 valley_heads_X, valley_heads_Y, valley_heads_Z, 
+                                 valley_tails_X, valley_tails_Y, valley_tails_Z, 
+                                 0, 0, 0,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
                         _Cax, _Cbx,
                         _Cay, _Cby,
                         _Caz, _Cbz,
@@ -1412,24 +1848,17 @@ void gDiamond::update_FDTD_gpu_simulation_shmem_EH(size_t num_timesteps) { // si
                         valley_heads_X, valley_heads_Y, valley_heads_Z, 
                         valley_tails_X, valley_tails_Y, valley_tails_Z, 
                         0, 0, 0,
-                        total_cal,
                         block_size,
                         grid_size);
 
+    if(!check_correctness_simu_shmem()) {
+      std::cout << "phase 8. t = " << t << "\n";
+      std::cerr << "error: results not match\n";
+      std::exit(EXIT_FAILURE);
+    }
   }
 
-  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    _Ex_simu[i] = Ex_temp[i];
-    _Ey_simu[i] = Ey_temp[i];
-    _Ez_simu[i] = Ez_temp[i];
-    _Hx_simu[i] = Hx_temp[i];
-    _Hy_simu[i] = Hy_temp[i];
-    _Hz_simu[i] = Hz_temp[i];
-  }
-
-  std::cout << "gpu simulation (shmem EH) total calculations: " << total_cal << "\n"; 
-
-} 
+}
 
 std::vector<int> gDiamond::_get_head_tail(size_t BLX, size_t BLT,
                                           std::vector<int> xx_heads, std::vector<int> xx_tails,
@@ -1692,6 +2121,7 @@ void gDiamond::_updateEH_phase_seq_shmem_EH(std::vector<float>& Ex, std::vector<
                                             std::vector<int> zz_tails,
                                             int m_or_v_X, int m_or_v_Y, int m_or_v_Z,
                                             size_t &total_cal,
+                                            size_t current_time,
                                             size_t block_size,
                                             size_t grid_size) 
 {
@@ -1724,10 +2154,11 @@ void gDiamond::_updateEH_phase_seq_shmem_EH(std::vector<float>& Ex, std::vector<
       int shared_H_z = local_z + 1;
       int shared_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH;
 
-      if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz &&
-         global_x <= xx_tails[xx] &&
-         global_y <= yy_tails[yy] &&
-         global_z <= zz_tails[zz]) {
+      // if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz &&
+      //    global_x <= xx_tails[xx] &&
+      //    global_y <= yy_tails[yy] &&
+      //    global_z <= zz_tails[zz]) {
+      if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz) {
 
         // load core
         Hx_shmem[shared_H_idx] = Hx[global_idx];
@@ -1759,10 +2190,11 @@ void gDiamond::_updateEH_phase_seq_shmem_EH(std::vector<float>& Ex, std::vector<
 
       int shared_E_idx = shared_E_x + shared_E_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH;
 
-      if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz &&
-         global_x <= xx_tails[xx] &&
-         global_y <= yy_tails[yy] &&
-         global_z <= zz_tails[zz]) {
+      // if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz &&
+      //    global_x <= xx_tails[xx] &&
+      //    global_y <= yy_tails[yy] &&
+      //    global_z <= zz_tails[zz]) {
+      if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz) {
 
         Ex_shmem[shared_E_idx] = Ex[global_idx];
         Ey_shmem[shared_E_idx] = Ey[global_idx];
@@ -1781,6 +2213,7 @@ void gDiamond::_updateEH_phase_seq_shmem_EH(std::vector<float>& Ex, std::vector<
           Ex_shmem[shared_E_x + shared_E_y * BLX_EH + (shared_E_z + 1) * BLX_EH * BLY_EH] = Ex[global_x + global_y * Nx + (global_z + 1) * Nx * Ny];
           Ey_shmem[shared_E_x + shared_E_y * BLX_EH + (shared_E_z + 1) * BLX_EH * BLY_EH] = Ey[global_x + global_y * Nx + (global_z + 1) * Nx * Ny];
         }
+
       }
     }
 
@@ -1855,7 +2288,58 @@ void gDiamond::_updateEH_phase_seq_shmem_EH(std::vector<float>& Ex, std::vector<
 
             int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
 
+            // if(m_or_v_X == 0 && xx == 1 && yy == 0 && zz == 0 && global_y == 3 && global_z == 3) {
+            //   std::cout << "check update E\n";
+            // }
+
             total_cal++;
+
+            // check shared memory load before calculation
+            // if(Hx_shmem[s_H_idx] != Hx[g_idx]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hx_shmem[s_H_idx] != Hx[g_idx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hx_shmem[s_H_idx - BLX_EH * BLY_EH] != Hx[g_idx - Nx * Ny]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hx_shmem[s_H_idx] != Hx[g_idx - Nx * Ny]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hx_shmem[s_H_idx - BLX_EH] != Hx[g_idx - Nx]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hx_shmem[s_H_idx - BLX_EH] != Hx[g_idx - Nx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hy_shmem[s_H_idx] != Hy[g_idx]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hy_shmem[s_H_idx] != Hy[g_idx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hy_shmem[s_H_idx - 1] != Hy[g_idx - 1]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hy_shmem[s_H_idx - 1] != Hy[g_idx - 1]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hy_shmem[s_H_idx - BLX_EH * BLY_EH] != Hy[g_idx - Nx * Ny]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hy_shmem[s_H_idx - BLX_EH * BLY_EH] != Hy[g_idx - Nx * Ny]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hz_shmem[s_H_idx] != Hz[g_idx]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hz_shmem[s_H_idx] != Hz[g_idx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hz_shmem[s_H_idx - 1] != Hz[g_idx - 1]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hz_shmem[s_H_idx - 1] != Hz[g_idx - 1]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hz_shmem[s_H_idx - BLX_EH] != Hz[g_idx - Nx]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hz_shmem[s_H_idx - BLX_EH] != Hz[g_idx - Nx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
 
             // if(Hy[g_idx - 1] != Hy_shmem[s_H_idx - 1]) {
             //   std::cout << "Hy[g_idx - 1] = " << Hy[g_idx - 1] << ", Hy_shmem[s_H_idx - 1] = " << Hy_shmem[s_H_idx - 1] << "\n"; 
@@ -1882,6 +2366,22 @@ void gDiamond::_updateEH_phase_seq_shmem_EH(std::vector<float>& Ex, std::vector<
                       ((Hx_shmem[s_H_idx] - Hx_shmem[s_H_idx - BLX_EH * BLY_EH]) - (Hz_shmem[s_H_idx] - Hz_shmem[s_H_idx - 1]) - Jy[g_idx] * dx);
             Ez_shmem[s_E_idx] = Caz[g_idx] * Ez_shmem[s_E_idx] + Cbz[g_idx] *
                       ((Hy_shmem[s_H_idx] - Hy_shmem[s_H_idx - 1]) - (Hx_shmem[s_H_idx] - Hx_shmem[s_H_idx - BLX_EH]) - Jz[g_idx] * dx);
+
+            // if(Ex_shmem[s_E_idx] != Ex[g_idx]) {
+            //   std::cerr << "after updateE, ";
+            //   std::cerr << "Ex_shmem[s_E_idx] != Ex[g_idx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Ey_shmem[s_E_idx] != Ey[g_idx]) {
+            //   std::cerr << "after updateE, ";
+            //   std::cerr << "Ey_shmem[s_E_idx] != Ey[g_idx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Ez_shmem[s_E_idx] != Ez[g_idx]) {
+            //   std::cerr << "after updateE, ";
+            //   std::cerr << "Ez_shmem[s_E_idx] != Ez[g_idx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
           }
         }
       }
@@ -1925,6 +2425,68 @@ void gDiamond::_updateEH_phase_seq_shmem_EH(std::vector<float>& Ex, std::vector<
 
             int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
 
+            // if(Ex_shmem[s_E_idx] != Ex[g_idx]) {
+            //   std::cerr << "updateH, ";
+            //   std::cerr << "Ex_shmem[s_E_idx] != Ex[g_idx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Ex_shmem[s_E_idx + BLX_EH] != Ex[g_idx + Nx]) {
+            //   std::cerr << "updateH, ";
+            //   std::cerr << "Ex_shmem[s_E_idx + BLX_EH] != Ex[g_idx + Nx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Ex_shmem[s_E_idx + BLX_EH * BLY_EH] != Ex[g_idx + Nx * Ny]) {
+            //   std::cerr << "updateH, ";
+            //   std::cerr << "Ex_shmem[s_E_idx + BLX_EH * BLY_EH] != Ex[g_idx + Nx * Ny]\n";
+            //   std::cerr << "Ex_shmem[s_E_idx + BLX_EH * BLY_EH] = " << Ex_shmem[s_E_idx + BLX_EH * BLY_EH] << ", Ex[g_idx + Nx * Ny] = " << Ex[g_idx + Nx * Ny] << "\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(fabs(Ex[g_idx] + 0.0395334) <= 1e-8) {
+            //   std::cerr << "found in Ex[g_idx].\n";
+            // }
+            // if(fabs(Ex[g_idx + Nx * Ny] + 0.0395334) <= 1e-8) {
+            //   std::cerr << "found in Ex[g_idx + Nx * Ny].\n";
+            // }
+            // if(Ey_shmem[s_E_idx] != Ey[g_idx]) {
+            //   std::cerr << "updateH, ";
+            //   std::cerr << "Ey_shmem[s_E_idx] != Ey[g_idx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Ey_shmem[s_E_idx + 1] != Ey[g_idx + 1]) {
+            //   std::cerr << "updateH, ";
+            //   std::cerr << "Ey_shmem[s_E_idx + 1] != Ey[g_idx + 1]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Ey_shmem[s_E_idx + BLX_EH * BLY_EH] != Ey[g_idx + Nx * Ny]) {
+            //   std::cerr << "updateH, ";
+            //   std::cerr << "Ey_shmem[s_E_idx + BLX_EH * BLY_EH] != Ey[g_idx + Nx * Ny]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Ez_shmem[s_E_idx] != Ez[g_idx]) {
+            //   std::cerr << "updateH, ";
+            //   std::cerr << "Ez_shmem[s_E_idx] != Ez[g_idx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Ez_shmem[s_E_idx + 1] != Ez[g_idx + 1]) {
+            //   std::cerr << "updateH, ";
+            //   std::cerr << "Ez_shmem[s_E_idx + 1] != Ez[g_idx + 1]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Ez_shmem[s_E_idx + BLX_EH] != Ez[g_idx + Nx]) {
+            //   std::cerr << "updateH, ";
+            //   std::cerr << "Ez_shmem[s_E_idx + BLX_EH] != Ez[g_idx + Nx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            
+            // if(m_or_v_X == 0 && yy == 0 && zz == 0 && global_y == 3 && global_z == 3) {
+            //   std::cout << "t = " << t << ", local_x = " << local_x << ", shared_H_x = " << shared_H_x << ", shared_E_x " << shared_E_x << "\n";
+            // }
+            // if(Hz[_source_idx] != Hz_shmem[_source_idx]) {
+            //   std::cerr << "wrong!\n";
+            //   std::cout << "t = " << t << ", local_x = " << local_x << ", shared_H_x = " << shared_H_x << ", shared_E_x " << shared_E_x << "\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+
             total_cal++;
 
             // Hx[g_idx] = Dax[g_idx] * Hx[g_idx] + Dbx[g_idx] *
@@ -1939,6 +2501,22 @@ void gDiamond::_updateEH_phase_seq_shmem_EH(std::vector<float>& Ex, std::vector<
                       ((Ez_shmem[s_E_idx + 1] - Ez_shmem[s_E_idx]) - (Ex_shmem[s_E_idx + BLX_EH * BLY_EH] - Ex_shmem[s_E_idx]) - My[g_idx] * dx);
             Hz_shmem[s_H_idx] = Daz[g_idx] * Hz_shmem[s_H_idx] + Dbz[g_idx] *
                       ((Ex_shmem[s_E_idx + BLX_EH] - Ex_shmem[s_E_idx]) - (Ey_shmem[s_E_idx + 1] - Ey_shmem[s_E_idx]) - Mz[g_idx] * dx);
+
+            // if(Hx_shmem[s_H_idx] != Hx[g_idx]) {
+            //   std::cerr << "after updateH, ";
+            //   std::cerr << "Hx_shmem[s_H_idx] != Hx[g_idx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hy_shmem[s_H_idx] != Hy[g_idx]) {
+            //   std::cerr << "after updateH, ";
+            //   std::cerr << "Hy_shmem[s_H_idx] != Hy[g_idx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hz_shmem[s_H_idx] != Hz[g_idx]) {
+            //   std::cerr << "after updateH, ";
+            //   std::cerr << "Hz_shmem[s_H_idx] != Hz[g_idx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
           }
         }
       }
@@ -2582,6 +3160,154 @@ void gDiamond::update_FDTD_gpu_fuse_kernel_shmem_EH(size_t num_timesteps) { // 3
                         1, 1, 1,
                         block_size,
                         grid_size);
+
+    // phase 2: (v, m, m)
+    grid_size = num_valleys_X * num_mountains_Y * num_mountains_Z;
+    updateEH_phase_shmem_EH<<<grid_size, block_size>>>(Ex, Ey, Ez,
+                        Hx, Hy, Hz,
+                        Cax, Cbx,
+                        Cay, Cby,
+                        Caz, Cbz,
+                        Dax, Dbx,
+                        Day, Dby,
+                        Daz, Dbz,
+                        Jx, Jy, Jz,
+                        Mx, My, Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_valleys_X, num_mountains_Y, num_mountains_Z, 
+                        valley_heads_X_d, mountain_heads_Y_d, mountain_heads_Z_d, 
+                        valley_tails_X_d, mountain_tails_Y_d, mountain_tails_Z_d, 
+                        0, 1, 1,
+                        block_size,
+                        grid_size);
+
+    // phase 3: (m, v, m)
+    grid_size = num_mountains_X * num_valleys_Y * num_mountains_Z;
+    updateEH_phase_shmem_EH<<<grid_size, block_size>>>(Ex, Ey, Ez,
+                        Hx, Hy, Hz,
+                        Cax, Cbx,
+                        Cay, Cby,
+                        Caz, Cbz,
+                        Dax, Dbx,
+                        Day, Dby,
+                        Daz, Dbz,
+                        Jx, Jy, Jz,
+                        Mx, My, Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_mountains_X, num_valleys_Y, num_mountains_Z, 
+                        mountain_heads_X_d, valley_heads_Y_d, mountain_heads_Z_d, 
+                        mountain_tails_X_d, valley_tails_Y_d, mountain_tails_Z_d, 
+                        1, 0, 1,
+                        block_size,
+                        grid_size);
+
+    // phase 4: (m, m, v)
+    grid_size = num_mountains_X * num_mountains_Y * num_valleys_Z;
+    updateEH_phase_shmem_EH<<<grid_size, block_size>>>(Ex, Ey, Ez,
+                        Hx, Hy, Hz,
+                        Cax, Cbx,
+                        Cay, Cby,
+                        Caz, Cbz,
+                        Dax, Dbx,
+                        Day, Dby,
+                        Daz, Dbz,
+                        Jx, Jy, Jz,
+                        Mx, My, Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_mountains_X, num_mountains_Y, num_valleys_Z, 
+                        mountain_heads_X_d, mountain_heads_Y_d, valley_heads_Z_d, 
+                        mountain_tails_X_d, mountain_tails_Y_d, valley_tails_Z_d, 
+                        1, 1, 0,
+                        block_size,
+                        grid_size);
+
+    // phase 5: (v, v, m)
+    grid_size = num_valleys_X * num_valleys_Y * num_mountains_Z;
+    updateEH_phase_shmem_EH<<<grid_size, block_size>>>(Ex, Ey, Ez,
+                        Hx, Hy, Hz,
+                        Cax, Cbx,
+                        Cay, Cby,
+                        Caz, Cbz,
+                        Dax, Dbx,
+                        Day, Dby,
+                        Daz, Dbz,
+                        Jx, Jy, Jz,
+                        Mx, My, Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_valleys_X, num_valleys_Y, num_mountains_Z, 
+                        valley_heads_X_d, valley_heads_Y_d, mountain_heads_Z_d, 
+                        valley_tails_X_d, valley_tails_Y_d, mountain_tails_Z_d, 
+                        0, 0, 1,
+                        block_size,
+                        grid_size);
+
+    // phase 6: (v, m, v)
+    grid_size = num_valleys_X * num_mountains_Y * num_valleys_Z;
+    updateEH_phase_shmem_EH<<<grid_size, block_size>>>(Ex, Ey, Ez,
+                        Hx, Hy, Hz,
+                        Cax, Cbx,
+                        Cay, Cby,
+                        Caz, Cbz,
+                        Dax, Dbx,
+                        Day, Dby,
+                        Daz, Dbz,
+                        Jx, Jy, Jz,
+                        Mx, My, Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_valleys_X, num_mountains_Y, num_valleys_Z, 
+                        valley_heads_X_d, mountain_heads_Y_d, valley_heads_Z_d, 
+                        valley_tails_X_d, mountain_tails_Y_d, valley_tails_Z_d, 
+                        0, 1, 0,
+                        block_size,
+                        grid_size);
+
+    // phase 7: (m, v, v)
+    grid_size = num_mountains_X * num_valleys_Y * num_valleys_Z;
+    updateEH_phase_shmem_EH<<<grid_size, block_size>>>(Ex, Ey, Ez,
+                        Hx, Hy, Hz,
+                        Cax, Cbx,
+                        Cay, Cby,
+                        Caz, Cbz,
+                        Dax, Dbx,
+                        Day, Dby,
+                        Daz, Dbz,
+                        Jx, Jy, Jz,
+                        Mx, My, Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_mountains_X, num_valleys_Y, num_valleys_Z, 
+                        mountain_heads_X_d, valley_heads_Y_d, valley_heads_Z_d, 
+                        mountain_tails_X_d, valley_tails_Y_d, valley_tails_Z_d, 
+                        1, 0, 0,
+                        block_size,
+                        grid_size);
+
+    // phase 8: (v, v, v)
+    grid_size = num_valleys_X * num_valleys_Y * num_valleys_Z;
+    updateEH_phase_shmem_EH<<<grid_size, block_size>>>(Ex, Ey, Ez,
+                        Hx, Hy, Hz,
+                        Cax, Cbx,
+                        Cay, Cby,
+                        Caz, Cbz,
+                        Dax, Dbx,
+                        Day, Dby,
+                        Daz, Dbz,
+                        Jx, Jy, Jz,
+                        Mx, My, Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_valleys_X, num_valleys_Y, num_valleys_Z, 
+                        valley_heads_X_d, valley_heads_Y_d, valley_heads_Z_d, 
+                        valley_tails_X_d, valley_tails_Y_d, valley_tails_Z_d, 
+                        0, 0, 0,
+                        block_size,
+                        grid_size);
+
 
   }
   cudaDeviceSynchronize();
