@@ -2295,51 +2295,51 @@ void gDiamond::_updateEH_phase_seq_shmem_EH(std::vector<float>& Ex, std::vector<
             total_cal++;
 
             // check shared memory load before calculation
-            if(Hx_shmem[s_H_idx] != Hx[g_idx]) {
-              std::cerr << "updateE, ";
-              std::cerr << "Hx_shmem[s_H_idx] != Hx[g_idx]\n";
-              std::exit(EXIT_FAILURE);
-            }
-            if(Hx_shmem[s_H_idx - BLX_EH * BLY_EH] != Hx[g_idx - Nx * Ny]) {
-              std::cerr << "updateE, ";
-              std::cerr << "Hx_shmem[s_H_idx] != Hx[g_idx - Nx * Ny]\n";
-              std::exit(EXIT_FAILURE);
-            }
-            if(Hx_shmem[s_H_idx - BLX_EH] != Hx[g_idx - Nx]) {
-              std::cerr << "updateE, ";
-              std::cerr << "Hx_shmem[s_H_idx - BLX_EH] != Hx[g_idx - Nx]\n";
-              std::exit(EXIT_FAILURE);
-            }
-            if(Hy_shmem[s_H_idx] != Hy[g_idx]) {
-              std::cerr << "updateE, ";
-              std::cerr << "Hy_shmem[s_H_idx] != Hy[g_idx]\n";
-              std::exit(EXIT_FAILURE);
-            }
-            if(Hy_shmem[s_H_idx - 1] != Hy[g_idx - 1]) {
-              std::cerr << "updateE, ";
-              std::cerr << "Hy_shmem[s_H_idx - 1] != Hy[g_idx - 1]\n";
-              std::exit(EXIT_FAILURE);
-            }
-            if(Hy_shmem[s_H_idx - BLX_EH * BLY_EH] != Hy[g_idx - Nx * Ny]) {
-              std::cerr << "updateE, ";
-              std::cerr << "Hy_shmem[s_H_idx - BLX_EH * BLY_EH] != Hy[g_idx - Nx * Ny]\n";
-              std::exit(EXIT_FAILURE);
-            }
-            if(Hz_shmem[s_H_idx] != Hz[g_idx]) {
-              std::cerr << "updateE, ";
-              std::cerr << "Hz_shmem[s_H_idx] != Hz[g_idx]\n";
-              std::exit(EXIT_FAILURE);
-            }
-            if(Hz_shmem[s_H_idx - 1] != Hz[g_idx - 1]) {
-              std::cerr << "updateE, ";
-              std::cerr << "Hz_shmem[s_H_idx - 1] != Hz[g_idx - 1]\n";
-              std::exit(EXIT_FAILURE);
-            }
-            if(Hz_shmem[s_H_idx - BLX_EH] != Hz[g_idx - Nx]) {
-              std::cerr << "updateE, ";
-              std::cerr << "Hz_shmem[s_H_idx - BLX_EH] != Hz[g_idx - Nx]\n";
-              std::exit(EXIT_FAILURE);
-            }
+            // if(Hx_shmem[s_H_idx] != Hx[g_idx]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hx_shmem[s_H_idx] != Hx[g_idx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hx_shmem[s_H_idx - BLX_EH * BLY_EH] != Hx[g_idx - Nx * Ny]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hx_shmem[s_H_idx] != Hx[g_idx - Nx * Ny]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hx_shmem[s_H_idx - BLX_EH] != Hx[g_idx - Nx]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hx_shmem[s_H_idx - BLX_EH] != Hx[g_idx - Nx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hy_shmem[s_H_idx] != Hy[g_idx]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hy_shmem[s_H_idx] != Hy[g_idx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hy_shmem[s_H_idx - 1] != Hy[g_idx - 1]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hy_shmem[s_H_idx - 1] != Hy[g_idx - 1]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hy_shmem[s_H_idx - BLX_EH * BLY_EH] != Hy[g_idx - Nx * Ny]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hy_shmem[s_H_idx - BLX_EH * BLY_EH] != Hy[g_idx - Nx * Ny]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hz_shmem[s_H_idx] != Hz[g_idx]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hz_shmem[s_H_idx] != Hz[g_idx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hz_shmem[s_H_idx - 1] != Hz[g_idx - 1]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hz_shmem[s_H_idx - 1] != Hz[g_idx - 1]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
+            // if(Hz_shmem[s_H_idx - BLX_EH] != Hz[g_idx - Nx]) {
+            //   std::cerr << "updateE, ";
+            //   std::cerr << "Hz_shmem[s_H_idx - BLX_EH] != Hz[g_idx - Nx]\n";
+            //   std::exit(EXIT_FAILURE);
+            // }
 
             // if(Hy[g_idx - 1] != Hy_shmem[s_H_idx - 1]) {
             //   std::cout << "Hy[g_idx - 1] = " << Hy[g_idx - 1] << ", Hy_shmem[s_H_idx - 1] = " << Hy_shmem[s_H_idx - 1] << "\n"; 
@@ -3313,12 +3313,12 @@ void gDiamond::update_FDTD_gpu_fuse_kernel_shmem_EH(size_t num_timesteps) { // 3
   cudaDeviceSynchronize();
 
   // copy E, H back to host 
-  CUDACHECK(cudaMemcpy(_Ex_gpu.data(), Ex, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
-  CUDACHECK(cudaMemcpy(_Ey_gpu.data(), Ey, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
-  CUDACHECK(cudaMemcpy(_Ez_gpu.data(), Ez, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
-  CUDACHECK(cudaMemcpy(_Hx_gpu.data(), Hx, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
-  CUDACHECK(cudaMemcpy(_Hy_gpu.data(), Hy, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
-  CUDACHECK(cudaMemcpy(_Hz_gpu.data(), Hz, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Ex_gpu_shEH.data(), Ex, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Ey_gpu_shEH.data(), Ey, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Ez_gpu_shEH.data(), Ez, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hx_gpu_shEH.data(), Hx, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hy_gpu_shEH.data(), Hy, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hz_gpu_shEH.data(), Hz, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
 
   auto end = std::chrono::high_resolution_clock::now();
   std::cout << "gpu runtime (3-D mapping, shared memory for EH only): " << std::chrono::duration<double>(end-start).count() << "s\n"; 

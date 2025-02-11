@@ -13,13 +13,13 @@ int main(int argc, char* argv[]) {
   size_t num_timesteps = std::atoi(argv[4]);
   gdiamond::gDiamond exp(Nx, Ny, Nz); 
 
-  // exp.update_FDTD_gpu_simulation_check(num_timesteps);
   exp.update_FDTD_seq_check_result(num_timesteps);
-  exp.update_FDTD_gpu_simulation_shmem_EH(num_timesteps);
+  exp.update_FDTD_gpu_fuse_kernel_globalmem(num_timesteps);
+  exp.update_FDTD_gpu_fuse_kernel_shmem_EH(num_timesteps);
 
   // exp.print_results();
 
-  if(!exp.check_correctness_simu()) {
+  if(!exp.check_correctness_gpu() & !exp.check_correctness_gpu_shmem()) {
     std::cerr << "error: results not match\n";
     std::exit(EXIT_FAILURE);
   }

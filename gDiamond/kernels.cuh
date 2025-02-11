@@ -4,7 +4,7 @@
 #define BLX_GPU 8
 #define BLY_GPU 8
 #define BLZ_GPU 8
-#define BLT_GPU 4 
+#define BLT_GPU 2 
 #define BLX_EH (BLX_GPU + 1)
 #define BLY_EH (BLY_GPU + 1)
 #define BLZ_EH (BLZ_GPU + 1)
@@ -876,10 +876,7 @@ __global__ void updateEH_phase_shmem_EH(float *Ex, float *Ey, float *Ez,
   int shared_H_z = local_z + 1;
   int shared_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH;
 
-  if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz &&
-     global_x <= xx_tails[xx] &&
-     global_y <= yy_tails[yy] &&
-     global_z <= zz_tails[zz]) {
+  if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz) {
     Hx_shmem[shared_H_idx] = Hx[global_idx];
     Hy_shmem[shared_H_idx] = Hy[global_idx];
     Hz_shmem[shared_H_idx] = Hz[global_idx];
@@ -908,10 +905,7 @@ __global__ void updateEH_phase_shmem_EH(float *Ex, float *Ey, float *Ez,
 
   int shared_E_idx = shared_E_x + shared_E_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH;
 
-  if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz &&
-     global_x <= xx_tails[xx] &&
-     global_y <= yy_tails[yy] &&
-     global_z <= zz_tails[zz]) {
+  if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz) { 
 
     Ex_shmem[shared_E_idx] = Ex[global_idx];
     Ey_shmem[shared_E_idx] = Ey[global_idx];
@@ -998,16 +992,16 @@ __global__ void updateEH_phase_shmem_EH(float *Ex, float *Ey, float *Ez,
         int Hoffset_Y = indices_Y[2] - yy_heads[yy];
         int Hoffset_Z = indices_Z[2] - zz_heads[zz];
 
-        shared_H_x = (m_or_v_X == 0 && xx != 0)? local_x + 1 + Hoffset_X + 1 : local_x + 1 + Hoffset_X;
-        shared_H_y = (m_or_v_Y == 0 && yy != 0)? local_y + 1 + Hoffset_Y + 1 : local_y + 1 + Hoffset_Y;
-        shared_H_z = (m_or_v_Z == 0 && zz != 0)? local_z + 1 + Hoffset_Z + 1 : local_z + 1 + Hoffset_Z;
+        int s_H_x = (m_or_v_X == 0 && xx != 0)? local_x + 1 + Hoffset_X + 1 : local_x + 1 + Hoffset_X;
+        int s_H_y = (m_or_v_Y == 0 && yy != 0)? local_y + 1 + Hoffset_Y + 1 : local_y + 1 + Hoffset_Y;
+        int s_H_z = (m_or_v_Z == 0 && zz != 0)? local_z + 1 + Hoffset_Z + 1 : local_z + 1 + Hoffset_Z;
 
-        shared_E_x = local_x + Eoffset_X;
-        shared_E_y = local_y + Eoffset_Y;
-        shared_E_z = local_z + Eoffset_Z;
+        int s_E_x = local_x + Eoffset_X;
+        int s_E_y = local_y + Eoffset_Y;
+        int s_E_z = local_z + Eoffset_Z;
 
-        int s_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH; // shared memory idx for H
-        int s_E_idx = shared_E_x + shared_E_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH; // shared memory idx for E
+        int s_H_idx = s_H_x + s_H_y * BLX_EH + s_H_z * BLX_EH * BLY_EH; // s memory idx for H
+        int s_E_idx = s_E_x + s_E_y * BLX_EH + s_E_z * BLX_EH * BLY_EH; // s memory idx for E
 
         int g_idx = g_x + g_y * Nx + g_z * Nx * Ny; // global idx
 
@@ -1044,16 +1038,16 @@ __global__ void updateEH_phase_shmem_EH(float *Ex, float *Ey, float *Ez,
         int Hoffset_Y = indices_Y[2] - yy_heads[yy];
         int Hoffset_Z = indices_Z[2] - zz_heads[zz];
 
-        shared_H_x = local_x + 1 + Hoffset_X;
-        shared_H_y = local_y + 1 + Hoffset_Y;
-        shared_H_z = local_z + 1 + Hoffset_Z;
+        int s_H_x = local_x + 1 + Hoffset_X;
+        int s_H_y = local_y + 1 + Hoffset_Y;
+        int s_H_z = local_z + 1 + Hoffset_Z;
 
-        shared_E_x = (m_or_v_X == 0 && xx != 0)? local_x + Eoffset_X - 1 : local_x + Eoffset_X;
-        shared_E_y = (m_or_v_Y == 0 && yy != 0)? local_y + Eoffset_Y - 1 : local_y + Eoffset_Y;
-        shared_E_z = (m_or_v_Z == 0 && zz != 0)? local_z + Eoffset_Z - 1 : local_z + Eoffset_Z;
+        int s_E_x = (m_or_v_X == 0 && xx != 0)? local_x + Eoffset_X - 1 : local_x + Eoffset_X;
+        int s_E_y = (m_or_v_Y == 0 && yy != 0)? local_y + Eoffset_Y - 1 : local_y + Eoffset_Y;
+        int s_E_z = (m_or_v_Z == 0 && zz != 0)? local_z + Eoffset_Z - 1 : local_z + Eoffset_Z;
 
-        int s_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH; // shared memory idx for H
-        int s_E_idx = shared_E_x + shared_E_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH; // shared memory idx for E
+        int s_H_idx = s_H_x + s_H_y * BLX_EH + s_H_z * BLX_EH * BLY_EH; // s memory idx for H
+        int s_E_idx = s_E_x + s_E_y * BLX_EH + s_E_z * BLX_EH * BLY_EH; // s memory idx for E
 
         int g_idx = g_x + g_y * Nx + g_z * Nx * Ny; // global idx
 
@@ -1075,17 +1069,16 @@ __global__ void updateEH_phase_shmem_EH(float *Ex, float *Ey, float *Ez,
      global_y <= yy_tails[yy] &&
      global_z <= zz_tails[zz]) {
 
+     int s_H_x = local_x + 1;
+     int s_H_y = local_y + 1;
+     int s_H_z = local_z + 1;
 
-     shared_H_x = local_x + 1;
-     shared_H_y = local_y + 1;
-     shared_H_z = local_z + 1;
+     int s_E_x = local_x;
+     int s_E_y = local_y;
+     int s_E_z = local_z;
 
-     shared_E_x = local_x;
-     shared_E_y = local_y;
-     shared_E_z = local_z;
-
-     int s_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH; // shared memory idx for H
-     int s_E_idx = shared_E_x + shared_E_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH; // shared memory idx for E
+     int s_H_idx = s_H_x + s_H_y * BLX_EH + s_H_z * BLX_EH * BLY_EH; // s memory idx for H
+     int s_E_idx = s_E_x + s_E_y * BLX_EH + s_E_z * BLX_EH * BLY_EH; // s memory idx for E
 
      int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
 
