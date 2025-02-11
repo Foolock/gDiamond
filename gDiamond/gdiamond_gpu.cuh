@@ -2295,51 +2295,51 @@ void gDiamond::_updateEH_phase_seq_shmem_EH(std::vector<float>& Ex, std::vector<
             total_cal++;
 
             // check shared memory load before calculation
-            // if(Hx_shmem[s_H_idx] != Hx[g_idx]) {
-            //   std::cerr << "updateE, ";
-            //   std::cerr << "Hx_shmem[s_H_idx] != Hx[g_idx]\n";
-            //   std::exit(EXIT_FAILURE);
-            // }
-            // if(Hx_shmem[s_H_idx - BLX_EH * BLY_EH] != Hx[g_idx - Nx * Ny]) {
-            //   std::cerr << "updateE, ";
-            //   std::cerr << "Hx_shmem[s_H_idx] != Hx[g_idx - Nx * Ny]\n";
-            //   std::exit(EXIT_FAILURE);
-            // }
-            // if(Hx_shmem[s_H_idx - BLX_EH] != Hx[g_idx - Nx]) {
-            //   std::cerr << "updateE, ";
-            //   std::cerr << "Hx_shmem[s_H_idx - BLX_EH] != Hx[g_idx - Nx]\n";
-            //   std::exit(EXIT_FAILURE);
-            // }
-            // if(Hy_shmem[s_H_idx] != Hy[g_idx]) {
-            //   std::cerr << "updateE, ";
-            //   std::cerr << "Hy_shmem[s_H_idx] != Hy[g_idx]\n";
-            //   std::exit(EXIT_FAILURE);
-            // }
-            // if(Hy_shmem[s_H_idx - 1] != Hy[g_idx - 1]) {
-            //   std::cerr << "updateE, ";
-            //   std::cerr << "Hy_shmem[s_H_idx - 1] != Hy[g_idx - 1]\n";
-            //   std::exit(EXIT_FAILURE);
-            // }
-            // if(Hy_shmem[s_H_idx - BLX_EH * BLY_EH] != Hy[g_idx - Nx * Ny]) {
-            //   std::cerr << "updateE, ";
-            //   std::cerr << "Hy_shmem[s_H_idx - BLX_EH * BLY_EH] != Hy[g_idx - Nx * Ny]\n";
-            //   std::exit(EXIT_FAILURE);
-            // }
-            // if(Hz_shmem[s_H_idx] != Hz[g_idx]) {
-            //   std::cerr << "updateE, ";
-            //   std::cerr << "Hz_shmem[s_H_idx] != Hz[g_idx]\n";
-            //   std::exit(EXIT_FAILURE);
-            // }
-            // if(Hz_shmem[s_H_idx - 1] != Hz[g_idx - 1]) {
-            //   std::cerr << "updateE, ";
-            //   std::cerr << "Hz_shmem[s_H_idx - 1] != Hz[g_idx - 1]\n";
-            //   std::exit(EXIT_FAILURE);
-            // }
-            // if(Hz_shmem[s_H_idx - BLX_EH] != Hz[g_idx - Nx]) {
-            //   std::cerr << "updateE, ";
-            //   std::cerr << "Hz_shmem[s_H_idx - BLX_EH] != Hz[g_idx - Nx]\n";
-            //   std::exit(EXIT_FAILURE);
-            // }
+            if(Hx_shmem[s_H_idx] != Hx[g_idx]) {
+              std::cerr << "updateE, ";
+              std::cerr << "Hx_shmem[s_H_idx] != Hx[g_idx]\n";
+              std::exit(EXIT_FAILURE);
+            }
+            if(Hx_shmem[s_H_idx - BLX_EH * BLY_EH] != Hx[g_idx - Nx * Ny]) {
+              std::cerr << "updateE, ";
+              std::cerr << "Hx_shmem[s_H_idx] != Hx[g_idx - Nx * Ny]\n";
+              std::exit(EXIT_FAILURE);
+            }
+            if(Hx_shmem[s_H_idx - BLX_EH] != Hx[g_idx - Nx]) {
+              std::cerr << "updateE, ";
+              std::cerr << "Hx_shmem[s_H_idx - BLX_EH] != Hx[g_idx - Nx]\n";
+              std::exit(EXIT_FAILURE);
+            }
+            if(Hy_shmem[s_H_idx] != Hy[g_idx]) {
+              std::cerr << "updateE, ";
+              std::cerr << "Hy_shmem[s_H_idx] != Hy[g_idx]\n";
+              std::exit(EXIT_FAILURE);
+            }
+            if(Hy_shmem[s_H_idx - 1] != Hy[g_idx - 1]) {
+              std::cerr << "updateE, ";
+              std::cerr << "Hy_shmem[s_H_idx - 1] != Hy[g_idx - 1]\n";
+              std::exit(EXIT_FAILURE);
+            }
+            if(Hy_shmem[s_H_idx - BLX_EH * BLY_EH] != Hy[g_idx - Nx * Ny]) {
+              std::cerr << "updateE, ";
+              std::cerr << "Hy_shmem[s_H_idx - BLX_EH * BLY_EH] != Hy[g_idx - Nx * Ny]\n";
+              std::exit(EXIT_FAILURE);
+            }
+            if(Hz_shmem[s_H_idx] != Hz[g_idx]) {
+              std::cerr << "updateE, ";
+              std::cerr << "Hz_shmem[s_H_idx] != Hz[g_idx]\n";
+              std::exit(EXIT_FAILURE);
+            }
+            if(Hz_shmem[s_H_idx - 1] != Hz[g_idx - 1]) {
+              std::cerr << "updateE, ";
+              std::cerr << "Hz_shmem[s_H_idx - 1] != Hz[g_idx - 1]\n";
+              std::exit(EXIT_FAILURE);
+            }
+            if(Hz_shmem[s_H_idx - BLX_EH] != Hz[g_idx - Nx]) {
+              std::cerr << "updateE, ";
+              std::cerr << "Hz_shmem[s_H_idx - BLX_EH] != Hz[g_idx - Nx]\n";
+              std::exit(EXIT_FAILURE);
+            }
 
             // if(Hy[g_idx - 1] != Hy_shmem[s_H_idx - 1]) {
             //   std::cout << "Hy[g_idx - 1] = " << Hy[g_idx - 1] << ", Hy_shmem[s_H_idx - 1] = " << Hy_shmem[s_H_idx - 1] << "\n"; 
