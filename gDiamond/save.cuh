@@ -1,5 +1,459 @@
 // store copy of implementations
 
+void gDiamond::update_FDTD_gpu_simulation_check(size_t num_timesteps) {
+
+  std::cout << "running update_FDTD_gpu_simulation and update_FDTD_gpu_simulation_shmem_EH\n"; 
+
+  // clear source Mz for experiments
+  _Mz.clear();
+
+  // transfer source
+  for(size_t t=0; t<num_timesteps; t++) {
+    float Mz_value = M_source_amp * std::sin(SOURCE_OMEGA * t * dt);
+    _Mz[_source_idx] = Mz_value;
+  }
+
+  size_t max_phases = 8;
+  std::vector<int> mountain_heads_X;
+  std::vector<int> mountain_tails_X;
+  std::vector<int> mountain_heads_Y;
+  std::vector<int> mountain_tails_Y;
+  std::vector<int> mountain_heads_Z;
+  std::vector<int> mountain_tails_Z;
+  std::vector<int> valley_heads_X;
+  std::vector<int> valley_tails_X;
+  std::vector<int> valley_heads_Y;
+  std::vector<int> valley_tails_Y;
+  std::vector<int> valley_heads_Z;
+  std::vector<int> valley_tails_Z;
+  _setup_diamond_tiling_gpu(BLX_GPU, BLY_GPU, BLZ_GPU, BLT_GPU, max_phases);
+
+  for(auto range : _Eranges_phases_X[0][0]) { 
+    mountain_heads_X.push_back(range.first);
+    mountain_tails_X.push_back(range.second);
+  }
+  for(auto range : _Eranges_phases_Y[0][0]) { 
+    mountain_heads_Y.push_back(range.first);
+    mountain_tails_Y.push_back(range.second);
+  }
+  for(auto range : _Eranges_phases_Z[0][0]) { 
+    mountain_heads_Z.push_back(range.first);
+    mountain_tails_Z.push_back(range.second);
+  }
+  for(auto range : _Hranges_phases_X[1][BLT_GPU-1]) { 
+    valley_heads_X.push_back(range.first);
+    valley_tails_X.push_back(range.second);
+  }
+  for(auto range : _Hranges_phases_Y[2][BLT_GPU-1]) { 
+    valley_heads_Y.push_back(range.first);
+    valley_tails_Y.push_back(range.second);
+  }
+  for(auto range : _Hranges_phases_Z[3][BLT_GPU-1]) { 
+    valley_heads_Z.push_back(range.first);
+    valley_tails_Z.push_back(range.second);
+  }
+
+  size_t num_mountains_X = mountain_heads_X.size();
+  size_t num_mountains_Y = mountain_heads_Y.size();
+  size_t num_mountains_Z = mountain_heads_Z.size();
+  size_t num_valleys_X = valley_heads_X.size();
+  size_t num_valleys_Y = valley_heads_Y.size();
+  size_t num_valleys_Z = valley_heads_Z.size();
+
+  size_t block_size = BLX_GPU * BLY_GPU * BLZ_GPU;
+  size_t grid_size;
+
+  size_t total_cal = 0;
+  for(size_t t=0; t<num_timesteps/BLT_GPU; t++) {
+    
+    // phase 1: (m, m, m)
+    grid_size = num_mountains_X * num_mountains_Y * num_mountains_Z;
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_mountains_X, num_mountains_Y, num_mountains_Z, 
+                                 mountain_heads_X, mountain_heads_Y, mountain_heads_Z, 
+                                 mountain_tails_X, mountain_tails_Y, mountain_tails_Z, 
+                                 1, 1, 1,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_mountains_X, num_mountains_Y, num_mountains_Z, 
+                        mountain_heads_X, mountain_heads_Y, mountain_heads_Z, 
+                        mountain_tails_X, mountain_tails_Y, mountain_tails_Z, 
+                        1, 1, 1,
+                        block_size,
+                        grid_size);
+
+    if(!check_correctness_simu_shmem()) {
+      std::cout << "phase 1. t = " << t << "\n";
+      std::cerr << "error: results not match\n";
+      std::exit(EXIT_FAILURE);
+    }
+
+    // phase 2: (v, m, m)
+    grid_size = num_valleys_X * num_mountains_Y * num_mountains_Z;
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_valleys_X, num_mountains_Y, num_mountains_Z, 
+                                 valley_heads_X, mountain_heads_Y, mountain_heads_Z, 
+                                 valley_tails_X, mountain_tails_Y, mountain_tails_Z, 
+                                 0, 1, 1,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_valleys_X, num_mountains_Y, num_mountains_Z, 
+                        valley_heads_X, mountain_heads_Y, mountain_heads_Z, 
+                        valley_tails_X, mountain_tails_Y, mountain_tails_Z, 
+                        0, 1, 1,
+                        block_size,
+                        grid_size);
+
+    if(!check_correctness_simu_shmem()) {
+      std::cout << "phase 2. t = " << t << "\n";
+      std::cerr << "error: results not match\n";
+      std::exit(EXIT_FAILURE);
+    }
+
+    // phase 3: (m, v, m)
+    grid_size = num_mountains_X * num_valleys_Y * num_mountains_Z;
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_mountains_X, num_valleys_Y, num_mountains_Z, 
+                                 mountain_heads_X, valley_heads_Y, mountain_heads_Z, 
+                                 mountain_tails_X, valley_tails_Y, mountain_tails_Z, 
+                                 1, 0, 1,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_mountains_X, num_valleys_Y, num_mountains_Z, 
+                        mountain_heads_X, valley_heads_Y, mountain_heads_Z, 
+                        mountain_tails_X, valley_tails_Y, mountain_tails_Z, 
+                        1, 0, 1,
+                        block_size,
+                        grid_size);
+
+    if(!check_correctness_simu_shmem()) {
+      std::cout << "phase 3. t = " << t << "\n";
+      std::cerr << "error: results not match\n";
+      std::exit(EXIT_FAILURE);
+    }
+
+    // phase 4: (m, m, v)
+    grid_size = num_mountains_X * num_mountains_Y * num_valleys_Z;
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_mountains_X, num_mountains_Y, num_valleys_Z, 
+                                 mountain_heads_X, mountain_heads_Y, valley_heads_Z, 
+                                 mountain_tails_X, mountain_tails_Y, valley_tails_Z, 
+                                 1, 1, 0,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_mountains_X, num_mountains_Y, num_valleys_Z, 
+                        mountain_heads_X, mountain_heads_Y, valley_heads_Z, 
+                        mountain_tails_X, mountain_tails_Y, valley_tails_Z, 
+                        1, 1, 0,
+                        block_size,
+                        grid_size);
+
+    if(!check_correctness_simu_shmem()) {
+      std::cout << "phase 4. t = " << t << "\n";
+      std::cerr << "error: results not match\n";
+      std::exit(EXIT_FAILURE);
+    }
+
+    // phase 5: (v, v, m)
+    grid_size = num_valleys_X * num_valleys_Y * num_mountains_Z;
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_valleys_X, num_valleys_Y, num_mountains_Z, 
+                                 valley_heads_X, valley_heads_Y, mountain_heads_Z, 
+                                 valley_tails_X, valley_tails_Y, mountain_tails_Z, 
+                                 0, 0, 1,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_valleys_X, num_valleys_Y, num_mountains_Z, 
+                        valley_heads_X, valley_heads_Y, mountain_heads_Z, 
+                        valley_tails_X, valley_tails_Y, mountain_tails_Z, 
+                        0, 0, 1,
+                        block_size,
+                        grid_size);
+
+    if(!check_correctness_simu_shmem()) {
+      std::cout << "phase 5. t = " << t << "\n";
+      std::cerr << "error: results not match\n";
+      std::exit(EXIT_FAILURE);
+    }
+
+    // phase 6: (v, m, v)
+    grid_size = num_valleys_X * num_mountains_Y * num_valleys_Z;
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_valleys_X, num_mountains_Y, num_valleys_Z, 
+                                 valley_heads_X, mountain_heads_Y, valley_heads_Z, 
+                                 valley_tails_X, mountain_tails_Y, valley_tails_Z, 
+                                 0, 1, 0,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_valleys_X, num_mountains_Y, num_valleys_Z, 
+                        valley_heads_X, mountain_heads_Y, valley_heads_Z, 
+                        valley_tails_X, mountain_tails_Y, valley_tails_Z, 
+                        0, 1, 0,
+                        block_size,
+                        grid_size);
+
+    if(!check_correctness_simu_shmem()) {
+      std::cout << "phase 6. t = " << t << "\n";
+      std::cerr << "error: results not match\n";
+      std::exit(EXIT_FAILURE);
+    }
+
+    // phase 7: (m, v, v)
+    grid_size = num_mountains_X * num_valleys_Y * num_valleys_Z;
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_mountains_X, num_valleys_Y, num_valleys_Z, 
+                                 mountain_heads_X, valley_heads_Y, valley_heads_Z, 
+                                 mountain_tails_X, valley_tails_Y, valley_tails_Z, 
+                                 1, 0, 0,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_mountains_X, num_valleys_Y, num_valleys_Z, 
+                        mountain_heads_X, valley_heads_Y, valley_heads_Z, 
+                        mountain_tails_X, valley_tails_Y, valley_tails_Z, 
+                        1, 0, 0,
+                        block_size,
+                        grid_size);
+
+    if(!check_correctness_simu_shmem()) {
+      std::cout << "phase 7. t = " << t << "\n";
+      std::cerr << "error: results not match\n";
+      std::exit(EXIT_FAILURE);
+    }
+
+    // phase 8: (v, v, v)
+    grid_size = num_valleys_X * num_valleys_Y * num_valleys_Z;
+    _updateEH_phase_seq_shmem_EH(_Ex_simu_sh, _Ey_simu_sh, _Ez_simu_sh,
+                                 _Hx_simu_sh, _Hy_simu_sh, _Hz_simu_sh,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 _Nx, _Ny, _Nz,
+                                 num_valleys_X, num_valleys_Y, num_valleys_Z, 
+                                 valley_heads_X, valley_heads_Y, valley_heads_Z, 
+                                 valley_tails_X, valley_tails_Y, valley_tails_Z, 
+                                 0, 0, 0,
+                                 total_cal,
+                                 t,
+                                 block_size,
+                                 grid_size);
+
+    _updateEH_phase_seq(_Ex_simu, _Ey_simu, _Ez_simu,
+                        _Hx_simu, _Hy_simu, _Hz_simu,
+                        _Cax, _Cbx,
+                        _Cay, _Cby,
+                        _Caz, _Cbz,
+                        _Dax, _Dbx,
+                        _Day, _Dby,
+                        _Daz, _Dbz,
+                        _Jx, _Jy, _Jz,
+                        _Mx, _My, _Mz,
+                        _dx, 
+                        _Nx, _Ny, _Nz,
+                        num_valleys_X, num_valleys_Y, num_valleys_Z, 
+                        valley_heads_X, valley_heads_Y, valley_heads_Z, 
+                        valley_tails_X, valley_tails_Y, valley_tails_Z, 
+                        0, 0, 0,
+                        block_size,
+                        grid_size);
+
+    if(!check_correctness_simu_shmem()) {
+      std::cout << "phase 8. t = " << t << "\n";
+      std::cerr << "error: results not match\n";
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
+}
+
+
 void gDiamond::update_FDTD_gpu_simulation(size_t num_timesteps) { // simulation of gpu threads
 
   // create temporary E and H for experiments

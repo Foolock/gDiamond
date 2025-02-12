@@ -4,10 +4,17 @@
 #define BLX_GPU 8
 #define BLY_GPU 8
 #define BLZ_GPU 8
-#define BLT_GPU 2 
+#define BLT_GPU 4 
 #define BLX_EH (BLX_GPU + 1)
 #define BLY_EH (BLY_GPU + 1)
 #define BLZ_EH (BLZ_GPU + 1)
+
+#define BLX_GPU_2D 8
+#define BLY_GPU_2D 8
+#define BLZ_GPU_2D 8 // won't matter
+#define BLT_GPU_2D 4 
+#define BLX_EH_2D (BLX_GPU_2D + 1)
+#define BLY_EH_2D (BLY_GPU_2D + 1)
 
 //
 // ----------------------------------- 2-D mapping, no pipeline, no diamond tiling ------------------------------------------

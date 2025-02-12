@@ -21,6 +21,8 @@ class gDiamond {
                                                _Hx_gpu(Nx * Ny * Nz), _Hy_gpu(Nx * Ny * Nz), _Hz_gpu(Nx * Ny * Nz),
                                                _Ex_gpu_shEH(Nx * Ny * Nz), _Ey_gpu_shEH(Nx * Ny * Nz), _Ez_gpu_shEH(Nx * Ny * Nz),
                                                _Hx_gpu_shEH(Nx * Ny * Nz), _Hy_gpu_shEH(Nx * Ny * Nz), _Hz_gpu_shEH(Nx * Ny * Nz),
+                                               _Ex_gpu_bl(Nx * Ny * Nz), _Ey_gpu_bl(Nx * Ny * Nz), _Ez_gpu_bl(Nx * Ny * Nz),
+                                               _Hx_gpu_bl(Nx * Ny * Nz), _Hy_gpu_bl(Nx * Ny * Nz), _Hz_gpu_bl(Nx * Ny * Nz),
                                                _Ex_simu(Nx * Ny * Nz), _Ey_simu(Nx * Ny * Nz), _Ez_simu(Nx * Ny * Nz),
                                                _Hx_simu(Nx * Ny * Nz), _Hy_simu(Nx * Ny * Nz), _Hz_simu(Nx * Ny * Nz),
                                                _Ex_simu_sh(Nx * Ny * Nz), _Ey_simu_sh(Nx * Ny * Nz), _Ez_simu_sh(Nx * Ny * Nz),
@@ -88,6 +90,8 @@ class gDiamond {
     void update_FDTD_gpu_simulation_1_D_shmem(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow 
     void update_FDTD_gpu_fuse_kernel_globalmem(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels, global memory only
     void update_FDTD_gpu_fuse_kernel_shmem_EH(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels, put EH in shared memory 
+    void update_FDTD_gpu_simulation_2_D_globalmem(size_t num_timesteps); // 2-D mapping, each thread finish the entire Z dimension,
+                                                                         // use diamond tiling to fuse kernels, global memory only.
 
     // check correctness
     bool check_correctness_gpu();
@@ -124,6 +128,27 @@ class gDiamond {
                              int m_or_v_X, int m_or_v_Y, int m_or_v_Z,
                              size_t block_size,
                              size_t grid_size);
+
+    void _updateEH_phase_seq_2D(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
+                                std::vector<float>& Hx, std::vector<float>& Hy, std::vector<float>& Hz,
+                                std::vector<float>& Cax, std::vector<float>& Cbx,
+                                std::vector<float>& Cay, std::vector<float>& Cby,
+                                std::vector<float>& Caz, std::vector<float>& Cbz,
+                                std::vector<float>& Dax, std::vector<float>& Dbx,
+                                std::vector<float>& Day, std::vector<float>& Dby,
+                                std::vector<float>& Daz, std::vector<float>& Dbz,
+                                std::vector<float>& Jx, std::vector<float>& Jy, std::vector<float>& Jz,
+                                std::vector<float>& Mx, std::vector<float>& My, std::vector<float>& Mz,
+                                float dx, 
+                                int Nx, int Ny, int Nz,
+                                int xx_num, int yy_num, 
+                                std::vector<int> xx_heads, 
+                                std::vector<int> yy_heads, 
+                                std::vector<int> xx_tails, 
+                                std::vector<int> yy_tails, 
+                                int m_or_v_X, int m_or_v_Y, 
+                                size_t block_size,
+                                size_t grid_size);
 
     void _updateEH_phase_seq_shmem_EH(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
                                       std::vector<float>& Hx, std::vector<float>& Hy, std::vector<float>& Hz,
@@ -301,6 +326,12 @@ class gDiamond {
     std::vector<float> _Hz_omp_dt;
     
     // E and H (result from GPU)
+    std::vector<float> _Ex_gpu_bl;
+    std::vector<float> _Ey_gpu_bl;
+    std::vector<float> _Ez_gpu_bl;
+    std::vector<float> _Hx_gpu_bl;
+    std::vector<float> _Hy_gpu_bl;
+    std::vector<float> _Hz_gpu_bl;
     std::vector<float> _Ex_gpu;
     std::vector<float> _Ey_gpu;
     std::vector<float> _Ez_gpu;
@@ -601,12 +632,12 @@ bool gDiamond::check_correctness_gpu() {
   bool correct = true;
 
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    if(fabs(_Ex_seq[i] - _Ex_gpu[i]) >= 1e-8 ||
-       fabs(_Ey_seq[i] - _Ey_gpu[i]) >= 1e-8 ||
-       fabs(_Ez_seq[i] - _Ez_gpu[i]) >= 1e-8 ||
-       fabs(_Hx_seq[i] - _Hx_gpu[i]) >= 1e-8 ||
-       fabs(_Hy_seq[i] - _Hy_gpu[i]) >= 1e-8 ||
-       fabs(_Hz_seq[i] - _Hz_gpu[i]) >= 1e-8
+    if(fabs(_Ex_gpu_bl[i] - _Ex_gpu[i]) >= 1e-8 ||
+       fabs(_Ey_gpu_bl[i] - _Ey_gpu[i]) >= 1e-8 ||
+       fabs(_Ez_gpu_bl[i] - _Ez_gpu[i]) >= 1e-8 ||
+       fabs(_Hx_gpu_bl[i] - _Hx_gpu[i]) >= 1e-8 ||
+       fabs(_Hy_gpu_bl[i] - _Hy_gpu[i]) >= 1e-8 ||
+       fabs(_Hz_gpu_bl[i] - _Hz_gpu[i]) >= 1e-8
     ) {
       correct = false;
       break;
@@ -620,12 +651,12 @@ bool gDiamond::check_correctness_gpu_shmem() {
   bool correct = true;
 
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    if(fabs(_Ex_seq[i] - _Ex_gpu_shEH[i]) >= 1e-8 ||
-       fabs(_Ey_seq[i] - _Ey_gpu_shEH[i]) >= 1e-8 ||
-       fabs(_Ez_seq[i] - _Ez_gpu_shEH[i]) >= 1e-8 ||
-       fabs(_Hx_seq[i] - _Hx_gpu_shEH[i]) >= 1e-8 ||
-       fabs(_Hy_seq[i] - _Hy_gpu_shEH[i]) >= 1e-8 ||
-       fabs(_Hz_seq[i] - _Hz_gpu_shEH[i]) >= 1e-8
+    if(fabs(_Ex_gpu_bl[i] - _Ex_gpu_shEH[i]) >= 1e-8 ||
+       fabs(_Ey_gpu_bl[i] - _Ey_gpu_shEH[i]) >= 1e-8 ||
+       fabs(_Ez_gpu_bl[i] - _Ez_gpu_shEH[i]) >= 1e-8 ||
+       fabs(_Hx_gpu_bl[i] - _Hx_gpu_shEH[i]) >= 1e-8 ||
+       fabs(_Hy_gpu_bl[i] - _Hy_gpu_shEH[i]) >= 1e-8 ||
+       fabs(_Hz_gpu_bl[i] - _Hz_gpu_shEH[i]) >= 1e-8
     ) {
       correct = false;
       break;
@@ -678,12 +709,12 @@ bool gDiamond::check_correctness_simu() {
   bool correct = true;
 
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    if(fabs(_Ex_seq[i] - _Ex_simu_sh[i]) >= 1e-8 ||
-       fabs(_Ey_seq[i] - _Ey_simu_sh[i]) >= 1e-8 ||
-       fabs(_Ez_seq[i] - _Ez_simu_sh[i]) >= 1e-8 ||
-       fabs(_Hx_seq[i] - _Hx_simu_sh[i]) >= 1e-8 ||
-       fabs(_Hy_seq[i] - _Hy_simu_sh[i]) >= 1e-8 ||
-       fabs(_Hz_seq[i] - _Hz_simu_sh[i]) >= 1e-8
+    if(fabs(_Ex_seq[i] - _Ex_simu[i]) >= 1e-8 ||
+       fabs(_Ey_seq[i] - _Ey_simu[i]) >= 1e-8 ||
+       fabs(_Ez_seq[i] - _Ez_simu[i]) >= 1e-8 ||
+       fabs(_Hx_seq[i] - _Hx_simu[i]) >= 1e-8 ||
+       fabs(_Hy_seq[i] - _Hy_simu[i]) >= 1e-8 ||
+       fabs(_Hz_seq[i] - _Hz_simu[i]) >= 1e-8
     ) {
       correct = false;
       break;
