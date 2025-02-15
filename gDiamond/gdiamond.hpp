@@ -88,11 +88,13 @@ class gDiamond {
     void update_FDTD_gpu_simulation_check(size_t num_timesteps);
     void update_FDTD_gpu_simulation_1_D(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow, diamond tiling 
     void update_FDTD_gpu_simulation_1_D_shmem(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow, diamond tiling
-    void update_FDTD_gpu_fuse_kernel_globalmem(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels, global memory only
-    void update_FDTD_gpu_fuse_kernel_shmem_EH(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels, put EH in shared memory 
-    void update_FDTD_gpu_simulation_2_D_globalmem(size_t num_timesteps); // 2-D mapping, each thread finish the entire Z dimension,
-                                                                         // use diamond tiling to fuse kernels, global memory only.
     void update_FDTD_gpu_simulation_1_D_pt(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow, parallelogram tiling 
+    void update_FDTD_gpu_simulation_2_D_globalmem(size_t num_timesteps); // 2-D mapping, each thread finish the entire Z dimension,
+
+    void update_FDTD_gpu_fuse_kernel_globalmem(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels, global memory only
+    void update_FDTD_gpu_fuse_kernel_globalmem_pt(size_t num_timesteps); // 2-D mapping, using diamond tiling on X, Y dimension to fuse kernels, 
+                                                                         // add parallelogram tiling for z dimension, global memory only
+    void update_FDTD_gpu_fuse_kernel_shmem_EH(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels, put EH in shared memory 
 
     // check correctness
     bool check_correctness_gpu_2D();
