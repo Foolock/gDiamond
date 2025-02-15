@@ -3089,42 +3089,47 @@ void gDiamond::_updateEH_phase_seq_2D(std::vector<float>& Ex, std::vector<float>
 
     int num_zz = Nz + BLT_GPU_PT; 
 
-    for(size_t t=0; t<BLT_GPU_PT; t++) {
-      int calculate_Ex = 1; // calculate this E tile or not
-      int calculate_Hx = 1; // calculate this H tile or not
-      int calculate_Ey = 1; 
-      int calculate_Hy = 1; 
+    for(int zz=0; zz<num_zz; zz++) {
 
-      // {Ehead, Etail, Hhead, Htail}
-      std::vector<int> indices_X = _get_head_tail(BLX_GPU_PT, BLT_GPU_PT,
-                                                  xx_heads, xx_tails,
-                                                  xx, t,
-                                                  m_or_v_X,
-                                                  Nx,
-                                                  &calculate_Ex, &calculate_Hx);
+      for(size_t t=0; t<BLT_GPU_PT; t++) {
+        int calculate_Ex = 1; // calculate this E tile or not
+        int calculate_Hx = 1; // calculate this H tile or not
+        int calculate_Ey = 1; 
+        int calculate_Hy = 1; 
 
-      std::vector<int> indices_Y = _get_head_tail(BLY_GPU_PT, BLT_GPU_PT,
-                                                  yy_heads, yy_tails,
-                                                  yy, t,
-                                                  m_or_v_Y,
-                                                  Ny,
-                                                  &calculate_Ey, &calculate_Hy);
+        // {Ehead, Etail, Hhead, Htail}
+        std::vector<int> indices_X = _get_head_tail(BLX_GPU_PT, BLT_GPU_PT,
+                                                    xx_heads, xx_tails,
+                                                    xx, t,
+                                                    m_or_v_X,
+                                                    Nx,
+                                                    &calculate_Ex, &calculate_Hx);
 
-      // update E
-      if(calculate_Ex & calculate_Ey) {
-        for(size_t thread_id=0; thread_id<block_size; thread_id++) {
-          int local_x = thread_id % BLX_GPU_PT;                     // X coordinate within the tile
-          int local_y = (thread_id / BLX_GPU_PT) % BLY_GPU_PT;     // Y coordinate within the tile
+        std::vector<int> indices_Y = _get_head_tail(BLY_GPU_PT, BLT_GPU_PT,
+                                                    yy_heads, yy_tails,
+                                                    yy, t,
+                                                    m_or_v_Y,
+                                                    Ny,
+                                                    &calculate_Ey, &calculate_Hy);
 
-          // Ehead is offset
-          int global_x = indices_X[0] + local_x; // Global X coordinate
-          int global_y = indices_Y[0] + local_y; // Global Y coordinate
+        int global_z_E = _get_z_planeE(t, zz, Nz);
+        int global_z_H = _get_z_planeH(t, zz, Nz); 
 
-          if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && 
-            global_x <= indices_X[1] &&
-            global_y <= indices_Y[1]) {
-            for(int global_z = 1; global_z < Nz - 1; global_z++) {
-              int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
+        // update E
+        if(calculate_Ex & calculate_Ey) {
+          for(size_t thread_id=0; thread_id<block_size; thread_id++) {
+            int local_x = thread_id % BLX_GPU_PT;                     // X coordinate within the tile
+            int local_y = (thread_id / BLX_GPU_PT) % BLY_GPU_PT;     // Y coordinate within the tile
+
+            // Ehead is offset
+            int global_x = indices_X[0] + local_x; // Global X coordinate
+            int global_y = indices_Y[0] + local_y; // Global Y coordinate
+
+            if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && 
+              global_x <= indices_X[1] &&
+              global_y <= indices_Y[1] &&
+              global_z_E != -1) {
+              int g_idx = global_x + global_y * Nx + global_z_E * Nx * Ny; // global idx
 
               Ex[g_idx] = Cax[g_idx] * Ex[g_idx] + Cbx[g_idx] *
                         ((Hz[g_idx] - Hz[g_idx - Nx]) - (Hy[g_idx] - Hy[g_idx - Nx * Ny]) - Jx[g_idx] * dx);
@@ -3135,23 +3140,22 @@ void gDiamond::_updateEH_phase_seq_2D(std::vector<float>& Ex, std::vector<float>
             }
           }
         }
-      }
 
-      // update H
-      if(calculate_Hx & calculate_Hy) {
-        for(size_t thread_id=0; thread_id<block_size; thread_id++) {
-          int local_x = thread_id % BLX_GPU_PT;                     // X coordinate within the tile
-          int local_y = (thread_id / BLX_GPU_PT) % BLY_GPU_PT;     // Y coordinate within the tile
+        // update H
+        if(calculate_Hx & calculate_Hy) {
+          for(size_t thread_id=0; thread_id<block_size; thread_id++) {
+            int local_x = thread_id % BLX_GPU_PT;                     // X coordinate within the tile
+            int local_y = (thread_id / BLX_GPU_PT) % BLY_GPU_PT;     // Y coordinate within the tile
 
-          // Hhead is offset
-          int global_x = indices_X[2] + local_x; // Global X coordinate
-          int global_y = indices_Y[2] + local_y; // Global Y coordinate
+            // Hhead is offset
+            int global_x = indices_X[2] + local_x; // Global X coordinate
+            int global_y = indices_Y[2] + local_y; // Global Y coordinate
 
-          if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 &&
-            global_x <= indices_X[3] &&
-            global_y <= indices_Y[3]) {
-            for(int global_z = 1; global_z < Nz - 1; global_z++) {
-              int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
+            if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 &&
+              global_x <= indices_X[3] &&
+              global_y <= indices_Y[3] &&
+              global_z_H != -1) {
+              int g_idx = global_x + global_y * Nx + global_z_H * Nx * Ny; // global idx
 
               Hx[g_idx] = Dax[g_idx] * Hx[g_idx] + Dbx[g_idx] *
                         ((Ey[g_idx + Nx * Ny] - Ey[g_idx]) - (Ez[g_idx + Nx] - Ez[g_idx]) - Mx[g_idx] * dx);
@@ -3162,8 +3166,8 @@ void gDiamond::_updateEH_phase_seq_2D(std::vector<float>& Ex, std::vector<float>
             }
           }
         }
-      }
 
+      }
     }
   }
 
