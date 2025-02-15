@@ -2938,7 +2938,7 @@ void gDiamond::update_FDTD_gpu_simulation_2_D_globalmem(size_t num_timesteps) { 
   std::vector<int> valley_tails_X;
   std::vector<int> valley_heads_Y;
   std::vector<int> valley_tails_Y;
-  _setup_diamond_tiling_gpu(BLX_GPU_2D, BLY_GPU_2D, BLZ_GPU_2D, BLT_GPU_2D, max_phases);
+  _setup_diamond_tiling_gpu(BLX_GPU_PT, BLY_GPU_PT, BLZ_GPU_PT, BLT_GPU_PT, max_phases);
 
   for(auto range : _Eranges_phases_X[0][0]) { 
     mountain_heads_X.push_back(range.first);
@@ -2948,11 +2948,11 @@ void gDiamond::update_FDTD_gpu_simulation_2_D_globalmem(size_t num_timesteps) { 
     mountain_heads_Y.push_back(range.first);
     mountain_tails_Y.push_back(range.second);
   }
-  for(auto range : _Hranges_phases_X[1][BLT_GPU_2D-1]) { 
+  for(auto range : _Hranges_phases_X[1][BLT_GPU_PT-1]) { 
     valley_heads_X.push_back(range.first);
     valley_tails_X.push_back(range.second);
   }
-  for(auto range : _Hranges_phases_Y[2][BLT_GPU_2D-1]) { 
+  for(auto range : _Hranges_phases_Y[2][BLT_GPU_PT-1]) { 
     valley_heads_Y.push_back(range.first);
     valley_tails_Y.push_back(range.second);
   }
@@ -2962,10 +2962,10 @@ void gDiamond::update_FDTD_gpu_simulation_2_D_globalmem(size_t num_timesteps) { 
   size_t num_valleys_X = valley_heads_X.size();
   size_t num_valleys_Y = valley_heads_Y.size();
 
-  size_t block_size = BLX_GPU_2D * BLY_GPU_2D;
+  size_t block_size = BLX_GPU_PT * BLY_GPU_PT;
   size_t grid_size;
 
-  for(size_t t=0; t<num_timesteps/BLT_GPU_2D; t++) {
+  for(size_t t=0; t<num_timesteps/BLT_GPU_PT; t++) {
     
     // phase 1. (m, m, *)
     grid_size = num_mountains_X * num_mountains_Y;
@@ -3087,21 +3087,23 @@ void gDiamond::_updateEH_phase_seq_2D(std::vector<float>& Ex, std::vector<float>
     int xx = block_id % xx_num;
     int yy = (block_id % (xx_num * yy_num)) / xx_num;
 
-    for(size_t t=0; t<BLT_GPU_2D; t++) {
+    int num_zz = Nz + BLT_GPU_PT; 
+
+    for(size_t t=0; t<BLT_GPU_PT; t++) {
       int calculate_Ex = 1; // calculate this E tile or not
       int calculate_Hx = 1; // calculate this H tile or not
       int calculate_Ey = 1; 
       int calculate_Hy = 1; 
 
       // {Ehead, Etail, Hhead, Htail}
-      std::vector<int> indices_X = _get_head_tail(BLX_GPU_2D, BLT_GPU_2D,
+      std::vector<int> indices_X = _get_head_tail(BLX_GPU_PT, BLT_GPU_PT,
                                                   xx_heads, xx_tails,
                                                   xx, t,
                                                   m_or_v_X,
                                                   Nx,
                                                   &calculate_Ex, &calculate_Hx);
 
-      std::vector<int> indices_Y = _get_head_tail(BLY_GPU_2D, BLT_GPU_2D,
+      std::vector<int> indices_Y = _get_head_tail(BLY_GPU_PT, BLT_GPU_PT,
                                                   yy_heads, yy_tails,
                                                   yy, t,
                                                   m_or_v_Y,
@@ -3111,8 +3113,8 @@ void gDiamond::_updateEH_phase_seq_2D(std::vector<float>& Ex, std::vector<float>
       // update E
       if(calculate_Ex & calculate_Ey) {
         for(size_t thread_id=0; thread_id<block_size; thread_id++) {
-          int local_x = thread_id % BLX_GPU_2D;                     // X coordinate within the tile
-          int local_y = (thread_id / BLX_GPU_2D) % BLY_GPU_2D;     // Y coordinate within the tile
+          int local_x = thread_id % BLX_GPU_PT;                     // X coordinate within the tile
+          int local_y = (thread_id / BLX_GPU_PT) % BLY_GPU_PT;     // Y coordinate within the tile
 
           // Ehead is offset
           int global_x = indices_X[0] + local_x; // Global X coordinate
@@ -3138,8 +3140,8 @@ void gDiamond::_updateEH_phase_seq_2D(std::vector<float>& Ex, std::vector<float>
       // update H
       if(calculate_Hx & calculate_Hy) {
         for(size_t thread_id=0; thread_id<block_size; thread_id++) {
-          int local_x = thread_id % BLX_GPU_2D;                     // X coordinate within the tile
-          int local_y = (thread_id / BLX_GPU_2D) % BLY_GPU_2D;     // Y coordinate within the tile
+          int local_x = thread_id % BLX_GPU_PT;                     // X coordinate within the tile
+          int local_y = (thread_id / BLX_GPU_PT) % BLY_GPU_PT;     // Y coordinate within the tile
 
           // Hhead is offset
           int global_x = indices_X[2] + local_x; // Global X coordinate
@@ -3167,7 +3169,102 @@ void gDiamond::_updateEH_phase_seq_2D(std::vector<float>& Ex, std::vector<float>
 
 }
 
+void gDiamond::update_FDTD_gpu_simulation_1_D_pt(size_t num_timesteps) { // CPU single thread 1-D simulation of GPU workflow 
 
+  size_t max_phases = 8;
+  std::vector<int> mountain_heads_X;
+  std::vector<int> mountain_tails_X;
+  std::vector<int> valley_heads_X;
+  std::vector<int> valley_tails_X;
+  _setup_diamond_tiling_gpu(BLX_GPU_PT, BLY_GPU_PT, BLZ_GPU_PT, BLT_GPU_PT, max_phases);
+
+  for(auto range : _Eranges_phases_X[0][0]) { 
+    mountain_heads_X.push_back(range.first);
+    mountain_tails_X.push_back(range.second);
+  }
+  for(auto range : _Hranges_phases_X[1][BLT_GPU_PT-1]) { 
+    valley_heads_X.push_back(range.first);
+    valley_tails_X.push_back(range.second);
+  }
+  
+  size_t num_mountains_X = mountain_heads_X.size();
+  size_t num_valleys_X = valley_heads_X.size();
+
+  // write 1 dimension just to check
+  std::vector<float> E_simu(_Nz, 1);
+  std::vector<float> H_simu(_Nz, 1);
+  std::vector<float> E_seq(_Nz, 1);
+  std::vector<float> H_seq(_Nz, 1);
+  size_t total_timesteps = 4;
+
+  // seq version
+  for(size_t t=0; t<total_timesteps; t++) {
+
+    // update E
+    for(size_t z=1; z<_Nz-1; z++) {
+      E_seq[z] = H_seq[z-1] + H_seq[z] * 2; 
+    }
+
+    std::cout << "t = " << t << ", E_seq =";
+    for(size_t z=0; z<_Nz; z++) {
+      std::cout << E_seq[z] << " ";
+    }
+    std::cout << "\n";
+
+    // update H 
+    for(size_t z=1; z<_Nz-1; z++) {
+      H_seq[z] = E_seq[z+1] + E_seq[z] * 2; 
+    }
+  }
+
+  // tiling version
+  size_t num_zz = _Nz + BLT_GPU_PT;
+  for(size_t tt=0; tt<total_timesteps/BLT_GPU_PT; tt++) {
+    for(size_t zz=0; zz<num_zz; zz++) {
+      for(size_t t=0; t<BLT_GPU_PT; t++) {
+        int z_E = _get_z_planeE(t, zz, _Nz);
+        int z_H = _get_z_planeH(t, zz, _Nz); 
+        if(z_E != -1) {
+          E_simu[z_E] = H_simu[z_E-1] + H_simu[z_E] * 2; 
+        }
+        if(z_H != -1) {
+          H_simu[z_H] = E_simu[z_H+1] + E_simu[z_H] * 2; 
+        }
+      }
+    }
+  }
+  
+  std::cout << "E_seq = ";
+  for(size_t z=0; z<_Nz; z++) {
+    std::cout << E_seq[z] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "E_simu = ";
+  for(size_t z=0; z<_Nz; z++) {
+    std::cout << E_simu[z] << " ";
+  }
+  std::cout << "\n";
+
+  for(size_t z=0; z<_Nz; z++) {
+    if(E_seq[z] != E_simu[z] || H_seq[z] != H_simu[z]) {
+      std::cerr << "1-D demo results mismatch.\n";
+      std::exit(EXIT_FAILURE);
+    }
+  }
+}
+
+int gDiamond::_get_z_planeE(int t, int zz, int Nz) {
+  int result = zz - t;
+  // return (result >= 0 && result <= Nz - 1)? result : -1; 
+  return (result >= 1 && result <= Nz - 2)? result : -1; 
+}
+
+int gDiamond::_get_z_planeH(int t, int zz, int Nz) {
+  int result = zz - t - 1;
+  // return (result >= 0 && result <= Nz - 1)? result : -1;
+  return (result >= 1 && result <= Nz - 2)? result : -1;
+}
 
 } // end of namespace gdiamond
 

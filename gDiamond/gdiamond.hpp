@@ -86,14 +86,16 @@ class gDiamond {
     void update_FDTD_gpu_simulation(size_t num_timesteps); // simulation of gpu threads
     void update_FDTD_gpu_simulation_shmem_EH(size_t num_timesteps); // simulation of gpu threads, with shared memory on E, H
     void update_FDTD_gpu_simulation_check(size_t num_timesteps);
-    void update_FDTD_gpu_simulation_1_D(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow 
-    void update_FDTD_gpu_simulation_1_D_shmem(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow 
+    void update_FDTD_gpu_simulation_1_D(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow, diamond tiling 
+    void update_FDTD_gpu_simulation_1_D_shmem(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow, diamond tiling
     void update_FDTD_gpu_fuse_kernel_globalmem(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels, global memory only
     void update_FDTD_gpu_fuse_kernel_shmem_EH(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels, put EH in shared memory 
     void update_FDTD_gpu_simulation_2_D_globalmem(size_t num_timesteps); // 2-D mapping, each thread finish the entire Z dimension,
                                                                          // use diamond tiling to fuse kernels, global memory only.
+    void update_FDTD_gpu_simulation_1_D_pt(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow, parallelogram tiling 
 
     // check correctness
+    bool check_correctness_gpu_2D();
     bool check_correctness_gpu();
     bool check_correctness_gpu_shmem();
     bool check_correctness_omp();
@@ -220,6 +222,9 @@ class gDiamond {
                                     int mountain_or_valley,
                                     int Nx,
                                     int *calculate_E, int *calculate_H);
+
+    int _get_z_planeE(int t, int zz, int Nz);
+    int _get_z_planeH(int t, int zz, int Nz);
 
     // fill up indices and ranges vector for mountains and valleys
     void _get_indices_and_ranges(size_t BLX, size_t BLT, size_t Nx,
@@ -627,6 +632,25 @@ void gDiamond::update_FDTD_seq_test(size_t num_timesteps) {
     _Hz_seq[i] = Hz_temp[i];
   }
 }
+
+bool gDiamond::check_correctness_gpu_2D() {
+  bool correct = true;
+
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    if(fabs(_Ex_seq[i] - _Ex_gpu[i]) >= 1e-8 ||
+       fabs(_Ey_seq[i] - _Ey_gpu[i]) >= 1e-8 ||
+       fabs(_Ez_seq[i] - _Ez_gpu[i]) >= 1e-8 ||
+       fabs(_Hx_seq[i] - _Hx_gpu[i]) >= 1e-8 ||
+       fabs(_Hy_seq[i] - _Hy_gpu[i]) >= 1e-8 ||
+       fabs(_Hz_seq[i] - _Hz_gpu[i]) >= 1e-8
+    ) {
+      correct = false;
+      break;
+    }
+  }
+
+  return correct;
+} 
 
 bool gDiamond::check_correctness_gpu() {
   bool correct = true;
