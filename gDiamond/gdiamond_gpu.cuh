@@ -3174,26 +3174,7 @@ void gDiamond::_updateEH_phase_seq_2D(std::vector<float>& Ex, std::vector<float>
 }
 
 void gDiamond::update_FDTD_gpu_simulation_1_D_pt(size_t num_timesteps) { // CPU single thread 1-D simulation of GPU workflow 
-
-  size_t max_phases = 8;
-  std::vector<int> mountain_heads_X;
-  std::vector<int> mountain_tails_X;
-  std::vector<int> valley_heads_X;
-  std::vector<int> valley_tails_X;
-  _setup_diamond_tiling_gpu(BLX_GPU_PT, BLY_GPU_PT, BLZ_GPU_PT, BLT_GPU_PT, max_phases);
-
-  for(auto range : _Eranges_phases_X[0][0]) { 
-    mountain_heads_X.push_back(range.first);
-    mountain_tails_X.push_back(range.second);
-  }
-  for(auto range : _Hranges_phases_X[1][BLT_GPU_PT-1]) { 
-    valley_heads_X.push_back(range.first);
-    valley_tails_X.push_back(range.second);
-  }
   
-  size_t num_mountains_X = mountain_heads_X.size();
-  size_t num_valleys_X = valley_heads_X.size();
-
   // write 1 dimension just to check
   std::vector<float> E_simu(_Nz, 1);
   std::vector<float> H_simu(_Nz, 1);
@@ -3233,6 +3214,102 @@ void gDiamond::update_FDTD_gpu_simulation_1_D_pt(size_t num_timesteps) { // CPU 
         }
         if(z_H != -1) {
           H_simu[z_H] = E_simu[z_H+1] + E_simu[z_H] * 2; 
+        }
+      }
+    }
+  }
+
+  /*
+  size_t num_zz = _Nz - BLT_GPU_PT;
+  for(size_t tt=0; tt<total_timesteps/BLT_GPU_PT; tt++) {
+    for(size_t zz=0; zz<num_zz; zz++) {
+      size_t z_start = (zz == 0)? 0 : 4;  
+      size_t z_bound = (zz == 0 || zz == num_zz - 1)? BLT_GPU_PT + 1 : 1;  
+      for(size_t z=z_start; z<z_start+z_bound; z++) {
+        std::cout << "z+zz = " << z+zz << "\n";
+        for(size_t t=0; t<BLT_GPU_PT; t++) {
+          int z_E = _get_z_planeE(t, z+zz, _Nz);
+          int z_H = _get_z_planeH(t, z+zz, _Nz); 
+          if(z_E != -1) {
+            E_simu[z_E] = H_simu[z_E-1] + H_simu[z_E] * 2; 
+          }
+          if(z_H != -1) {
+            H_simu[z_H] = E_simu[z_H+1] + E_simu[z_H] * 2; 
+          }
+        }
+      }
+    }
+  }
+  */
+  
+  std::cout << "E_seq = ";
+  for(size_t z=0; z<_Nz; z++) {
+    std::cout << E_seq[z] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "E_simu = ";
+  for(size_t z=0; z<_Nz; z++) {
+    std::cout << E_simu[z] << " ";
+  }
+  std::cout << "\n";
+
+  for(size_t z=0; z<_Nz; z++) {
+    if(E_seq[z] != E_simu[z] || H_seq[z] != H_simu[z]) {
+      std::cerr << "1-D demo results mismatch.\n";
+      std::exit(EXIT_FAILURE);
+    }
+  }
+}
+
+void gDiamond::update_FDTD_gpu_simulation_1_D_pt_shmem(size_t num_timesteps) { // CPU single thread 1-D simulation of GPU workflow 
+  
+  // write 1 dimension just to check
+  std::vector<float> E_simu(_Nz, 1);
+  std::vector<float> H_simu(_Nz, 1);
+  std::vector<float> E_seq(_Nz, 1);
+  std::vector<float> H_seq(_Nz, 1);
+  size_t total_timesteps = 4;
+
+  // seq version
+  for(size_t t=0; t<total_timesteps; t++) {
+
+    // update E
+    for(size_t z=1; z<_Nz-1; z++) {
+      E_seq[z] = H_seq[z-1] + H_seq[z] * 2; 
+    }
+
+    std::cout << "t = " << t << ", E_seq =";
+    for(size_t z=0; z<_Nz; z++) {
+      std::cout << E_seq[z] << " ";
+    }
+    std::cout << "\n";
+
+    // update H 
+    for(size_t z=1; z<_Nz-1; z++) {
+      H_seq[z] = E_seq[z+1] + E_seq[z] * 2; 
+    }
+  }
+
+  // tiling version
+  // size_t num_z = _Nz + BLT_GPU_PT; // total number of z tiles
+
+  size_t num_zz = _Nz - BLT_GPU_PT;
+  for(size_t tt=0; tt<total_timesteps/BLT_GPU_PT; tt++) {
+    for(size_t zz=0; zz<num_zz; zz++) {
+      size_t z_start = (zz == 0)? 0 : 4;  
+      size_t z_bound = (zz == 0 || zz == num_zz - 1)? BLT_GPU_PT + 1 : 1;  
+      for(size_t z=z_start; z<z_start+z_bound; z++) {
+        std::cout << "z+zz = " << z+zz << "\n";
+        for(size_t t=0; t<BLT_GPU_PT; t++) {
+          int z_E = _get_z_planeE(t, z+zz, _Nz);
+          int z_H = _get_z_planeH(t, z+zz, _Nz); 
+          if(z_E != -1) {
+            E_simu[z_E] = H_simu[z_E-1] + H_simu[z_E] * 2; 
+          }
+          if(z_H != -1) {
+            H_simu[z_H] = E_simu[z_H+1] + E_simu[z_H] * 2; 
+          }
         }
       }
     }
