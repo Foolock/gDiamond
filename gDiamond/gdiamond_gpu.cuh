@@ -3269,65 +3269,106 @@ void gDiamond::update_FDTD_gpu_simulation_1_D_pt_shmem(size_t num_timesteps) { /
   std::vector<float> H_simu(_Nz, 1);
   std::vector<float> E_seq(_Nz, 1);
   std::vector<float> H_seq(_Nz, 1);
-  size_t total_timesteps = 4;
+  int total_timesteps = 4;
 
+  int Nz = _Nz;
   // seq version
-  for(size_t t=0; t<total_timesteps; t++) {
+  for(int t=0; t<total_timesteps; t++) {
 
     // update E
-    for(size_t z=1; z<_Nz-1; z++) {
+    for(int z=1; z<Nz-1; z++) {
       E_seq[z] = H_seq[z-1] + H_seq[z] * 2; 
     }
 
     std::cout << "t = " << t << ", E_seq =";
-    for(size_t z=0; z<_Nz; z++) {
+    for(int z=0; z<Nz; z++) {
       std::cout << E_seq[z] << " ";
     }
     std::cout << "\n";
 
     // update H 
-    for(size_t z=1; z<_Nz-1; z++) {
+    for(int z=1; z<Nz-1; z++) {
       H_seq[z] = E_seq[z+1] + E_seq[z] * 2; 
     }
   }
 
   // tiling version
-  // size_t num_z = _Nz + BLT_GPU_PT; // total number of z tiles
+  // int num_z = Nz + BLT_GPU_PT; // total number of z tiles
 
-  size_t num_zz = _Nz - BLT_GPU_PT;
-  for(size_t tt=0; tt<total_timesteps/BLT_GPU_PT; tt++) {
-    for(size_t zz=0; zz<num_zz; zz++) {
-      size_t z_start = (zz == 0)? 0 : 4;  
-      size_t z_bound = (zz == 0 || zz == num_zz - 1)? BLT_GPU_PT + 1 : 1;  
-      for(size_t z=z_start; z<z_start+z_bound; z++) {
+  int num_zz = Nz - BLT_GPU_PT;
+  for(int tt=0; tt<total_timesteps/BLT_GPU_PT; tt++) {
+    for(int zz=0; zz<num_zz; zz++) {
+
+      float E_shmem[BLT_GPU_PT + 1];
+      float H_shmem[BLT_GPU_PT + 1];
+
+      // load shmem
+      for(int z=0; z<BLT_GPU_PT+1; z++) {
+        E_shmem[z] = E_simu[z+zz]; 
+        H_shmem[z] = H_simu[z+zz];
+      }
+
+      int z_start = (zz == 0)? 0 : 4;  
+      int z_bound = (zz == 0 || zz == num_zz - 1)? BLT_GPU_PT + 1 : 1;  
+      for(int z=z_start; z<z_start+z_bound; z++) {
         std::cout << "z+zz = " << z+zz << "\n";
-        for(size_t t=0; t<BLT_GPU_PT; t++) {
-          int z_E = _get_z_planeE(t, z+zz, _Nz);
-          int z_H = _get_z_planeH(t, z+zz, _Nz); 
-          if(z_E != -1) {
-            E_simu[z_E] = H_simu[z_E-1] + H_simu[z_E] * 2; 
+        for(int t=0; t<BLT_GPU_PT; t++) {
+          int s_z_E = _get_z_planeE_shmem(t, z, Nz);
+          int s_z_H = _get_z_planeH_shmem(t, z, Nz); 
+          // if(zz == num_zz - 1 && s_z_E != -1 && s_z_H != -1) {
+          //   std::cout << "z = " << z << ", t = " << t << ", s_z_E = " << s_z_E << ", s_z_H = " << s_z_H << "\n";
+          // }
+          int g_z_E = s_z_E + zz;
+          int g_z_H = s_z_H + zz;
+          if(s_z_E != -1 && g_z_E >= 1 && g_z_E <= Nz-2) {
+            E_shmem[s_z_E] = H_shmem[s_z_E-1] + H_shmem[s_z_E] * 2; 
           }
-          if(z_H != -1) {
-            H_simu[z_H] = E_simu[z_H+1] + E_simu[z_H] * 2; 
+          if(s_z_H != -1 && g_z_H >= 1 && g_z_H <= Nz-2) {
+            H_shmem[s_z_H] = E_shmem[s_z_H+1] + E_shmem[s_z_H] * 2; 
           }
         }
       }
+
+      // store globalmem
+      for(int z=0; z<BLT_GPU_PT+1; z++) {
+        E_simu[z+zz] = E_shmem[z]; 
+        H_simu[z+zz] = H_shmem[z];
+      }
+
+      /*
+      int z_start = (zz == 0)? 0 : 4;  
+      int z_bound = (zz == 0 || zz == num_zz - 1)? BLT_GPU_PT + 1 : 1;  
+      for(int z=z_start; z<z_start+z_bound; z++) {
+        for(int t=0; t<BLT_GPU_PT; t++) {
+          int g_z_E = _get_z_planeE(t, z+zz, Nz);
+          int g_z_H = _get_z_planeH(t, z+zz, Nz); 
+          if(g_z_E != -1) {
+            E_simu[g_z_E] = H_simu[g_z_E-1] + H_simu[g_z_E] * 2; 
+          }
+          if(g_z_H != -1) {
+            H_simu[g_z_H] = E_simu[g_z_H+1] + E_simu[g_z_H] * 2; 
+          }
+        }
+      }
+      */
+
+
     }
   }
   
   std::cout << "E_seq = ";
-  for(size_t z=0; z<_Nz; z++) {
+  for(int z=0; z<Nz; z++) {
     std::cout << E_seq[z] << " ";
   }
   std::cout << "\n";
 
   std::cout << "E_simu = ";
-  for(size_t z=0; z<_Nz; z++) {
+  for(int z=0; z<Nz; z++) {
     std::cout << E_simu[z] << " ";
   }
   std::cout << "\n";
 
-  for(size_t z=0; z<_Nz; z++) {
+  for(int z=0; z<Nz; z++) {
     if(E_seq[z] != E_simu[z] || H_seq[z] != H_simu[z]) {
       std::cerr << "1-D demo results mismatch.\n";
       std::exit(EXIT_FAILURE);
@@ -3346,6 +3387,18 @@ int gDiamond::_get_z_planeH(int t, int zz, int Nz) {
   // return (result >= 0 && result <= Nz - 1)? result : -1;
   return (result >= 1 && result <= Nz - 2)? result : -1;
 }
+
+int gDiamond::_get_z_planeE_shmem(int t, int zz, int Nz) {
+  int result = zz - t;
+  return (result >= 0 && result <= Nz - 1)? result : -1; 
+}
+
+int gDiamond::_get_z_planeH_shmem(int t, int zz, int Nz) {
+  int result = zz - t - 1;
+  return (result >= 0 && result <= Nz - 1)? result : -1;
+}
+
+
 
 void gDiamond::update_FDTD_gpu_fuse_kernel_globalmem_pt(size_t num_timesteps) { // 2-D mapping, using diamond tiling on X, Y dimension to fuse kernels, 
 

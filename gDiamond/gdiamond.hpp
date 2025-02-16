@@ -228,6 +228,8 @@ class gDiamond {
 
     int _get_z_planeE(int t, int zz, int Nz);
     int _get_z_planeH(int t, int zz, int Nz);
+    int _get_z_planeE_shmem(int t, int zz, int Nz);
+    int _get_z_planeH_shmem(int t, int zz, int Nz);
 
     // fill up indices and ranges vector for mountains and valleys
     void _get_indices_and_ranges(size_t BLX, size_t BLT, size_t Nx,
