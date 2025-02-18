@@ -1,4 +1,4 @@
-#include "gdiamond_gpu.cuh"
+#include "gdiamond_omp.hpp"
 
 int main(int argc, char* argv[]) {
 
@@ -13,12 +13,7 @@ int main(int argc, char* argv[]) {
   size_t num_timesteps = std::atoi(argv[4]);
   gdiamond::gDiamond exp(Nx, Ny, Nz); 
 
-  exp.update_FDTD_seq(num_timesteps);
-  exp.update_FDTD_gpu_2D(num_timesteps);
+  exp.update_FDTD_omp_figures(num_timesteps);
 
-  if(!exp.check_correctness_gpu_2D()) {
-    std::cerr << "error: results not match\n";
-    std::exit(EXIT_FAILURE);
-  }
   return 0;
 }

@@ -2,6 +2,7 @@
 #define GDIAMOND_HPP 
 
 #include <iostream>
+#include <filesystem>
 #include <random> 
 #include <chrono>
 #include <vector>
@@ -65,6 +66,11 @@ class gDiamond {
       free(mask);
     }
 
+    // for figures output
+    void update_FDTD_seq_figures(size_t num_timesteps);
+    void update_FDTD_omp_figures(size_t num_timesteps);
+    void update_FDTD_gpu_figures(size_t num_timesteps); // only use for result checking
+
     // run FDTD in cpu single thread
     void update_FDTD_seq(size_t num_timesteps);
     void update_FDTD_seq_test(size_t num_timesteps);
@@ -80,9 +86,13 @@ class gDiamond {
     void update_FDTD_gpu_2D(size_t num_timesteps); // 2-D mapping, without diamond tiling, no pipeline
     void update_FDTD_gpu_3D_warp_underutilization(size_t num_timesteps); // 3-D mapping, has warp underutilization issue 
     void update_FDTD_gpu_3D_warp_underutilization_fix(size_t num_timesteps); // 3-D mapping, fix warp underutilization issue 
+    void update_FDTD_gpu_check_result(size_t num_timesteps); // only use for result checking
+
+    // wrong implementation
     void update_FDTD_gpu_fuse_kernel(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels
     void update_FDTD_gpu_fuse_kernel_testing(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels
-    void update_FDTD_gpu_check_result(size_t num_timesteps); // only use for result checking
+
+    // simulation check
     void update_FDTD_gpu_simulation(size_t num_timesteps); // simulation of gpu threads
     void update_FDTD_gpu_simulation_shmem_EH(size_t num_timesteps); // simulation of gpu threads, with shared memory on E, H
     void update_FDTD_gpu_simulation_check(size_t num_timesteps);
@@ -91,10 +101,11 @@ class gDiamond {
     void update_FDTD_gpu_simulation_1_D_pt(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow, parallelogram tiling 
     void update_FDTD_gpu_simulation_1_D_pt_shmem(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow, parallelogram tiling 
     void update_FDTD_gpu_simulation_2_D_globalmem(size_t num_timesteps); // 2-D mapping, each thread finish the entire Z dimension,
+    void update_FDTD_gpu_simulation_2_D_shmem(size_t num_timesteps); // 2-D mapping, each thread finish the entire Z dimension,
 
+    // correct implementation after simulation
     void update_FDTD_gpu_fuse_kernel_globalmem(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels, global memory only
     void update_FDTD_gpu_fuse_kernel_globalmem_pt(size_t num_timesteps); // 2-D mapping, using diamond tiling on X, Y dimension to fuse kernels, 
-                                                                         // add parallelogram tiling for z dimension, global memory only
     void update_FDTD_gpu_fuse_kernel_shmem_EH(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels, put EH in shared memory 
 
     // check correctness
@@ -154,6 +165,27 @@ class gDiamond {
                                 int m_or_v_X, int m_or_v_Y, 
                                 size_t block_size,
                                 size_t grid_size);
+
+    void _updateEH_phase_seq_2D_shmem_EH(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
+                                         std::vector<float>& Hx, std::vector<float>& Hy, std::vector<float>& Hz,
+                                         std::vector<float>& Cax, std::vector<float>& Cbx,
+                                         std::vector<float>& Cay, std::vector<float>& Cby,
+                                         std::vector<float>& Caz, std::vector<float>& Cbz,
+                                         std::vector<float>& Dax, std::vector<float>& Dbx,
+                                         std::vector<float>& Day, std::vector<float>& Dby,
+                                         std::vector<float>& Daz, std::vector<float>& Dbz,
+                                         std::vector<float>& Jx, std::vector<float>& Jy, std::vector<float>& Jz,
+                                         std::vector<float>& Mx, std::vector<float>& My, std::vector<float>& Mz,
+                                         float dx, 
+                                         int Nx, int Ny, int Nz,
+                                         int xx_num, int yy_num, 
+                                         std::vector<int> xx_heads, 
+                                         std::vector<int> yy_heads, 
+                                         std::vector<int> xx_tails, 
+                                         std::vector<int> yy_tails, 
+                                         int m_or_v_X, int m_or_v_Y, 
+                                         size_t block_size,
+                                         size_t grid_size);
 
     void _updateEH_phase_seq_shmem_EH(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
                                       std::vector<float>& Hx, std::vector<float>& Hy, std::vector<float>& Hz,
@@ -481,7 +513,119 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
   }
 }
 
+void gDiamond::update_FDTD_seq_figures(size_t num_timesteps) {
+
+  if (std::filesystem::create_directory("seq_figures")) {
+      std::cerr << "seq_figures created successfully. " << std::endl;
+  } else {
+      std::cerr << "failed to create seq_figures or it already exists." << std::endl;
+      std::exit(EXIT_FAILURE);
+  }
+
+  // create temporary E and H for experiments
+  std::vector<float> Ex_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Ey_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Ez_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Hx_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Hy_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Hz_temp(_Nx * _Ny * _Nz, 0);
+
+  // clear source Mz for experiments
+  _Mz.clear();
+
+  std::chrono::duration<double> seq_runtime(0);
+
+  for(size_t t=0; t<num_timesteps; t++) {
+
+    auto start = std::chrono::high_resolution_clock::now();
+    float Mz_value = M_source_amp * std::sin(SOURCE_OMEGA * t * dt);
+    // std::cout << "seq: Mz_value = " << Mz_value << "\n";
+    _Mz[_source_idx] = Mz_value;
+
+    // update E
+    for(size_t k=1; k<_Nz-1; k++) {
+      for(size_t j=1; j<_Ny-1; j++) {
+        for(size_t i=1; i<_Nx-1; i++) {
+          size_t idx = i + j*_Nx + k*(_Nx*_Ny);
+          Ex_temp[idx] = _Cax[idx] * Ex_temp[idx] + _Cbx[idx] *
+            ((Hz_temp[idx] - Hz_temp[idx - _Nx]) - (Hy_temp[idx] - Hy_temp[idx - _Nx * _Ny]) - _Jx[idx] * _dx);
+          Ey_temp[idx] = _Cay[idx] * Ey_temp[idx] + _Cby[idx] *
+            ((Hx_temp[idx] - Hx_temp[idx - _Nx * _Ny]) - (Hz_temp[idx] - Hz_temp[idx - 1]) - _Jy[idx] * _dx);
+          Ez_temp[idx] = _Caz[idx] * Ez_temp[idx] + _Cbz[idx] *
+            ((Hy_temp[idx] - Hy_temp[idx - 1]) - (Hx_temp[idx] - Hx_temp[idx - _Nx]) - _Jz[idx] * _dx);
+        }
+      }
+    }
+
+    // update H
+    for(size_t k=1; k<_Nz-1; k++) {
+      for(size_t j=1; j<_Ny-1; j++) {
+        for(size_t i=1; i<_Nx-1; i++) {
+          size_t idx = i + j*_Nx + k*(_Nx*_Ny);
+          Hx_temp[idx] = _Dax[idx] * Hx_temp[idx] + _Dbx[idx] *
+            ((Ey_temp[idx + _Nx * _Ny] - Ey_temp[idx]) - (Ez_temp[idx + _Nx] - Ez_temp[idx]) - _Mx[idx] * _dx);
+          Hy_temp[idx] = _Day[idx] * Hy_temp[idx] + _Dby[idx] *
+            ((Ez_temp[idx + 1] - Ez_temp[idx]) - (Ex_temp[idx + _Nx * _Ny] - Ex_temp[idx]) - _My[idx] * _dx);
+          Hz_temp[idx] = _Daz[idx] * Hz_temp[idx] + _Dbz[idx] *
+            ((Ex_temp[idx + _Nx] - Ex_temp[idx]) - (Ey_temp[idx + 1] - Ey_temp[idx]) - _Mz[idx] * _dx);
+        }
+      }
+    }
+
+    auto end = std::chrono::high_resolution_clock::now();
+
+    seq_runtime += end-start;
+
+    // Record the field using a monitor, once in a while
+    if (t % (num_timesteps/10) == 0)
+    {
+      printf("Iter: %ld / %ld \n", t, num_timesteps);
+
+      float *H_time_monitor_xy;
+      H_time_monitor_xy = (float *)malloc(_Nx * _Ny * sizeof(float));
+      memset(H_time_monitor_xy, 0, _Nx * _Ny * sizeof(float));
+
+      // ------------ plotting time domain
+      // File name initialization
+      char field_filename[50];
+      size_t k = _Nz / 2;  // Assuming you want the middle slice
+      for(size_t i=0; i<_Nx; i++) {
+        for(size_t j=0; j<_Ny; j++) {
+          H_time_monitor_xy[i + j*_Nx] = Hz_temp[i + j*_Nz + k*_Nx*_Ny];
+        }
+      }
+
+      snprintf(field_filename, sizeof(field_filename), "seq_figures/Hz_seq_%04ld.png", t);
+      save_field_png(H_time_monitor_xy, field_filename, _Nx, _Ny, 1.0 / sqrt(mu0 / eps0));
+
+      free(H_time_monitor_xy);
+    }
+
+  }
+  std::cout << "seq runtime (excluding figures output): " << seq_runtime.count() << "s\n"; 
+  std::cout << "seq performance (excluding figures output): " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / seq_runtime.count() << "Mcells/s\n";
+
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    _Ex_seq[i] = Ex_temp[i];
+    _Ey_seq[i] = Ey_temp[i];
+    _Ez_seq[i] = Ez_temp[i];
+    _Hx_seq[i] = Hx_temp[i];
+    _Hy_seq[i] = Hy_temp[i];
+    _Hz_seq[i] = Hz_temp[i];
+  }
+
+}
+
 void gDiamond::update_FDTD_seq(size_t num_timesteps) {
+
+  /*
+  if (std::filesystem::create_directory("seq_figures")) {
+      std::cerr << "seq_figures created successfully. " << std::endl;
+  } else {
+      std::cerr << "failed to create seq_figures or it already exists." << std::endl;
+      std::exit(EXIT_FAILURE);
+  }
+  */
 
   // create temporary E and H for experiments
   std::vector<float> Ex_temp(_Nx * _Ny * _Nz, 0);
@@ -551,7 +695,7 @@ void gDiamond::update_FDTD_seq(size_t num_timesteps) {
         }
       }
 
-      snprintf(field_filename, sizeof(field_filename), "figures/Hz_seq_%04ld.png", t);
+      snprintf(field_filename, sizeof(field_filename), "seq_figures/Hz_seq_%04ld.png", t);
       save_field_png(H_time_monitor_xy, field_filename, _Nx, _Ny, 1.0 / sqrt(mu0 / eps0));
 
       free(H_time_monitor_xy);
@@ -560,8 +704,8 @@ void gDiamond::update_FDTD_seq(size_t num_timesteps) {
 
   }
   auto end = std::chrono::high_resolution_clock::now();
-  std::cout << "seq runtime: " << std::chrono::duration<double>(end-start).count() << "s\n"; 
-  std::cout << "seq performance: " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / std::chrono::duration<double>(end-start).count() << "Mcells/s\n";
+  std::cout << "seq runtime (excluding figures output): " << std::chrono::duration<double>(end-start).count() << "s\n"; 
+  std::cout << "seq performance (excluding figures output): " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / std::chrono::duration<double>(end-start).count() << "Mcells/s\n";
 
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
     _Ex_seq[i] = Ex_temp[i];
