@@ -13,9 +13,9 @@ make -j 16 # plz ignore warnings since it is under development
 ### To run examples with figures output
 ```bash
 cd build # after you build the project
-./example/seq_figures Nx Ny Nz num_timesteps # CPU sequential example
-./example/omp_figures Nx Ny Nz num_timesteps # CPU parallel example with openmp
-./example/gpu_figures Nx Ny Nz num_timesteps # GPU example 
+./examples/seq_figures Nx Ny Nz num_timesteps # CPU sequential example
+./examples/omp_figures Nx Ny Nz num_timesteps # CPU parallel example with openmp
+./examples/gpu_figures Nx Ny Nz num_timesteps # GPU example 
 ```
 
 ### Environment info
