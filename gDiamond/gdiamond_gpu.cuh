@@ -3338,7 +3338,98 @@ void gDiamond::update_FDTD_gpu_simulation_2_D_shmem(size_t num_timesteps) { // 2
   size_t grid_size;
 
   for(size_t t=0; t<num_timesteps/BLT_GPU_PT; t++) {
-        
+
+    // phase 1. (m, m, *)
+    grid_size = num_mountains_X * num_mountains_Y;
+    _updateEH_phase_seq_2D_shmem_EH(_Ex_simu, _Ey_simu, _Ez_simu,
+                           _Hx_simu, _Hy_simu, _Hz_simu,
+                           _Cax, _Cbx,
+                           _Cay, _Cby,
+                           _Caz, _Cbz,
+                           _Dax, _Dbx,
+                           _Day, _Dby,
+                           _Daz, _Dbz,
+                           _Jx, _Jy, _Jz,
+                           _Mx, _My, _Mz,
+                           _dx,
+                           _Nx, _Ny, _Nz,
+                           num_mountains_X, num_mountains_Y,
+                           mountain_heads_X,
+                           mountain_heads_Y,
+                           mountain_tails_X,
+                           mountain_tails_Y,
+                           1, 1,
+                           block_size,
+                           grid_size);
+
+    // phase 2. (v, m, *)
+    grid_size = num_valleys_X * num_mountains_Y;
+    _updateEH_phase_seq_2D_shmem_EH(_Ex_simu, _Ey_simu, _Ez_simu,
+                           _Hx_simu, _Hy_simu, _Hz_simu,
+                           _Cax, _Cbx,
+                           _Cay, _Cby,
+                           _Caz, _Cbz,
+                           _Dax, _Dbx,
+                           _Day, _Dby,
+                           _Daz, _Dbz,
+                           _Jx, _Jy, _Jz,
+                           _Mx, _My, _Mz,
+                           _dx,
+                           _Nx, _Ny, _Nz,
+                           num_valleys_X, num_mountains_Y,
+                           valley_heads_X,
+                           mountain_heads_Y,
+                           valley_tails_X,
+                           mountain_tails_Y,
+                           0, 1,
+                           block_size,
+                           grid_size);
+
+    // phase 3. (m, v, *)
+    grid_size = num_mountains_X * num_valleys_Y;
+    _updateEH_phase_seq_2D_shmem_EH(_Ex_simu, _Ey_simu, _Ez_simu,
+                           _Hx_simu, _Hy_simu, _Hz_simu,
+                           _Cax, _Cbx,
+                           _Cay, _Cby,
+                           _Caz, _Cbz,
+                           _Dax, _Dbx,
+                           _Day, _Dby,
+                           _Daz, _Dbz,
+                           _Jx, _Jy, _Jz,
+                           _Mx, _My, _Mz,
+                           _dx,
+                           _Nx, _Ny, _Nz,
+                           num_mountains_X, num_valleys_Y,
+                           mountain_heads_X,
+                           valley_heads_Y,
+                           mountain_tails_X,
+                           valley_tails_Y,
+                           1, 0,
+                           block_size,
+                           grid_size);
+
+    // phase 4. (v, v, *)
+    grid_size = num_valleys_X * num_valleys_Y;
+    _updateEH_phase_seq_2D_shmem_EH(_Ex_simu, _Ey_simu, _Ez_simu,
+                           _Hx_simu, _Hy_simu, _Hz_simu,
+                           _Cax, _Cbx,
+                           _Cay, _Cby,
+                           _Caz, _Cbz,
+                           _Dax, _Dbx,
+                           _Day, _Dby,
+                           _Daz, _Dbz,
+                           _Jx, _Jy, _Jz,
+                           _Mx, _My, _Mz,
+                           _dx,
+                           _Nx, _Ny, _Nz,
+                           num_valleys_X, num_valleys_Y,
+                           valley_heads_X,
+                           valley_heads_Y,
+                           valley_tails_X,
+                           valley_tails_Y,
+                           0, 0,
+                           block_size,
+                           grid_size);
   }
 
 }
@@ -3363,6 +3454,267 @@ void gDiamond::_updateEH_phase_seq_2D_shmem_EH(std::vector<float>& Ex, std::vect
                                                int m_or_v_X, int m_or_v_Y, 
                                                size_t block_size,
                                                size_t grid_size) {
+
+  for(size_t block_id=0; block_id<grid_size; block_id++) {
+
+    int xx = block_id % xx_num;
+    int yy = block_id / xx_num;
+
+    int num_zz = Nz - BLT_GPU_PT; // number of times to load shared memory
+
+    // declare shared memory for each block
+    float Ex_shmem[(BLX_GPU_PT + 1) * (BLY_GPU_PT + 1) * (BLT_GPU_PT + 1)];
+    float Ey_shmem[(BLX_GPU_PT + 1) * (BLY_GPU_PT + 1) * (BLT_GPU_PT + 1)];
+    float Ez_shmem[(BLX_GPU_PT + 1) * (BLY_GPU_PT + 1) * (BLT_GPU_PT + 1)];
+    float Hx_shmem[(BLX_GPU_PT + 1) * (BLY_GPU_PT + 1) * (BLT_GPU_PT + 1)];
+    float Hy_shmem[(BLX_GPU_PT + 1) * (BLY_GPU_PT + 1) * (BLT_GPU_PT + 1)];
+    float Hz_shmem[(BLX_GPU_PT + 1) * (BLY_GPU_PT + 1) * (BLT_GPU_PT + 1)];
+
+    for(int zz=0; zz<num_zz; zz++) {
+
+      // load shared memory
+      for(size_t thread_id=0; thread_id<block_size; thread_id++) {
+
+        // thread index
+        int local_x = thread_id % BLX_GPU_PT;
+        int local_y = thread_id / BLX_GPU_PT;
+
+        // global index
+        int global_x = xx_heads[xx] + local_x; 
+        int global_y = yy_heads[yy] + local_y;
+
+        // shared index for H
+        int shared_H_x = local_x + 1;
+        int shared_H_y = local_y + 1;
+        
+        // shared index for E
+        int shared_E_x = local_x;
+        int shared_E_y = local_y;
+
+        for(int local_z=0; local_z<BLT_GPU_PT+1; local_z++) { // each thread iterate Z dimension
+          int global_z = local_z + zz;
+          int shared_H_z = local_z;
+          int shared_E_z = local_z;
+
+          int global_idx = global_x + global_y * Nx + global_z * Nx * Ny;
+          int shared_H_idx = shared_H_x + shared_H_y * BLX_EH_PT + shared_H_z * BLX_EH_PT * BLY_EH_PT;
+          int shared_E_idx = shared_E_x + shared_E_y * BLX_EH_PT + shared_E_z * BLX_EH_PT * BLY_EH_PT;
+
+          // load H
+          if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz) {
+
+            // load core
+            Hx_shmem[shared_H_idx] = Hx[global_idx];
+            Hy_shmem[shared_H_idx] = Hy[global_idx];
+            Hz_shmem[shared_H_idx] = Hz[global_idx];
+
+            // load HALO region
+            if(local_x == 0 && global_x > 0) {
+              Hz_shmem[shared_H_x - 1 + shared_H_y * BLX_EH_PT + shared_H_z * BLX_EH_PT * BLY_EH_PT] = Hz[global_x - 1 + global_y * Nx + global_z * Nx * Ny];
+              Hy_shmem[shared_H_x - 1 + shared_H_y * BLX_EH_PT + shared_H_z * BLX_EH_PT * BLY_EH_PT] = Hy[global_x - 1 + global_y * Nx + global_z * Nx * Ny];
+              
+            }
+            if(local_y == 0 && global_y > 0) {
+              Hx_shmem[shared_H_x + (shared_H_y - 1) * BLX_EH_PT + shared_H_z * BLX_EH_PT * BLY_EH_PT] = Hx[global_x + (global_y - 1) * Nx + global_z * Nx * Ny];
+              Hz_shmem[shared_H_x + (shared_H_y - 1) * BLX_EH_PT + shared_H_z * BLX_EH_PT * BLY_EH_PT] = Hz[global_x + (global_y - 1) * Nx + global_z * Nx * Ny];
+            }
+          }
+
+          // load E
+          if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz) {
+
+            Ex_shmem[shared_E_idx] = Ex[global_idx];
+            Ey_shmem[shared_E_idx] = Ey[global_idx];
+            Ez_shmem[shared_E_idx] = Ez[global_idx];
+
+            // load HALO region
+            if(local_x == BLX_GPU - 1 && global_x < Nx - 1) {
+              Ez_shmem[shared_E_x + 1 + shared_E_y * BLX_EH_PT + shared_E_z * BLX_EH_PT * BLY_EH_PT] = Ez[global_x + 1 + global_y * Nx + global_z * Nx * Ny];
+              Ey_shmem[shared_E_x + 1 + shared_E_y * BLX_EH_PT + shared_E_z * BLX_EH_PT * BLY_EH_PT] = Ey[global_x + 1 + global_y * Nx + global_z * Nx * Ny];
+            }
+            if(local_y == BLY_GPU - 1 && global_y < Ny - 1) {
+              Ex_shmem[shared_E_x + (shared_E_y + 1) * BLX_EH_PT + shared_E_z * BLX_EH_PT * BLY_EH_PT] = Ex[global_x + (global_y + 1) * Nx + global_z * Nx * Ny];
+              Ez_shmem[shared_E_x + (shared_E_y + 1) * BLX_EH_PT + shared_E_z * BLX_EH_PT * BLY_EH_PT] = Ez[global_x + (global_y + 1) * Nx + global_z * Nx * Ny];
+            }
+          } 
+        }
+      }
+
+      // do calculation
+      int z_start = (zz == 0)? 0 : 4;  
+      int z_bound = (zz == 0 || zz == num_zz - 1)? BLT_GPU_PT + 1 : 1;  
+      for(int local_z=z_start; local_z<z_start+z_bound; local_z++) { // each thread iterate Z dimension
+        for(size_t t=0; t<BLT_GPU_PT; t++) {
+          int calculate_Ex = 1; // calculate this E tile or not
+          int calculate_Hx = 1; // calculate this H tile or not
+          int calculate_Ey = 1;
+          int calculate_Hy = 1;
+
+          // {Ehead, Etail, Hhead, Htail}
+          std::vector<int> indices_X = _get_head_tail(BLX_GPU_PT, BLT_GPU_PT,
+                                                      xx_heads, xx_tails,
+                                                      xx, t,
+                                                      m_or_v_X,
+                                                      Nx,
+                                                      &calculate_Ex, &calculate_Hx);
+
+          std::vector<int> indices_Y = _get_head_tail(BLY_GPU_PT, BLT_GPU_PT,
+                                                      yy_heads, yy_tails,
+                                                      yy, t,
+                                                      m_or_v_Y,
+                                                      Ny,
+                                                      &calculate_Ey, &calculate_Hy);
+
+          // update E
+          if(calculate_Ex & calculate_Ey) {
+            for(size_t thread_id=0; thread_id<block_size; thread_id++) {
+              int local_x = thread_id % BLX_GPU_PT;
+              int local_y = thread_id / BLX_GPU_PT;
+
+              // Ehead is offset
+              int global_x = indices_X[0] + local_x; // Global X coordinate
+              int global_y = indices_Y[0] + local_y; // Global Y coordinate
+
+              int shared_E_z = _get_z_planeE_shmem(t, local_z, Nz);
+              int global_E_z = shared_E_z + zz;
+
+              if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_E_z >= 1 && global_E_z <= Nz-2 &&
+                global_x <= indices_X[1] &&
+                global_y <= indices_Y[1] &&
+                shared_E_z != -1) {
+
+                // need to recalculate shared indices
+                int Eoffset_X = indices_X[0] - xx_heads[xx];
+                int Eoffset_Y = indices_Y[0] - yy_heads[yy];
+
+                int Hoffset_X = indices_X[2] - xx_heads[xx];
+                int Hoffset_Y = indices_Y[2] - yy_heads[yy];
+
+                int shared_H_x = (m_or_v_X == 0 && xx != 0)? local_x + 1 + Hoffset_X + 1 : local_x + 1 + Hoffset_X;
+                int shared_H_y = (m_or_v_Y == 0 && yy != 0)? local_y + 1 + Hoffset_Y + 1 : local_y + 1 + Hoffset_Y;
+
+                int shared_E_x = local_x + Eoffset_X;
+                int shared_E_y = local_y + Eoffset_Y;
+
+                // notice that for H in Z dimension, it is using shared_E_z
+                int s_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH; // shared memory idx for H
+                int s_E_idx = shared_E_x + shared_E_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH; // shared memory idx for E
+
+                int g_idx = global_x + global_y * Nx + global_E_z * Nx * Ny; // global idx
+
+                // Ex[g_idx] = Cax[g_idx] * Ex[g_idx] + Cbx[g_idx] *
+                //           ((Hz[g_idx] - Hz[g_idx - Nx]) - (Hy[g_idx] - Hy[g_idx - Nx * Ny]) - Jx[g_idx] * dx);
+                // Ey[g_idx] = Cay[g_idx] * Ey[g_idx] + Cby[g_idx] *
+                //           ((Hx[g_idx] - Hx[g_idx - Nx * Ny]) - (Hz[g_idx] - Hz[g_idx - 1]) - Jy[g_idx] * dx);
+                // Ez[g_idx] = Caz[g_idx] * Ez[g_idx] + Cbz[g_idx] *
+                //           ((Hy[g_idx] - Hy[g_idx - 1]) - (Hx[g_idx] - Hx[g_idx - Nx]) - Jz[g_idx] * dx);
+
+                Ex_shmem[s_E_idx] = Cax[g_idx] * Ex_shmem[s_E_idx] + Cbx[g_idx] *
+                    ((Hz_shmem[s_H_idx] - Hz_shmem[s_H_idx - BLX_EH]) - (Hy_shmem[s_H_idx] - Hy_shmem[s_H_idx - BLX_EH * BLY_EH]) - Jx[g_idx] * dx);
+                Ey_shmem[s_E_idx] = Cay[g_idx] * Ey_shmem[s_E_idx] + Cby[g_idx] *
+                          ((Hx_shmem[s_H_idx] - Hx_shmem[s_H_idx - BLX_EH * BLY_EH]) - (Hz_shmem[s_H_idx] - Hz_shmem[s_H_idx - 1]) - Jy[g_idx] * dx);
+                Ez_shmem[s_E_idx] = Caz[g_idx] * Ez_shmem[s_E_idx] + Cbz[g_idx] *
+                          ((Hy_shmem[s_H_idx] - Hy_shmem[s_H_idx - 1]) - (Hx_shmem[s_H_idx] - Hx_shmem[s_H_idx - BLX_EH]) - Jz[g_idx] * dx);
+              }
+            }
+          }
+
+          // update H
+          if(calculate_Hx & calculate_Hy) {
+            for(size_t thread_id=0; thread_id<block_size; thread_id++) {
+              int local_x = thread_id % BLX_GPU_PT;
+              int local_y = thread_id / BLX_GPU_PT;
+
+              // Hhead is offset
+              int global_x = indices_X[2] + local_x; // Global X coordinate
+              int global_y = indices_Y[2] + local_y; // Global Y coordinate
+
+              int shared_H_z = _get_z_planeH_shmem(t, local_z, Nz);
+              int global_H_z = shared_H_z + zz;
+
+              if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_H_z >= 1 && global_H_z <= Nz-2 &&
+                global_x <= indices_X[3] &&
+                global_y <= indices_Y[3] &&
+                shared_H_z != -1) {
+
+                // need to recalculate shared indices
+                int Eoffset_X = indices_X[0] - xx_heads[xx];
+                int Eoffset_Y = indices_Y[0] - yy_heads[yy];
+
+                int Hoffset_X = indices_X[2] - xx_heads[xx];
+                int Hoffset_Y = indices_Y[2] - yy_heads[yy];
+
+                int shared_H_x = local_x + 1 + Hoffset_X;
+                int shared_H_y = local_y + 1 + Hoffset_Y;
+
+                int shared_E_x = (m_or_v_X == 0 && xx != 0)? local_x + Eoffset_X - 1 : local_x + Eoffset_X;
+                int shared_E_y = (m_or_v_Y == 0 && yy != 0)? local_y + Eoffset_Y - 1 : local_y + Eoffset_Y;
+
+                // notice that for E in Z dimension, it is using shared_H_z
+                int s_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH; // shared memory idx for H
+                int s_E_idx = shared_E_x + shared_E_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH; // shared memory idx for E
+
+                int g_idx = global_x + global_y * Nx + global_H_z * Nx * Ny; // global idx
+
+                // Hx[g_idx] = Dax[g_idx] * Hx[g_idx] + Dbx[g_idx] *
+                //           ((Ey[g_idx + Nx * Ny] - Ey[g_idx]) - (Ez[g_idx + Nx] - Ez[g_idx]) - Mx[g_idx] * dx);
+                // Hy[g_idx] = Day[g_idx] * Hy[g_idx] + Dby[g_idx] *
+                //           ((Ez[g_idx + 1] - Ez[g_idx]) - (Ex[g_idx + Nx * Ny] - Ex[g_idx]) - My[g_idx] * dx);
+                // Hz[g_idx] = Daz[g_idx] * Hz[g_idx] + Dbz[g_idx] *
+                //           ((Ex[g_idx + Nx] - Ex[g_idx]) - (Ey[g_idx + 1] - Ey[g_idx]) - Mz[g_idx] * dx);
+
+                Hx_shmem[s_H_idx] = Dax[g_idx] * Hx_shmem[s_H_idx] + Dbx[g_idx] *
+                    ((Ey_shmem[s_E_idx + BLX_EH * BLY_EH] - Ey_shmem[s_E_idx]) - (Ez_shmem[s_E_idx + BLX_EH] - Ez_shmem[s_E_idx]) - Mx[g_idx] * dx);
+                Hy_shmem[s_H_idx] = Day[g_idx] * Hy_shmem[s_H_idx] + Dby[g_idx] *
+                          ((Ez_shmem[s_E_idx + 1] - Ez_shmem[s_E_idx]) - (Ex_shmem[s_E_idx + BLX_EH * BLY_EH] - Ex_shmem[s_E_idx]) - My[g_idx] * dx);
+                Hz_shmem[s_H_idx] = Daz[g_idx] * Hz_shmem[s_H_idx] + Dbz[g_idx] *
+                          ((Ex_shmem[s_E_idx + BLX_EH] - Ex_shmem[s_E_idx]) - (Ey_shmem[s_E_idx + 1] - Ey_shmem[s_E_idx]) - Mz[g_idx] * dx);
+              }
+            }
+          }
+        }
+      }
+
+      // load back to global mem
+      // store E, H to global memory, no HALO needed
+      for(int local_z=0; local_z<BLT_GPU_PT+1; local_z++) {
+        int global_z = local_z + zz;
+        for(size_t thread_id=0; thread_id<block_size; thread_id++) {
+          int local_x = thread_id % BLX_GPU;                     // X coordinate within the tile
+          int local_y = (thread_id / BLX_GPU) % BLY_GPU;     // Y coordinate within the tile
+
+          // Hhead is offset
+          int global_x = xx_heads[xx] + local_x; // Global X coordinate
+          int global_y = yy_heads[yy] + local_y; // Global Y coordinate
+
+          if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
+            global_x <= xx_tails[xx] &&
+            global_y <= yy_tails[yy]) {
+
+            int shared_H_x = local_x + 1;
+            int shared_H_y = local_y + 1;
+            int shared_H_z = local_z;
+
+            int shared_E_x = local_x;
+            int shared_E_y = local_y;
+            int shared_E_z = local_z;
+
+            int s_H_idx = shared_H_x + shared_H_y * BLX_EH + shared_H_z * BLX_EH * BLY_EH; // shared memory idx for H
+            int s_E_idx = shared_E_x + shared_E_y * BLX_EH + shared_E_z * BLX_EH * BLY_EH; // shared memory idx for E
+
+            int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
+
+            Ex[g_idx] = Ex_shmem[s_E_idx];
+            Ey[g_idx] = Ey_shmem[s_E_idx];
+            Ez[g_idx] = Ez_shmem[s_E_idx];
+            Hx[g_idx] = Hx_shmem[s_H_idx];
+            Hy[g_idx] = Hy_shmem[s_H_idx];
+            Hz[g_idx] = Hz_shmem[s_H_idx];
+          }
+        }
+      }
+    }
+  }
 
 }
 
@@ -3616,9 +3968,8 @@ void gDiamond::update_FDTD_gpu_simulation_1_D_pt_shmem(size_t num_timesteps) { /
 
       int z_start = (zz == 0)? 0 : 4;  
       int z_bound = (zz == 0 || zz == num_zz - 1)? BLT_GPU_PT + 1 : 1;  
-      for(int z=z_start; z<z_start+z_bound; z++) {
-        std::cout << "z+zz = " << z+zz << "\n";
-        for(int t=0; t<BLT_GPU_PT; t++) {
+      for(int t=0; t<BLT_GPU_PT; t++) {
+        for(int z=z_start; z<z_start+z_bound; z++) {
           int s_z_E = _get_z_planeE_shmem(t, z, Nz);
           int s_z_H = _get_z_planeH_shmem(t, z, Nz); 
           // if(zz == num_zz - 1 && s_z_E != -1 && s_z_H != -1) {
@@ -3628,9 +3979,11 @@ void gDiamond::update_FDTD_gpu_simulation_1_D_pt_shmem(size_t num_timesteps) { /
           int g_z_H = s_z_H + zz;
           if(s_z_E != -1 && g_z_E >= 1 && g_z_E <= Nz-2) {
             E_shmem[s_z_E] = H_shmem[s_z_E-1] + H_shmem[s_z_E] * 2; 
+            // E_simu[g_z_E] = H_simu[g_z_E-1] + H_simu[g_z_E] * 2; 
           }
           if(s_z_H != -1 && g_z_H >= 1 && g_z_H <= Nz-2) {
             H_shmem[s_z_H] = E_shmem[s_z_H+1] + E_shmem[s_z_H] * 2; 
+            // H_simu[g_z_H] = E_simu[g_z_H+1] + E_simu[g_z_H] * 2; 
           }
         }
       }

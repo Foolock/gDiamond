@@ -1137,13 +1137,17 @@ __global__ void updateEH_phase_global_mem_2D(float *Ex, float *Ey, float *Ez,
                                   size_t grid_size) 
 {
   // first we map each (xx, yy, zz) to a block
+  // int xx = blockIdx.x % xx_num;
+  // int yy = (blockIdx.x % (xx_num * yy_num)) / xx_num;
   int xx = blockIdx.x % xx_num;
-  int yy = (blockIdx.x % (xx_num * yy_num)) / xx_num;
+  int yy = blockIdx.x / xx_num;
 
   // map each thread in the block to a global index
   int tid = threadIdx.x;
+  // int local_x = tid % BLX_GPU_PT;                     // X coordinate within the tile
+  // int local_y = (tid / BLX_GPU_PT) % BLY_GPU_PT;     // Y coordinate within the tile
   int local_x = tid % BLX_GPU_PT;                     // X coordinate within the tile
-  int local_y = (tid / BLX_GPU_PT) % BLY_GPU_PT;     // Y coordinate within the tile
+  int local_y = tid / BLX_GPU_PT;     // Y coordinate within the tile
 
   __shared__ int indices_X[4];
   __shared__ int indices_Y[4];
