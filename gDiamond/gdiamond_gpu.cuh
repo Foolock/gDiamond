@@ -3142,6 +3142,307 @@ void gDiamond::update_FDTD_gpu_fuse_kernel_shmem_EH(size_t num_timesteps) { // 3
   CUDACHECK(cudaFree(valley_tails_Z_d));
 }
 
+void gDiamond::update_FDTD_gpu_fuse_kernel_shmem_EH_pt(size_t num_timesteps) { // 2-D mapping, using diamond tiling on X, Y dimension to fuse kernels, put EH in shared memory 
+
+  size_t max_phases = 8;
+  std::vector<int> mountain_heads_X;
+  std::vector<int> mountain_tails_X;
+  std::vector<int> mountain_heads_Y;
+  std::vector<int> mountain_tails_Y;
+  std::vector<int> mountain_heads_Z;
+  std::vector<int> mountain_tails_Z;
+  std::vector<int> valley_heads_X;
+  std::vector<int> valley_tails_X;
+  std::vector<int> valley_heads_Y;
+  std::vector<int> valley_tails_Y;
+  std::vector<int> valley_heads_Z;
+  std::vector<int> valley_tails_Z;
+  _setup_diamond_tiling_gpu(BLX_GPU_PT, BLY_GPU_PT, BLZ_GPU_PT, BLT_GPU_PT, max_phases);
+
+  for(auto range : _Eranges_phases_X[0][0]) { 
+    mountain_heads_X.push_back(range.first);
+    mountain_tails_X.push_back(range.second);
+  }
+  for(auto range : _Eranges_phases_Y[0][0]) { 
+    mountain_heads_Y.push_back(range.first);
+    mountain_tails_Y.push_back(range.second);
+  }
+  // std::cout << "valley X range = ";
+  for(auto range : _Hranges_phases_X[1][BLT_GPU_PT-1]) { 
+    // std::cout << "(" << range.first << ", " << range.second << ") ";
+    valley_heads_X.push_back(range.first);
+    valley_tails_X.push_back(range.second);
+  }
+  // std::cout << "\n";
+  for(auto range : _Hranges_phases_Y[2][BLT_GPU_PT-1]) { 
+    valley_heads_Y.push_back(range.first);
+    valley_tails_Y.push_back(range.second);
+  }
+
+  size_t num_mountains_X = mountain_heads_X.size();
+  size_t num_mountains_Y = mountain_heads_Y.size();
+  size_t num_mountains_Z = mountain_heads_Z.size();
+  size_t num_valleys_X = valley_heads_X.size();
+  size_t num_valleys_Y = valley_heads_Y.size();
+
+  // head and tail on device
+  int *mountain_heads_X_d, *mountain_tails_X_d;
+  int *mountain_heads_Y_d, *mountain_tails_Y_d;
+  int *valley_heads_X_d, *valley_tails_X_d;
+  int *valley_heads_Y_d, *valley_tails_Y_d;
+
+  CUDACHECK(cudaMalloc(&mountain_heads_X_d, sizeof(int) * num_mountains_X));
+  CUDACHECK(cudaMalloc(&mountain_tails_X_d, sizeof(int) * num_mountains_X));
+  CUDACHECK(cudaMalloc(&mountain_heads_Y_d, sizeof(int) * num_mountains_Y));
+  CUDACHECK(cudaMalloc(&mountain_tails_Y_d, sizeof(int) * num_mountains_Y));
+  CUDACHECK(cudaMalloc(&valley_heads_X_d, sizeof(int) * num_valleys_X));
+  CUDACHECK(cudaMalloc(&valley_tails_X_d, sizeof(int) * num_valleys_X));
+  CUDACHECK(cudaMalloc(&valley_heads_Y_d, sizeof(int) * num_valleys_Y));
+  CUDACHECK(cudaMalloc(&valley_tails_Y_d, sizeof(int) * num_valleys_Y));
+
+  // E, H, J, M on device 
+  float *Ex, *Ey, *Ez, *Hx, *Hy, *Hz, *Jx, *Jy, *Jz, *Mx, *My, *Mz;
+
+  // Ca, Cb, Da, Db on device
+  float *Cax, *Cay, *Caz, *Cbx, *Cby, *Cbz;
+  float *Dax, *Day, *Daz, *Dbx, *Dby, *Dbz;
+
+  CUDACHECK(cudaMalloc(&Ex, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Ey, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Ez, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Hx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Hy, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Hz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Jx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Jy, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Jz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Mx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&My, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Mz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cax, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cbx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cay, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cby, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Caz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cbz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Dax, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Dbx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Day, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Dby, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Daz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Dbz, sizeof(float) * _Nx * _Ny * _Nz)); 
+
+  // initialize E, H as 0 
+  CUDACHECK(cudaMemset(Ex, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Ey, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Ez, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Hx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Hy, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Hz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+
+  // initialize J, M, Ca, Cb, Da, Db as 0 
+  CUDACHECK(cudaMemset(Jx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Jy, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Jz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Mx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(My, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Mz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cax, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cbx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cay, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cby, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Caz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cbz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Dax, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Dbx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Day, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Dby, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Daz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Dbz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+
+  // transfer source
+  for(size_t t=0; t<num_timesteps; t++) {
+    float Mz_value = M_source_amp * std::sin(SOURCE_OMEGA * t * dt);
+    CUDACHECK(cudaMemcpy(Mz + _source_idx, &Mz_value, sizeof(float), cudaMemcpyHostToDevice));
+  }
+  
+  auto start = std::chrono::high_resolution_clock::now();
+
+  // copy Ca, Cb, Da, Db
+  CUDACHECK(cudaMemcpyAsync(Cax, _Cax.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Cay, _Cay.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Caz, _Caz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Cbx, _Cbx.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Cby, _Cby.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Cbz, _Cbz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Dax, _Dax.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Day, _Day.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Daz, _Daz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Dbx, _Dbx.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Dby, _Dby.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Dbz, _Dbz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+
+  // copy heads and tails
+  CUDACHECK(cudaMemcpyAsync(mountain_heads_X_d, mountain_heads_X.data(), sizeof(int) * num_mountains_X, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(mountain_tails_X_d, mountain_tails_X.data(), sizeof(int) * num_mountains_X, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(mountain_heads_Y_d, mountain_heads_Y.data(), sizeof(int) * num_mountains_Y, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(mountain_tails_Y_d, mountain_tails_Y.data(), sizeof(int) * num_mountains_Y, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(valley_heads_X_d, valley_heads_X.data(), sizeof(int) * num_valleys_X, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(valley_tails_X_d, valley_tails_X.data(), sizeof(int) * num_valleys_X, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(valley_heads_Y_d, valley_heads_Y.data(), sizeof(int) * num_valleys_Y, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(valley_tails_Y_d, valley_tails_Y.data(), sizeof(int) * num_valleys_Y, cudaMemcpyHostToDevice));
+
+  // set block size 
+  size_t block_size = BLX_GPU_PT * BLY_GPU_PT;
+  size_t grid_size;
+  size_t num_para_Z = _Nz - BLT_GPU_PT; 
+  
+  for(size_t t=0; t<num_timesteps/BLT_GPU_PT; t++) {
+ 
+    // phase 1. (m, m, *)
+    grid_size = num_mountains_X * num_mountains_Y;
+    updateEH_phase_shmem_EH_2D<<<grid_size, block_size>>>(Ex, Ey, Ez,
+                                                            Hx, Hy, Hz,
+                                                            Cax, Cbx,
+                                                            Cay, Cby,
+                                                            Caz, Cbz,
+                                                            Dax, Dbx,
+                                                            Day, Dby,
+                                                            Daz, Dbz,
+                                                            Jx, Jy, Jz,
+                                                            Mx, My, Mz,
+                                                            _dx, 
+                                                            _Nx, _Ny, _Nz,
+                                                            num_mountains_X, num_mountains_Y, num_para_Z, 
+                                                            mountain_heads_X_d,
+                                                            mountain_heads_Y_d,
+                                                            mountain_tails_X_d,
+                                                            mountain_tails_Y_d,
+                                                            1, 1, 
+                                                            block_size,
+                                                            grid_size); 
+
+    // phase 2. (v, m, *)
+    grid_size = num_valleys_X * num_mountains_Y;
+    updateEH_phase_shmem_EH_2D<<<grid_size, block_size>>>(Ex, Ey, Ez,
+                                                            Hx, Hy, Hz,
+                                                            Cax, Cbx,
+                                                            Cay, Cby,
+                                                            Caz, Cbz,
+                                                            Dax, Dbx,
+                                                            Day, Dby,
+                                                            Daz, Dbz,
+                                                            Jx, Jy, Jz,
+                                                            Mx, My, Mz,
+                                                            _dx, 
+                                                            _Nx, _Ny, _Nz,
+                                                            num_valleys_X, num_mountains_Y, num_para_Z, 
+                                                            valley_heads_X_d,
+                                                            mountain_heads_Y_d,
+                                                            valley_tails_X_d,
+                                                            mountain_tails_Y_d,
+                                                            0, 1, 
+                                                            block_size,
+                                                            grid_size); 
+
+    // phase 3. (m, v, *)
+    grid_size = num_mountains_X * num_valleys_Y;
+    updateEH_phase_shmem_EH_2D<<<grid_size, block_size>>>(Ex, Ey, Ez,
+                                                            Hx, Hy, Hz,
+                                                            Cax, Cbx,
+                                                            Cay, Cby,
+                                                            Caz, Cbz,
+                                                            Dax, Dbx,
+                                                            Day, Dby,
+                                                            Daz, Dbz,
+                                                            Jx, Jy, Jz,
+                                                            Mx, My, Mz,
+                                                            _dx, 
+                                                            _Nx, _Ny, _Nz,
+                                                            num_mountains_X, num_valleys_Y, num_para_Z, 
+                                                            mountain_heads_X_d,
+                                                            valley_heads_Y_d,
+                                                            mountain_tails_X_d,
+                                                            valley_tails_Y_d,
+                                                            1, 0, 
+                                                            block_size,
+                                                            grid_size); 
+
+    // phase 4. (v, v, *)
+    grid_size = num_valleys_X * num_valleys_Y;
+    updateEH_phase_shmem_EH_2D<<<grid_size, block_size>>>(Ex, Ey, Ez,
+                                                            Hx, Hy, Hz,
+                                                            Cax, Cbx,
+                                                            Cay, Cby,
+                                                            Caz, Cbz,
+                                                            Dax, Dbx,
+                                                            Day, Dby,
+                                                            Daz, Dbz,
+                                                            Jx, Jy, Jz,
+                                                            Mx, My, Mz,
+                                                            _dx, 
+                                                            _Nx, _Ny, _Nz,
+                                                            num_valleys_X, num_valleys_Y, num_para_Z, 
+                                                            valley_heads_X_d,
+                                                            valley_heads_Y_d,
+                                                            valley_tails_X_d,
+                                                            valley_tails_Y_d,
+                                                            0, 0, 
+                                                            block_size,
+                                                            grid_size); 
+     
+  }
+  cudaDeviceSynchronize();
+
+  // copy E, H back to host 
+  CUDACHECK(cudaMemcpy(_Ex_gpu.data(), Ex, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Ey_gpu.data(), Ey, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Ez_gpu.data(), Ez, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hx_gpu.data(), Hx, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hy_gpu.data(), Hy, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hz_gpu.data(), Hz, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+
+  auto end = std::chrono::high_resolution_clock::now();
+  std::cout << "gpu runtime (2-D mapping, (dt on XY, pt on Z) shared memory on EH): " << std::chrono::duration<double>(end-start).count() << "s\n"; 
+  std::cout << "gpu performance: " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / std::chrono::duration<double>(end-start).count() << "Mcells/s\n";
+
+  CUDACHECK(cudaFree(Ex));
+  CUDACHECK(cudaFree(Ey));
+  CUDACHECK(cudaFree(Ez));
+  CUDACHECK(cudaFree(Hx));
+  CUDACHECK(cudaFree(Hy));
+  CUDACHECK(cudaFree(Hz));
+  CUDACHECK(cudaFree(Jx));
+  CUDACHECK(cudaFree(Jy));
+  CUDACHECK(cudaFree(Jz));
+  CUDACHECK(cudaFree(Mx));
+  CUDACHECK(cudaFree(My));
+  CUDACHECK(cudaFree(Mz));
+  CUDACHECK(cudaFree(Cax));
+  CUDACHECK(cudaFree(Cbx));
+  CUDACHECK(cudaFree(Cay));
+  CUDACHECK(cudaFree(Cby));
+  CUDACHECK(cudaFree(Caz));
+  CUDACHECK(cudaFree(Cbz));
+  CUDACHECK(cudaFree(Dax));
+  CUDACHECK(cudaFree(Dbx));
+  CUDACHECK(cudaFree(Day));
+  CUDACHECK(cudaFree(Dby));
+  CUDACHECK(cudaFree(Daz));
+  CUDACHECK(cudaFree(Dbz));
+
+  CUDACHECK(cudaFree(mountain_heads_X_d));
+  CUDACHECK(cudaFree(mountain_tails_X_d));
+  CUDACHECK(cudaFree(mountain_heads_Y_d));
+  CUDACHECK(cudaFree(mountain_tails_Y_d));
+  CUDACHECK(cudaFree(valley_heads_X_d));
+  CUDACHECK(cudaFree(valley_tails_X_d));
+  CUDACHECK(cudaFree(valley_heads_Y_d));
+  CUDACHECK(cudaFree(valley_tails_Y_d));
+
+
+}
+
 void gDiamond::update_FDTD_gpu_simulation_2_D_globalmem(size_t num_timesteps) { // 2-D mapping, each thread finish the entire Z dimension,
 
   std::cout << "running update_FDTD_gpu_simulation_2_D_globalmem\n";
@@ -3543,8 +3844,8 @@ void gDiamond::_updateEH_phase_seq_2D_shmem_EH(std::vector<float>& Ex, std::vect
       // do calculation
       int z_start = (zz == 0)? 0 : 4;  
       int z_bound = (zz == 0 || zz == num_zz - 1)? BLT_GPU_PT + 1 : 1;  
-      for(int local_z=z_start; local_z<z_start+z_bound; local_z++) { // each thread iterate Z dimension
-        for(size_t t=0; t<BLT_GPU_PT; t++) {
+      for(size_t t=0; t<BLT_GPU_PT; t++) {
+        for(int local_z=z_start; local_z<z_start+z_bound; local_z++) { // each thread iterate Z dimension
           int calculate_Ex = 1; // calculate this E tile or not
           int calculate_Hx = 1; // calculate this H tile or not
           int calculate_Ey = 1;
