@@ -126,10 +126,16 @@ void gDiamond::update_FDTD_gpu_figures(size_t num_timesteps) { // only use for r
 
     auto start1 = std::chrono::high_resolution_clock::now();
 
-    // Current source
-    float Mz_value = M_source_amp * std::sin(SOURCE_OMEGA * t * dt);
+    // // Current source
+    // float Mz_value = M_source_amp * std::sin(SOURCE_OMEGA * t * dt);
 
-    CUDACHECK(cudaMemcpy(Mz + _source_idx, &Mz_value, sizeof(float), cudaMemcpyHostToDevice));
+    // CUDACHECK(cudaMemcpy(Mz + _source_idx, &Mz_value, sizeof(float), cudaMemcpyHostToDevice));
+
+    // Current source
+    // float Jx_value = J_source_amp * std::sin(SOURCE_OMEGA * t * dt);
+    float Jx_value = J_source_amp * std::exp(-((t * dt - t_peak) * (t * dt - t_peak)) / (2 * t_sigma * t_sigma)) * std::sin(SOURCE_OMEGA * t * dt);
+
+    CUDACHECK(cudaMemcpy(Jx + _source_idx, &Jx_value, sizeof(float), cudaMemcpyHostToDevice));
     
     // update E
     updateE_3Dmap_fix<<<grid_size, BLOCK_SIZE, 0>>>(Ex, Ey, Ez,
@@ -146,13 +152,13 @@ void gDiamond::update_FDTD_gpu_figures(size_t num_timesteps) { // only use for r
     gpu_runtime += end1 - start1;
 
     // Record the field using a monitor, once in a while
-    if (t % (num_timesteps/10) == 0)
+    if (t % (num_timesteps/10) == 39)
     {
       printf("Iter: %ld / %ld \n", t, num_timesteps);
 
-      float *H_time_monitor_xy;
-      H_time_monitor_xy = (float *)malloc(_Nx * _Ny * sizeof(float));
-      memset(H_time_monitor_xy, 0, _Nx * _Ny * sizeof(float));
+      float *E_time_monitor_xy;
+      E_time_monitor_xy = (float *)malloc(_Nx * _Ny * sizeof(float));
+      memset(E_time_monitor_xy, 0, _Nx * _Ny * sizeof(float));
 
       // ------------ plotting time domain
       // File name initialization
@@ -161,15 +167,15 @@ void gDiamond::update_FDTD_gpu_figures(size_t num_timesteps) { // only use for r
       size_t k = _Nz / 2;  // Assuming you want the middle slice
       for (size_t j = 0; j < _Ny; ++j)
       {
-        float* device_ptr = Hz + j * _Nx + k * _Nx * _Ny; // Pointer to the start of the row in the desired slice
-        float* host_ptr = H_time_monitor_xy + j * _Nx;  // Pointer to the host memory
+        float* device_ptr = Ex + j * _Nx + k * _Nx * _Ny; // Pointer to the start of the row in the desired slice
+        float* host_ptr = E_time_monitor_xy + j * _Nx;  // Pointer to the host memory
         cudaMemcpy(host_ptr, device_ptr, slice_pitch, cudaMemcpyDeviceToHost);
       }
 
-      snprintf(field_filename, sizeof(field_filename), "gpu_figures/Hz_naive_gpu_%04ld.png", t);
-      save_field_png(H_time_monitor_xy, field_filename, _Nx, _Ny, 1.0 / sqrt(mu0 / eps0));
+      snprintf(field_filename, sizeof(field_filename), "gpu_figures/Ex_naive_gpu_%04ld.png", t);
+      save_field_png(E_time_monitor_xy, field_filename, _Nx, _Ny, 1.0 / sqrt(mu0 / eps0));
 
-      free(H_time_monitor_xy);
+      free(E_time_monitor_xy);
     }
   }
   cudaDeviceSynchronize();
@@ -4219,6 +4225,63 @@ void gDiamond::update_FDTD_gpu_simulation_1_D_pt(size_t num_timesteps) { // CPU 
       std::exit(EXIT_FAILURE);
     }
   }
+}
+
+void gDiamond::update_FDTD_gpu_simulation_1_D_pt_pipeline(size_t num_timesteps) { // CPU single thread simulation of GPU workflow, parallelogram tiling with pipeline
+  
+  // write 1 dimension just to check
+  std::vector<float> E_simu(_Nz, 1);
+  std::vector<float> H_simu(_Nz, 1);
+  std::vector<float> E_seq(_Nz, 1);
+  std::vector<float> H_seq(_Nz, 1);
+  int total_timesteps = 4;
+
+  int Nz = _Nz;
+  // seq version
+  for(int t=0; t<total_timesteps; t++) {
+
+    // update E
+    for(int z=1; z<Nz-1; z++) {
+      E_seq[z] = H_seq[z-1] + H_seq[z] * 2; 
+    }
+
+    std::cout << "t = " << t << ", E_seq =";
+    for(int z=0; z<Nz; z++) {
+      std::cout << E_seq[z] << " ";
+    }
+    std::cout << "\n";
+
+    // update H 
+    for(int z=1; z<Nz-1; z++) {
+      H_seq[z] = E_seq[z+1] + E_seq[z] * 2; 
+    }
+  }
+
+  // tiling version
+  // int num_z = Nz + BLT_GPU_PT; // total number of z tiles
+  int num_zz = (Nz - (BLZ_GPU_PT - BLT_GPU_PT - 1) + BLZ_GPU_PT - 1) / BLZ_GPU_PT;
+
+  std::cout << "num_zz = " << num_zz << "\n";
+    
+  std::cout << "E_seq = ";
+  for(int z=0; z<Nz; z++) {
+    std::cout << E_seq[z] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "E_simu = ";
+  for(int z=0; z<Nz; z++) {
+    std::cout << E_simu[z] << " ";
+  }
+  std::cout << "\n";
+
+  for(int z=0; z<Nz; z++) {
+    if(E_seq[z] != E_simu[z] || H_seq[z] != H_simu[z]) {
+      std::cerr << "1-D demo results mismatch.\n";
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
 }
 
 void gDiamond::update_FDTD_gpu_simulation_1_D_pt_shmem(size_t num_timesteps) { // CPU single thread 1-D simulation of GPU workflow 

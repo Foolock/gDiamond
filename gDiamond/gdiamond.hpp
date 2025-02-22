@@ -102,6 +102,7 @@ class gDiamond {
     void update_FDTD_gpu_simulation_1_D_pt_shmem(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow, parallelogram tiling 
     void update_FDTD_gpu_simulation_2_D_globalmem(size_t num_timesteps); // 2-D mapping, each thread finish the entire Z dimension,
     void update_FDTD_gpu_simulation_2_D_shmem(size_t num_timesteps); // 2-D mapping, each thread finish the entire Z dimension,
+    void update_FDTD_gpu_simulation_1_D_pt_pipeline(size_t num_timesteps); // CPU single thread simulation of GPU workflow, parallelogram tiling with pipeline
 
     // correct implementation after simulation
     void update_FDTD_gpu_fuse_kernel_globalmem(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels, global memory only
@@ -432,11 +433,12 @@ class gDiamond {
     const float SOURCE_WAVELENGTH = 1 * um;
     const float SOURCE_FREQUENCY = c0 / SOURCE_WAVELENGTH;  // frequency of the source
     const float SOURCE_OMEGA = 2 * PI * SOURCE_FREQUENCY;
-    const float _dx = SOURCE_WAVELENGTH / 30;
-    const float dt = 0.56f * _dx / c0;  // courant factor: c * dt < dx / sqrt(3)
+    const float _dx = SOURCE_WAVELENGTH / 10;
+    // const float dt = 0.56f * _dx / c0;  // courant factor: c * dt < dx / sqrt(3)
+    const float dt = 0.05f;  // courant factor: c * dt < dx / sqrt(3)
     float J_source_amp = 5e4;
     float M_source_amp = J_source_amp * std::pow(eta0, 3.0);
-    float freq_sigma = 0.02 * SOURCE_FREQUENCY;
+    float freq_sigma = 0.2 * SOURCE_FREQUENCY;
     float t_sigma = 1 / freq_sigma / (2 * PI); // used to calculate Gaussian pulse width
     float t_peak = 5 * t_sigma;
 };  
