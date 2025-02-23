@@ -1531,6 +1531,193 @@ __global__ void updateEH_phase_shmem_EH_2D(float *Ex, float *Ey, float *Ez,
 
 }
 
+__global__ void updateEH_mil(float *Ex, float *Ey, float *Ez,
+                             float *Hx, float *Hy, float *Hz,
+                             float *Cax, float *Cbx,
+                             float *Cay, float *Cby,
+                             float *Caz, float *Cbz,
+                             float *Dax, float *Dbx,
+                             float *Day, float *Dby,
+                             float *Daz, float *Dbz,
+                             float *Jx, float *Jy, float *Jz,
+                             float *Mx, float *My, float *Mz,
+                             float dx, 
+                             int Nx, int Ny, int Nz,
+                             int xx_num, int yy_num, int zz_num, // number of tiles in each dimensions
+                             int *xx_heads, int *yy_heads, int *zz_heads,
+                             int *xx_tails, int *yy_tails, int *zz_tails,
+                             int *xx_top_heads, int *yy_top_heads, int *zz_top_heads,
+                             int *xx_top_tails, int *yy_top_tails, int *zz_top_tails,
+                             int *shmem_load_finish,
+                             size_t block_size,
+                             size_t grid_size) {
+
+  int xx = blockIdx.x % xx_num;
+  int yy = (blockIdx.x % (xx_num * yy_num)) / xx_num;
+  int zz = blockIdx.x / (xx_num * yy_num); 
+
+  int local_x = threadIdx.x % BLX_MIL;
+  int local_y = (threadIdx.x / BLX_MIL) % BLY_MIL;
+  int local_z = threadIdx.x / (BLX_MIL * BLY_MIL);
+
+  int global_x = xx_heads[xx] + local_x;
+  int global_y = yy_heads[yy] + local_y;
+  int global_z = zz_heads[zz] + local_z;
+  int global_idx = global_x + global_y * Nx + global_z * Nx * Ny;
+
+  int shared_H_x = local_x + 1;
+  int shared_H_y = local_y + 1;
+  int shared_H_z = local_z + 1;
+  int shared_H_idx = shared_H_x + shared_H_y * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH;
+
+  int shared_E_x = local_x;
+  int shared_E_y = local_y;
+  int shared_E_z = local_z;
+  int shared_E_idx = shared_E_x + shared_E_y * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH;
+
+  // declare shared memory
+  float Ex_shmem[BLX_MIL_EH * BLY_MIL_EH * BLZ_MIL_EH];
+  float Ey_shmem[BLX_MIL_EH * BLY_MIL_EH * BLZ_MIL_EH];
+  float Ez_shmem[BLX_MIL_EH * BLY_MIL_EH * BLZ_MIL_EH];
+  float Hx_shmem[BLX_MIL_EH * BLY_MIL_EH * BLZ_MIL_EH];
+  float Hy_shmem[BLX_MIL_EH * BLY_MIL_EH * BLZ_MIL_EH];
+  float Hz_shmem[BLX_MIL_EH * BLY_MIL_EH * BLZ_MIL_EH];
+
+  // // load shared memory
+  // if(global_x < Nx && global_y < Ny && global_z < Nz) {
+
+  //   // load core
+  //   Hx_shmem[shared_H_idx] = Hx[global_idx];
+  //   Hy_shmem[shared_H_idx] = Hy[global_idx];
+  //   Hz_shmem[shared_H_idx] = Hz[global_idx];
+
+  //   // load HALO region
+  //   if(local_x == 0 && global_x > 0) {
+  //     Hz_shmem[shared_H_x - 1 + shared_H_y * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH] = Hz[global_x - 1 + global_y * Nx + global_z * Nx * Ny];
+  //     Hy_shmem[shared_H_x - 1 + shared_H_y * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH] = Hy[global_x - 1 + global_y * Nx + global_z * Nx * Ny];
+
+  //   }
+  //   if(local_y == 0 && global_y > 0) {
+  //     Hx_shmem[shared_H_x + (shared_H_y - 1) * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH] = Hx[global_x + (global_y - 1) * Nx + global_z * Nx * Ny];
+  //     Hz_shmem[shared_H_x + (shared_H_y - 1) * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH] = Hz[global_x + (global_y - 1) * Nx + global_z * Nx * Ny];
+  //   }
+  //   if(local_z == 0 && global_z > 0) {
+  //     Hx_shmem[shared_H_x + shared_H_y * BLX_MIL_EH + (shared_H_z - 1) * BLX_MIL_EH * BLY_MIL_EH] = Hx[global_x + global_y * Nx + (global_z - 1) * Nx * Ny];
+  //     Hy_shmem[shared_H_x + shared_H_y * BLX_MIL_EH + (shared_H_z - 1) * BLX_MIL_EH * BLY_MIL_EH] = Hy[global_x + global_y * Nx + (global_z - 1) * Nx * Ny];
+  //   }
+  // }
+
+  // if(global_x < Nx && global_y < Ny && global_z < Nz) {
+
+  //   Ex_shmem[shared_E_idx] = Ex[global_idx];
+  //   Ey_shmem[shared_E_idx] = Ey[global_idx];
+  //   Ez_shmem[shared_E_idx] = Ez[global_idx];
+
+  //   // load HALO region
+  //   if(local_x == BLX_GPU - 1 && global_x < Nx - 1) {
+  //     Ez_shmem[shared_E_x + 1 + shared_E_y * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH] = Ez[global_x + 1 + global_y * Nx + global_z * Nx * Ny];
+  //     Ey_shmem[shared_E_x + 1 + shared_E_y * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH] = Ey[global_x + 1 + global_y * Nx + global_z * Nx * Ny];
+  //   }
+  //   if(local_y == BLY_GPU - 1 && global_y < Ny - 1) {
+  //     Ex_shmem[shared_E_x + (shared_E_y + 1) * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH] = Ex[global_x + (global_y + 1) * Nx + global_z * Nx * Ny];
+  //     Ez_shmem[shared_E_x + (shared_E_y + 1) * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH] = Ez[global_x + (global_y + 1) * Nx + global_z * Nx * Ny];
+  //   }
+  //   if(local_z == BLZ_GPU - 1 && global_z < Nz - 1) {
+  //     Ex_shmem[shared_E_x + shared_E_y * BLX_MIL_EH + (shared_E_z + 1) * BLX_MIL_EH * BLY_MIL_EH] = Ex[global_x + global_y * Nx + (global_z + 1) * Nx * Ny];
+  //     Ey_shmem[shared_E_x + shared_E_y * BLX_MIL_EH + (shared_E_z + 1) * BLX_MIL_EH * BLY_MIL_EH] = Ey[global_x + global_y * Nx + (global_z + 1) * Nx * Ny];
+  //   }
+  // }
+
+  __syncthreads();
+
+  // if(threadIdx.x == 0) {
+  //   atomicAdd(&shmem_load_finish[xx + yy * xx_num + zz * xx_num * yy_num], 1);
+  // }
+
+  // calculation
+  for(size_t t=0; t<BLT_MIL; t++) {
+
+    if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
+       global_x <= xx_tails[xx] &&
+       global_y <= yy_tails[yy] &&
+       global_z <= zz_tails[zz]) {
+
+      Ex_shmem[shared_E_idx] = Cax[global_idx] * Ex_shmem[shared_E_idx] + Cbx[global_idx] *
+                ((Hz_shmem[shared_H_idx] - Hz_shmem[shared_H_idx - BLX_MIL_EH]) - (Hy_shmem[shared_H_idx] - Hy_shmem[shared_H_idx - BLX_MIL_EH * BLY_MIL_EH]) - Jx[global_idx] * dx);
+      Ey_shmem[shared_E_idx] = Cay[global_idx] * Ey_shmem[shared_E_idx] + Cby[global_idx] *
+                ((Hx_shmem[shared_H_idx] - Hx_shmem[shared_H_idx - BLX_MIL_EH * BLY_MIL_EH]) - (Hz_shmem[shared_H_idx] - Hz_shmem[shared_H_idx - 1]) - Jy[global_idx] * dx);
+      Ez_shmem[shared_E_idx] = Caz[global_idx] * Ez_shmem[shared_E_idx] + Cbz[global_idx] *
+                ((Hy_shmem[shared_H_idx] - Hy_shmem[shared_H_idx - 1]) - (Hx_shmem[shared_H_idx] - Hx_shmem[shared_H_idx - BLX_MIL_EH]) - Jz[global_idx] * dx);
+    }
+
+    __syncthreads();
+
+    if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
+       global_x <= xx_tails[xx] &&
+       global_y <= yy_tails[yy] &&
+       global_z <= zz_tails[zz]) {
+
+      Hx_shmem[shared_H_idx] = Dax[global_idx] * Hx_shmem[shared_H_idx] + Dbx[global_idx] *
+                ((Ey_shmem[shared_E_idx + BLX_MIL_EH * BLY_MIL_EH] - Ey_shmem[shared_E_idx]) - (Ez_shmem[shared_E_idx + BLX_MIL_EH] - Ez_shmem[shared_E_idx]) - Mx[global_idx] * dx);
+      Hy_shmem[shared_H_idx] = Day[global_idx] * Hy_shmem[shared_H_idx] + Dby[global_idx] *
+                ((Ez_shmem[shared_E_idx + 1] - Ez_shmem[shared_E_idx]) - (Ex_shmem[shared_E_idx + BLX_MIL_EH * BLY_MIL_EH] - Ex_shmem[shared_E_idx]) - My[global_idx] * dx);
+      Hz_shmem[shared_H_idx] = Daz[global_idx] * Hz_shmem[shared_H_idx] + Dbz[global_idx] *
+                ((Ex_shmem[shared_E_idx + BLX_MIL_EH] - Ex_shmem[shared_E_idx]) - (Ey_shmem[shared_E_idx + 1] - Ey_shmem[shared_E_idx]) - Mz[global_idx] * dx);
+    }
+
+    __syncthreads();
+  
+  }
+
+  // // before store back to global mem, must check if adjacent block has finish shmem load
+  // if(threadIdx.x == 0) { // check xx+1
+  //   if(xx+1 <= xx_num-1) {
+  //     while(atomicMax(&shmem_load_finish[(xx + 1) + yy * xx_num + zz * xx_num * yy_num], 0) == 0) {}
+  //   }
+  // } 
+  // if(threadIdx.x == 32) { // check xx-1
+  //   if(xx-1 >= 0) {
+  //     while(atomicMax(&shmem_load_finish[(xx - 1) + yy * xx_num + zz * xx_num * yy_num], 0) == 0) {}
+  //   }
+  // }
+  // if(threadIdx.x == 64) { // check yy+1 
+  //   if(yy+1 <= yy_num-1) {
+  //     while(atomicMax(&shmem_load_finish[xx + (yy + 1) * xx_num + zz * xx_num * yy_num], 0) == 0) {}
+  //   }
+  // }
+  // if(threadIdx.x == 96) { // check yy-1 
+  //   if(yy-1 >= 0) {
+  //     while(atomicMax(&shmem_load_finish[xx + (yy - 1) * xx_num + zz * xx_num * yy_num], 0) == 0) {}
+  //   }
+  // }
+  // if(threadIdx.x == 128) { // check zz+1 
+  //   if(zz+1 <= zz_num-1) {
+  //     while(atomicMax(&shmem_load_finish[xx + yy * xx_num + (zz + 1) * xx_num * yy_num], 0) == 0) {}
+  //   }
+  // }
+  // if(threadIdx.x == 160) { // check zz-1 
+  //   if(zz-1 >= 0) {
+  //     while(atomicMax(&shmem_load_finish[xx + yy * xx_num + (zz - 1) * xx_num * yy_num], 0) == 0) {}
+  //   }
+  // }
+
+  // store back to global mem
+  if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
+     global_x >= xx_top_heads[xx] && global_x <= xx_top_tails[xx] &&
+     global_y >= yy_top_heads[yy] && global_y <= yy_top_tails[yy] &&
+     global_z >= zz_top_heads[zz] && global_z <= zz_top_tails[zz]) {
+    Ex[global_idx] = Ex_shmem[shared_E_idx];
+    Ey[global_idx] = Ey_shmem[shared_E_idx];
+    Ez[global_idx] = Ez_shmem[shared_E_idx];
+    Hx[global_idx] = Hx_shmem[shared_H_idx];
+    Hy[global_idx] = Hy_shmem[shared_H_idx];
+    Hz[global_idx] = Hz_shmem[shared_H_idx];
+  }
+
+}
+
+
+
 
 #endif
 

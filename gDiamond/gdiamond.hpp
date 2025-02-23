@@ -114,6 +114,7 @@ class gDiamond {
     void update_FDTD_gpu_fuse_kernel_shmem_EH(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels, put EH in shared memory 
     void update_FDTD_gpu_fuse_kernel_shmem_EH_pt(size_t num_timesteps); // 2-D mapping, using diamond tiling on X, Y dimension to fuse kernels, put EH in shared memory 
                                                                         // for shared memory flushing, no optimization used, all loaded from globalmem directly
+    void update_FDTD_gpu_fuse_kernel_shmem_EH_mil(size_t num_timesteps); // 3-D mapping, using more is less tiling on X, Y, Z dimension to fuse kernels, put EH in shared memory 
 
     // check correctness
     bool check_correctness_gpu_2D();
@@ -1630,9 +1631,9 @@ void gDiamond::_setup_diamond_tiling_gpu(size_t BLX, size_t BLY, size_t BLZ, siz
 
 void gDiamond::print_results() {
 
-  std::cout << "Ex_simu = ";
+  std::cout << "Ex_gpu = ";
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    std::cout << _Ex_simu[i] << " ";
+    std::cout << _Ex_gpu[i] << " ";
   }
   std::cout << "\n";
   std::cout << "\n";
