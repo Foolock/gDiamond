@@ -26,6 +26,8 @@ class gDiamond {
                                                _Hx_gpu_bl(Nx * Ny * Nz), _Hy_gpu_bl(Nx * Ny * Nz), _Hz_gpu_bl(Nx * Ny * Nz),
                                                _Ex_simu(Nx * Ny * Nz), _Ey_simu(Nx * Ny * Nz), _Ez_simu(Nx * Ny * Nz),
                                                _Hx_simu(Nx * Ny * Nz), _Hy_simu(Nx * Ny * Nz), _Hz_simu(Nx * Ny * Nz),
+                                               _Ex_simu_init(Nx * Ny * Nz), _Ey_simu_init(Nx * Ny * Nz), _Ez_simu_init(Nx * Ny * Nz),
+                                               _Hx_simu_init(Nx * Ny * Nz), _Hy_simu_init(Nx * Ny * Nz), _Hz_simu_init(Nx * Ny * Nz),
                                                _Ex_simu_sh(Nx * Ny * Nz), _Ey_simu_sh(Nx * Ny * Nz), _Ez_simu_sh(Nx * Ny * Nz),
                                                _Hx_simu_sh(Nx * Ny * Nz), _Hy_simu_sh(Nx * Ny * Nz), _Hz_simu_sh(Nx * Ny * Nz),
                                                _Ex_omp(Nx * Ny * Nz), _Ey_omp(Nx * Ny * Nz), _Ez_omp(Nx * Ny * Nz),
@@ -104,6 +106,7 @@ class gDiamond {
     void update_FDTD_gpu_simulation_2_D_shmem(size_t num_timesteps); // 2-D mapping, each thread finish the entire Z dimension,
     void update_FDTD_gpu_simulation_1_D_pt_pipeline(size_t num_timesteps); // CPU single thread simulation of GPU workflow, parallelogram tiling with pipeline
     void update_FDTD_gpu_simulation_1_D_mil(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow, more is less tiling
+    void update_FDTD_gpu_simulation_3_D_mil(size_t num_timesteps); // CPU single thread 3-D simulation of GPU workflow, more is less tiling
 
     // correct implementation after simulation
     void update_FDTD_gpu_fuse_kernel_globalmem(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels, global memory only
@@ -254,6 +257,28 @@ class gDiamond {
                                size_t grid_size
                                ); 
 
+    void _updateEH_mil_seq(std::vector<float>& Ex_init, std::vector<float>& Ey_init, std::vector<float>& Ez_init,
+                           std::vector<float>& Hx_init, std::vector<float>& Hy_init, std::vector<float>& Hz_init,
+                           std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
+                           std::vector<float>& Hx, std::vector<float>& Hy, std::vector<float>& Hz,
+                           std::vector<float>& Cax, std::vector<float>& Cbx,
+                           std::vector<float>& Cay, std::vector<float>& Cby,
+                           std::vector<float>& Caz, std::vector<float>& Cbz,
+                           std::vector<float>& Dax, std::vector<float>& Dbx,
+                           std::vector<float>& Day, std::vector<float>& Dby,
+                           std::vector<float>& Daz, std::vector<float>& Dbz,
+                           std::vector<float>& Jx, std::vector<float>& Jy, std::vector<float>& Jz,
+                           std::vector<float>& Mx, std::vector<float>& My, std::vector<float>& Mz,
+                           float dx, 
+                           int Nx, int Ny, int Nz,
+                           int xx_num, int yy_num, int zz_num, // number of tiles in each dimensions
+                           std::vector<int> xx_heads, std::vector<int> yy_heads, std::vector<int> zz_heads,
+                           std::vector<int> xx_tails, std::vector<int> yy_tails, std::vector<int> zz_tails,
+                           std::vector<int> xx_top_heads, std::vector<int> yy_top_heads, std::vector<int> zz_top_heads,
+                           std::vector<int> xx_top_tails, std::vector<int> yy_top_tails, std::vector<int> zz_top_tails,
+                           size_t block_size,
+                           size_t grid_size);
+
     // return {Ehead, Etail, Hhead, Htail}
     std::vector<int> _get_head_tail(size_t BLX, size_t BLT,
                                     std::vector<int> xx_heads, std::vector<int> xx_tails,
@@ -398,6 +423,12 @@ class gDiamond {
     std::vector<float> _Hx_simu;
     std::vector<float> _Hy_simu;
     std::vector<float> _Hz_simu;
+    std::vector<float> _Ex_simu_init;
+    std::vector<float> _Ey_simu_init;
+    std::vector<float> _Ez_simu_init;
+    std::vector<float> _Hx_simu_init;
+    std::vector<float> _Hy_simu_init;
+    std::vector<float> _Hz_simu_init;
     std::vector<float> _Ex_simu_sh;
     std::vector<float> _Ey_simu_sh;
     std::vector<float> _Ez_simu_sh;
@@ -1606,9 +1637,9 @@ void gDiamond::print_results() {
   std::cout << "\n";
   std::cout << "\n";
 
-  std::cout << "Ex_simu_sh = ";
+  std::cout << "Ex_seq = ";
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    std::cout << _Ex_simu_sh[i] << " ";
+    std::cout << _Ex_seq[i] << " ";
   }
   std::cout << "\n";
 

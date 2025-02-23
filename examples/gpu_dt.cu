@@ -14,7 +14,7 @@ int main(int argc, char* argv[]) {
   gdiamond::gDiamond exp(Nx, Ny, Nz); 
 
   exp.update_FDTD_seq_check_result(num_timesteps);
-  exp.update_FDTD_gpu_simulation_1_D_mil(num_timesteps);
+  exp.update_FDTD_gpu_simulation_3_D_mil(num_timesteps);
 
   // exp.print_results();
 

@@ -4229,6 +4229,352 @@ void gDiamond::update_FDTD_gpu_simulation_1_D_pt(size_t num_timesteps) { // CPU 
   }
 }
 
+void gDiamond::update_FDTD_gpu_simulation_3_D_mil(size_t num_timesteps) { // CPU single thread 3-D simulation of GPU workflow, more is less tiling
+
+  std::cout << "running update_FDTD_gpu_simulation_3_D_mil\n";
+
+  // clear source Mz for experiments
+  _Mz.clear();
+
+  // transfer source
+  for(size_t t=0; t<num_timesteps; t++) {
+    float Mz_value = M_source_amp * std::sin(SOURCE_OMEGA * t * dt);
+    _Mz[_source_idx] = Mz_value;
+  }
+
+  int Nx = _Nx;
+  int Ny = _Ny;
+  int Nz = _Nz;
+
+  // get xx_num, yy_num, zz_num
+  int xx_top_length = BLX_MIL - 2 * (BLT_MIL - 1) - 1; // length of mountain top
+  int yy_top_length = BLY_MIL - 2 * (BLT_MIL - 1) - 1; 
+  int zz_top_length = BLZ_MIL - 2 * (BLT_MIL - 1) - 1; 
+  int xx_num = (Nx + xx_top_length - 1) / xx_top_length;
+  int yy_num = (Ny + yy_top_length - 1) / yy_top_length;
+  int zz_num = (Nz + zz_top_length - 1) / zz_top_length;
+
+  // heads and tails for mountain bottom
+  std::vector<int> xx_heads(xx_num);
+  std::vector<int> xx_tails(xx_num);
+  std::vector<int> yy_heads(yy_num);
+  std::vector<int> yy_tails(yy_num);
+  std::vector<int> zz_heads(zz_num);
+  std::vector<int> zz_tails(zz_num);
+  // heads and tails for mountain top 
+  std::vector<int> xx_top_heads(xx_num);
+  std::vector<int> xx_top_tails(xx_num);
+  std::vector<int> yy_top_heads(yy_num);
+  std::vector<int> yy_top_tails(yy_num);
+  std::vector<int> zz_top_heads(zz_num);
+  std::vector<int> zz_top_tails(zz_num);
+
+  // fill xx_top_heads and xx_top_tails
+  for(int i=0; i<xx_num; i++) {
+    xx_top_heads[i] = i * xx_top_length;
+  }
+  for(int i=0; i<xx_num; i++) {
+    int temp = xx_top_heads[i] + xx_top_length - 1;
+    xx_top_tails[i] = (temp > Nx - 1)? Nx - 1 : temp;
+  }
+  for(int i=0; i<yy_num; i++) {
+    yy_top_heads[i] = i * yy_top_length;
+  }
+  for(int i=0; i<yy_num; i++) {
+    int temp = yy_top_heads[i] + yy_top_length - 1;
+    yy_top_tails[i] = (temp > Ny - 1)? Ny - 1 : temp;
+  }
+  for(int i=0; i<zz_num; i++) {
+    zz_top_heads[i] = i * zz_top_length;
+  }
+  for(int i=0; i<zz_num; i++) {
+    int temp = zz_top_heads[i] + zz_top_length - 1;
+    zz_top_tails[i] = (temp > Nz - 1)? Nz - 1 : temp;
+  }
+
+  // fill xx_heads and xx_tails
+  for(int i=0; i<xx_num; i++) {
+    int temp = xx_top_heads[i] - (BLT_MIL - 1);
+    xx_heads[i] = (temp < 0)? 0 : temp;
+  }
+  for(int i=0; i<xx_num; i++) {
+    int temp = xx_top_tails[i] + BLT_MIL;
+    xx_tails[i] = (temp > Nx - 1)? Nx - 1 : temp;
+  }
+  for(int i=0; i<yy_num; i++) {
+    int temp = yy_top_heads[i] - (BLT_MIL - 1);
+    yy_heads[i] = (temp < 0)? 0 : temp;
+  }
+  for(int i=0; i<yy_num; i++) {
+    int temp = yy_top_tails[i] + BLT_MIL;
+    yy_tails[i] = (temp > Ny - 1)? Ny - 1 : temp;
+  }
+  for(int i=0; i<zz_num; i++) {
+    int temp = zz_top_heads[i] - (BLT_MIL - 1);
+    zz_heads[i] = (temp < 0)? 0 : temp;
+  }
+  for(int i=0; i<zz_num; i++) {
+    int temp = zz_top_tails[i] + BLT_MIL;
+    zz_tails[i] = (temp > Nz - 1)? Nz - 1 : temp;
+  }
+
+  size_t block_size = BLX_MIL * BLY_MIL * BLZ_MIL;
+  size_t grid_size = xx_num * yy_num * zz_num;
+  for(size_t tt=0; tt<num_timesteps/BLT_MIL; tt++) {
+    _updateEH_mil_seq(_Ex_simu_init, _Ey_simu_init, _Ez_simu_init,
+                      _Hx_simu_init, _Hy_simu_init, _Hz_simu_init,
+                      _Ex_simu, _Ey_simu, _Ez_simu,
+                      _Hx_simu, _Hy_simu, _Hz_simu,
+                      _Cax, _Cbx,
+                      _Cay, _Cby,
+                      _Caz, _Cbz,
+                      _Dax, _Dbx,
+                      _Day, _Dby,
+                      _Daz, _Dbz,
+                      _Jx, _Jy, _Jz,
+                      _Mx, _My, _Mz,
+                      _dx, 
+                      Nx, Ny, Nz,
+                      xx_num, yy_num, zz_num, // number of tiles in each dimensions
+                      xx_heads, yy_heads, zz_heads,
+                      xx_tails, yy_tails, zz_tails,
+                      xx_top_heads, yy_top_heads, zz_top_heads,
+                      xx_top_tails, yy_top_tails, zz_top_tails,
+                      block_size,
+                      grid_size); 
+
+    // memory transfer from EH to EH init
+    for(int i=0; i<Nx*Ny*Nz; i++) {
+      _Ex_simu_init[i] = _Ex_simu[i];
+      _Ey_simu_init[i] = _Ey_simu[i];
+      _Ez_simu_init[i] = _Ez_simu[i];
+      _Hx_simu_init[i] = _Hx_simu[i];
+      _Hy_simu_init[i] = _Hy_simu[i];
+      _Hz_simu_init[i] = _Hz_simu[i];
+    }
+  }
+
+}
+
+void gDiamond::_updateEH_mil_seq(std::vector<float>& Ex_init, std::vector<float>& Ey_init, std::vector<float>& Ez_init,
+                                 std::vector<float>& Hx_init, std::vector<float>& Hy_init, std::vector<float>& Hz_init,
+                                 std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
+                                 std::vector<float>& Hx, std::vector<float>& Hy, std::vector<float>& Hz,
+                                 std::vector<float>& Cax, std::vector<float>& Cbx,
+                                 std::vector<float>& Cay, std::vector<float>& Cby,
+                                 std::vector<float>& Caz, std::vector<float>& Cbz,
+                                 std::vector<float>& Dax, std::vector<float>& Dbx,
+                                 std::vector<float>& Day, std::vector<float>& Dby,
+                                 std::vector<float>& Daz, std::vector<float>& Dbz,
+                                 std::vector<float>& Jx, std::vector<float>& Jy, std::vector<float>& Jz,
+                                 std::vector<float>& Mx, std::vector<float>& My, std::vector<float>& Mz,
+                                 float dx, 
+                                 int Nx, int Ny, int Nz,
+                                 int xx_num, int yy_num, int zz_num, // number of tiles in each dimensions
+                                 std::vector<int> xx_heads, std::vector<int> yy_heads, std::vector<int> zz_heads,
+                                 std::vector<int> xx_tails, std::vector<int> yy_tails, std::vector<int> zz_tails,
+                                 std::vector<int> xx_top_heads, std::vector<int> yy_top_heads, std::vector<int> zz_top_heads,
+                                 std::vector<int> xx_top_tails, std::vector<int> yy_top_tails, std::vector<int> zz_top_tails,
+                                 size_t block_size,
+                                 size_t grid_size) {
+
+  for(size_t block_id=0; block_id<grid_size; block_id++) {
+    int xx = block_id % xx_num;
+    int yy = (block_id % (xx_num * yy_num)) / xx_num;
+    int zz = block_id / (xx_num * yy_num); 
+
+    // declare shared memory
+    float Ex_shmem[BLX_MIL_EH * BLY_MIL_EH * BLZ_MIL_EH];
+    float Ey_shmem[BLX_MIL_EH * BLY_MIL_EH * BLZ_MIL_EH];
+    float Ez_shmem[BLX_MIL_EH * BLY_MIL_EH * BLZ_MIL_EH];
+    float Hx_shmem[BLX_MIL_EH * BLY_MIL_EH * BLZ_MIL_EH];
+    float Hy_shmem[BLX_MIL_EH * BLY_MIL_EH * BLZ_MIL_EH];
+    float Hz_shmem[BLX_MIL_EH * BLY_MIL_EH * BLZ_MIL_EH];
+
+    // load shared memory
+    for(size_t thread_id=0; thread_id<block_size; thread_id++) {
+      int local_x = thread_id % BLX_MIL;                     
+      int local_y = (thread_id / BLX_MIL) % BLY_MIL;     
+      int local_z = thread_id / (BLX_MIL * BLY_MIL);     
+
+      int global_x = xx_heads[xx] + local_x; 
+      int global_y = yy_heads[yy] + local_y; 
+      int global_z = zz_heads[zz] + local_z; 
+      int global_idx = global_x + global_y * Nx + global_z * Nx * Ny;
+
+      // load H, stencil pattern x-1, y-1, z-1
+      int shared_H_x = local_x + 1;
+      int shared_H_y = local_y + 1;
+      int shared_H_z = local_z + 1;
+      int shared_H_idx = shared_H_x + shared_H_y * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH;
+      
+      // load E, stencil pattern x+1, y+1, z+1
+      // the padding does not affect origins of local idx and shared_E_idx
+      // local idx and shared_E_idx still have the same origin
+      int shared_E_x = local_x;
+      int shared_E_y = local_y;
+      int shared_E_z = local_z;
+      int shared_E_idx = shared_E_x + shared_E_y * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH;
+
+      if(global_x < Nx && global_y < Ny && global_z < Nz) {
+
+        // load core
+        Hx_shmem[shared_H_idx] = Hx_init[global_idx];
+        Hy_shmem[shared_H_idx] = Hy_init[global_idx];
+        Hz_shmem[shared_H_idx] = Hz_init[global_idx];
+
+        // load HALO region
+        if(local_x == 0 && global_x > 0) {
+          Hz_shmem[shared_H_x - 1 + shared_H_y * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH] = Hz_init[global_x - 1 + global_y * Nx + global_z * Nx * Ny];
+          Hy_shmem[shared_H_x - 1 + shared_H_y * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH] = Hy_init[global_x - 1 + global_y * Nx + global_z * Nx * Ny];
+
+        }
+        if(local_y == 0 && global_y > 0) {
+          Hx_shmem[shared_H_x + (shared_H_y - 1) * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH] = Hx_init[global_x + (global_y - 1) * Nx + global_z * Nx * Ny];
+          Hz_shmem[shared_H_x + (shared_H_y - 1) * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH] = Hz_init[global_x + (global_y - 1) * Nx + global_z * Nx * Ny];
+        }
+        if(local_z == 0 && global_z > 0) {
+          Hx_shmem[shared_H_x + shared_H_y * BLX_MIL_EH + (shared_H_z - 1) * BLX_MIL_EH * BLY_MIL_EH] = Hx_init[global_x + global_y * Nx + (global_z - 1) * Nx * Ny];
+          Hy_shmem[shared_H_x + shared_H_y * BLX_MIL_EH + (shared_H_z - 1) * BLX_MIL_EH * BLY_MIL_EH] = Hy_init[global_x + global_y * Nx + (global_z - 1) * Nx * Ny];
+        }
+      }
+
+      if(global_x < Nx && global_y < Ny && global_z < Nz) {
+
+        Ex_shmem[shared_E_idx] = Ex_init[global_idx];
+        Ey_shmem[shared_E_idx] = Ey_init[global_idx];
+        Ez_shmem[shared_E_idx] = Ez_init[global_idx];
+
+        // load HALO region
+        if(local_x == BLX_GPU - 1 && global_x < Nx - 1) {
+          Ez_shmem[shared_E_x + 1 + shared_E_y * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH] = Ez_init[global_x + 1 + global_y * Nx + global_z * Nx * Ny];
+          Ey_shmem[shared_E_x + 1 + shared_E_y * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH] = Ey_init[global_x + 1 + global_y * Nx + global_z * Nx * Ny];
+        }
+        if(local_y == BLY_GPU - 1 && global_y < Ny - 1) {
+          Ex_shmem[shared_E_x + (shared_E_y + 1) * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH] = Ex_init[global_x + (global_y + 1) * Nx + global_z * Nx * Ny];
+          Ez_shmem[shared_E_x + (shared_E_y + 1) * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH] = Ez_init[global_x + (global_y + 1) * Nx + global_z * Nx * Ny];
+        }
+        if(local_z == BLZ_GPU - 1 && global_z < Nz - 1) {
+          Ex_shmem[shared_E_x + shared_E_y * BLX_MIL_EH + (shared_E_z + 1) * BLX_MIL_EH * BLY_MIL_EH] = Ex_init[global_x + global_y * Nx + (global_z + 1) * Nx * Ny];
+          Ey_shmem[shared_E_x + shared_E_y * BLX_MIL_EH + (shared_E_z + 1) * BLX_MIL_EH * BLY_MIL_EH] = Ey_init[global_x + global_y * Nx + (global_z + 1) * Nx * Ny];
+        }
+      }
+
+    }
+
+    // calculation 
+    for(size_t t=0; t<BLT_MIL; t++) {
+
+      // update E
+      for(size_t thread_id=0; thread_id<block_size; thread_id++) {
+        int local_x = thread_id % BLX_MIL;                     
+        int local_y = (thread_id / BLX_MIL) % BLY_MIL;     
+        int local_z = thread_id / (BLX_MIL * BLY_MIL);     
+
+        int global_x = xx_heads[xx] + local_x; 
+        int global_y = yy_heads[yy] + local_y; 
+        int global_z = zz_heads[zz] + local_z; 
+
+        int shared_H_x = local_x + 1;
+        int shared_H_y = local_y + 1;
+        int shared_H_z = local_z + 1;
+        
+        int shared_E_x = local_x;
+        int shared_E_y = local_y;
+        int shared_E_z = local_z;
+
+        int s_H_idx = shared_H_x + shared_H_y * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH; // shared memory idx for H
+        int s_E_idx = shared_E_x + shared_E_y * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH; // shared memory idx for E
+        int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
+
+        if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
+           global_x <= xx_tails[xx] &&
+           global_y <= yy_tails[yy] &&
+           global_z <= zz_tails[zz]) {
+
+          Ex_shmem[s_E_idx] = Cax[g_idx] * Ex_shmem[s_E_idx] + Cbx[g_idx] *
+                    ((Hz_shmem[s_H_idx] - Hz_shmem[s_H_idx - BLX_MIL_EH]) - (Hy_shmem[s_H_idx] - Hy_shmem[s_H_idx - BLX_MIL_EH * BLY_MIL_EH]) - Jx[g_idx] * dx);
+          Ey_shmem[s_E_idx] = Cay[g_idx] * Ey_shmem[s_E_idx] + Cby[g_idx] *
+                    ((Hx_shmem[s_H_idx] - Hx_shmem[s_H_idx - BLX_MIL_EH * BLY_MIL_EH]) - (Hz_shmem[s_H_idx] - Hz_shmem[s_H_idx - 1]) - Jy[g_idx] * dx);
+          Ez_shmem[s_E_idx] = Caz[g_idx] * Ez_shmem[s_E_idx] + Cbz[g_idx] *
+                    ((Hy_shmem[s_H_idx] - Hy_shmem[s_H_idx - 1]) - (Hx_shmem[s_H_idx] - Hx_shmem[s_H_idx - BLX_MIL_EH]) - Jz[g_idx] * dx);
+        }
+      }
+
+      // update H
+      for(size_t thread_id=0; thread_id<block_size; thread_id++) {
+        int local_x = thread_id % BLX_MIL;                     
+        int local_y = (thread_id / BLX_MIL) % BLY_MIL;     
+        int local_z = thread_id / (BLX_MIL * BLY_MIL);     
+
+        int global_x = xx_heads[xx] + local_x; 
+        int global_y = yy_heads[yy] + local_y; 
+        int global_z = zz_heads[zz] + local_z; 
+
+        int shared_H_x = local_x + 1;
+        int shared_H_y = local_y + 1;
+        int shared_H_z = local_z + 1;
+        
+        int shared_E_x = local_x;
+        int shared_E_y = local_y;
+        int shared_E_z = local_z;
+
+        int s_H_idx = shared_H_x + shared_H_y * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH; // shared memory idx for H
+        int s_E_idx = shared_E_x + shared_E_y * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH; // shared memory idx for E
+        int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
+
+        if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
+           global_x <= xx_tails[xx] &&
+           global_y <= yy_tails[yy] &&
+           global_z <= zz_tails[zz]) {
+
+          Hx_shmem[s_H_idx] = Dax[g_idx] * Hx_shmem[s_H_idx] + Dbx[g_idx] *
+                    ((Ey_shmem[s_E_idx + BLX_MIL_EH * BLY_MIL_EH] - Ey_shmem[s_E_idx]) - (Ez_shmem[s_E_idx + BLX_MIL_EH] - Ez_shmem[s_E_idx]) - Mx[g_idx] * dx);
+          Hy_shmem[s_H_idx] = Day[g_idx] * Hy_shmem[s_H_idx] + Dby[g_idx] *
+                    ((Ez_shmem[s_E_idx + 1] - Ez_shmem[s_E_idx]) - (Ex_shmem[s_E_idx + BLX_MIL_EH * BLY_MIL_EH] - Ex_shmem[s_E_idx]) - My[g_idx] * dx);
+          Hz_shmem[s_H_idx] = Daz[g_idx] * Hz_shmem[s_H_idx] + Dbz[g_idx] *
+                    ((Ex_shmem[s_E_idx + BLX_MIL_EH] - Ex_shmem[s_E_idx]) - (Ey_shmem[s_E_idx + 1] - Ey_shmem[s_E_idx]) - Mz[g_idx] * dx);
+        }
+      } 
+    }
+
+    // store back to global memory
+    for(size_t thread_id=0; thread_id<block_size; thread_id++) {
+      int local_x = thread_id % BLX_MIL;                     
+      int local_y = (thread_id / BLX_MIL) % BLY_MIL;     
+      int local_z = thread_id / (BLX_MIL * BLY_MIL);     
+
+      int global_x = xx_heads[xx] + local_x; 
+      int global_y = yy_heads[yy] + local_y; 
+      int global_z = zz_heads[zz] + local_z; 
+
+      int shared_H_x = local_x + 1;
+      int shared_H_y = local_y + 1;
+      int shared_H_z = local_z + 1;
+      
+      int shared_E_x = local_x;
+      int shared_E_y = local_y;
+      int shared_E_z = local_z;
+
+      int s_H_idx = shared_H_x + shared_H_y * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH; // shared memory idx for H
+      int s_E_idx = shared_E_x + shared_E_y * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH; // shared memory idx for E
+      int g_idx = global_x + global_y * Nx + global_z * Nx * Ny; // global idx
+
+      if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2 &&
+         global_x >= xx_top_heads[xx] && global_x <= xx_top_tails[xx] &&
+         global_y >= yy_top_heads[yy] && global_y <= yy_top_tails[yy] &&
+         global_z >= zz_top_heads[zz] && global_z <= zz_top_tails[zz]) {
+        Ex[g_idx] = Ex_shmem[s_E_idx];
+        Ey[g_idx] = Ey_shmem[s_E_idx];
+        Ez[g_idx] = Ez_shmem[s_E_idx];
+        Hx[g_idx] = Hx_shmem[s_H_idx];
+        Hy[g_idx] = Hy_shmem[s_H_idx];
+        Hz[g_idx] = Hz_shmem[s_H_idx];
+      }
+    }
+  }
+}
+
 void gDiamond::update_FDTD_gpu_simulation_1_D_mil(size_t num_timesteps) { // CPU single thread 1-D simulation of GPU workflow, more is less tiling
   
   // write 1 dimension just to check
@@ -4261,7 +4607,7 @@ void gDiamond::update_FDTD_gpu_simulation_1_D_mil(size_t num_timesteps) { // CPU
   }
 
   // tiling version
-  int xx_top_length = BLX_MIS - 2 * (BLT_MIS - 1) - 1; // length of mountain top
+  int xx_top_length = BLX_MIL - 2 * (BLT_MIL - 1) - 1; // length of mountain top
   int xx_num = (Nx + xx_top_length - 1) / xx_top_length;
 
   // std::cout << "xx_num = " << xx_num << "\n";
@@ -4285,11 +4631,11 @@ void gDiamond::update_FDTD_gpu_simulation_1_D_mil(size_t num_timesteps) { // CPU
 
   // fill xx_heads and xx_tails
   for(int i=0; i<xx_num; i++) {
-    int temp = xx_top_heads[i] - (BLT_MIS - 1);
+    int temp = xx_top_heads[i] - (BLT_MIL - 1);
     xx_heads[i] = (temp < 0)? 0 : temp;
   }
   for(int i=0; i<xx_num; i++) {
-    int temp = xx_top_tails[i] + BLT_MIS;
+    int temp = xx_top_tails[i] + BLT_MIL;
     xx_tails[i] = (temp > Nx - 1)? Nx - 1 : temp;
   }
 
@@ -4300,18 +4646,18 @@ void gDiamond::update_FDTD_gpu_simulation_1_D_mil(size_t num_timesteps) { // CPU
   // }
 
   int grid_size = xx_num; // we will launch xx_num blocks
-  for(size_t tt=0; tt<num_timesteps/BLT_MIS; tt++) {
+  for(size_t tt=0; tt<num_timesteps/BLT_MIL; tt++) {
 
     
     // launching kernel
     for(int xx=0; xx<grid_size; xx++) { // xx is block id
       
       // declare shmem 
-      float E_shmem[BLX_MIS_EH]; 
-      float H_shmem[BLX_MIS_EH];
+      float E_shmem[BLX_MIL_EH] = {0}; 
+      float H_shmem[BLX_MIL_EH] = {0};
 
       // load shmem
-      for(int local_x=0; local_x<BLX_MIS; local_x++) { // local_x is thread_id
+      for(int local_x=0; local_x<BLX_MIL; local_x++) { // local_x is thread_id
         int global_x = xx_heads[xx] + local_x;
         int shared_H_x = local_x + 1;
         int shared_E_x = local_x;
@@ -4327,17 +4673,17 @@ void gDiamond::update_FDTD_gpu_simulation_1_D_mil(size_t num_timesteps) { // CPU
         if(global_x < Nx) {
           E_shmem[shared_E_x] = E_simu_init[global_x];
           // load HALO
-          if(local_x == BLX_MIS-1 && global_x < Nx-1) {
+          if(local_x == BLX_MIL-1 && global_x < Nx-1) {
             E_shmem[shared_E_x + 1] = E_simu_init[global_x + 1];
           }
         }
       }
 
       // calculation
-      for(size_t t=0; t<BLT_MIS; t++) {
+      for(size_t t=0; t<BLT_MIL; t++) {
 
         // update E
-        for(int local_x=0; local_x<BLX_MIS; local_x++) { // local_x is thread_id
+        for(int local_x=0; local_x<BLX_MIL; local_x++) { // local_x is thread_id
           int global_x = xx_heads[xx] + local_x; 
           int shared_H_x = local_x + 1;
           int shared_E_x = local_x;
@@ -4347,7 +4693,7 @@ void gDiamond::update_FDTD_gpu_simulation_1_D_mil(size_t num_timesteps) { // CPU
         }
 
         // update H 
-        for(int local_x=0; local_x<BLX_MIS; local_x++) { // local_x is thread_id
+        for(int local_x=0; local_x<BLX_MIL; local_x++) { // local_x is thread_id
           int global_x = xx_heads[xx] + local_x; 
           int shared_H_x = local_x + 1;
           int shared_E_x = local_x;
@@ -4358,7 +4704,7 @@ void gDiamond::update_FDTD_gpu_simulation_1_D_mil(size_t num_timesteps) { // CPU
       }
 
       // store back to global mem
-      for(int local_x=0; local_x<BLX_MIS; local_x++) { // local_x is thread_id
+      for(int local_x=0; local_x<BLX_MIL; local_x++) { // local_x is thread_id
         int global_x = xx_heads[xx] + local_x;
         int shared_H_x = local_x + 1;
         int shared_E_x = local_x;

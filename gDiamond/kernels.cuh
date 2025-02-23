@@ -19,13 +19,13 @@
 #define BLY_EH_PT (BLY_GPU_PT + 1)
 
 // for more is less tiling
-#define BLX_MIS 8
-#define BLY_MIS 8
-#define BLZ_MIS 8
-#define BLT_MIS 2 
-#define BLX_MIS_EH (BLX_MIS + 1)
-#define BLY_MIS_EH (BLY_MIS + 1)
-#define BLZ_MIS_EH (BLZ_MIS + 1)
+#define BLX_MIL 8
+#define BLY_MIL 8
+#define BLZ_MIL 8
+#define BLT_MIL 2 
+#define BLX_MIL_EH (BLX_MIL + 1)
+#define BLY_MIL_EH (BLY_MIL + 1)
+#define BLZ_MIL_EH (BLZ_MIL + 1)
 
 //
 // ----------------------------------- device function -----------------------------------
