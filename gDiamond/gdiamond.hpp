@@ -103,6 +103,7 @@ class gDiamond {
     void update_FDTD_gpu_simulation_2_D_globalmem(size_t num_timesteps); // 2-D mapping, each thread finish the entire Z dimension,
     void update_FDTD_gpu_simulation_2_D_shmem(size_t num_timesteps); // 2-D mapping, each thread finish the entire Z dimension,
     void update_FDTD_gpu_simulation_1_D_pt_pipeline(size_t num_timesteps); // CPU single thread simulation of GPU workflow, parallelogram tiling with pipeline
+    void update_FDTD_gpu_simulation_1_D_mil(size_t num_timesteps); // CPU single thread 1-D simulation of GPU workflow, more is less tiling
 
     // correct implementation after simulation
     void update_FDTD_gpu_fuse_kernel_globalmem(size_t num_timesteps); // 3-D mapping, using diamond tiling to fuse kernels, global memory only

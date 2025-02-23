@@ -133,7 +133,8 @@ void gDiamond::update_FDTD_gpu_figures(size_t num_timesteps) { // only use for r
 
     // Current source
     // float Jx_value = J_source_amp * std::sin(SOURCE_OMEGA * t * dt);
-    float Jx_value = J_source_amp * std::exp(-((t * dt - t_peak) * (t * dt - t_peak)) / (2 * t_sigma * t_sigma)) * std::sin(SOURCE_OMEGA * t * dt);
+    // float Jx_value = J_source_amp * std::exp(-((t * dt - t_peak) * (t * dt - t_peak)) / (2 * t_sigma * t_sigma)) * std::sin(SOURCE_OMEGA * t * dt);
+    float Jx_value = J_source_amp * std::sin(SOURCE_OMEGA * t * dt);
 
     CUDACHECK(cudaMemcpy(Jx + _source_idx, &Jx_value, sizeof(float), cudaMemcpyHostToDevice));
     
@@ -173,7 +174,8 @@ void gDiamond::update_FDTD_gpu_figures(size_t num_timesteps) { // only use for r
       }
 
       snprintf(field_filename, sizeof(field_filename), "gpu_figures/Ex_naive_gpu_%04ld.png", t);
-      save_field_png(E_time_monitor_xy, field_filename, _Nx, _Ny, 1.0 / sqrt(mu0 / eps0));
+      // save_field_png(E_time_monitor_xy, field_filename, _Nx, _Ny, 1.0 / sqrt(mu0 / eps0));
+      save_field_png(E_time_monitor_xy, field_filename, _Nx, _Ny, 10);
 
       free(E_time_monitor_xy);
     }
@@ -4221,6 +4223,181 @@ void gDiamond::update_FDTD_gpu_simulation_1_D_pt(size_t num_timesteps) { // CPU 
 
   for(size_t z=0; z<_Nz; z++) {
     if(E_seq[z] != E_simu[z] || H_seq[z] != H_simu[z]) {
+      std::cerr << "1-D demo results mismatch.\n";
+      std::exit(EXIT_FAILURE);
+    }
+  }
+}
+
+void gDiamond::update_FDTD_gpu_simulation_1_D_mil(size_t num_timesteps) { // CPU single thread 1-D simulation of GPU workflow, more is less tiling
+  
+  // write 1 dimension just to check
+  std::vector<float> E_simu(_Nx, 1);
+  std::vector<float> H_simu(_Nx, 1);
+  std::vector<float> E_simu_init(_Nx, 1);
+  std::vector<float> H_simu_init(_Nx, 1);
+  std::vector<float> E_seq(_Nx, 1);
+  std::vector<float> H_seq(_Nx, 1);
+
+  int Nx = _Nx;
+  // seq version
+  for(size_t t=0; t<num_timesteps; t++) {
+
+    // update E
+    for(int x=1; x<Nx-1; x++) {
+      E_seq[x] = H_seq[x-1] + H_seq[x] * 2; 
+    }
+
+    std::cout << "t = " << t << ", E_seq =";
+    for(int x=0; x<Nx; x++) {
+      std::cout << E_seq[x] << " ";
+    }
+    std::cout << "\n";
+
+    // update H 
+    for(int x=1; x<Nx-1; x++) {
+      H_seq[x] = E_seq[x+1] + E_seq[x] * 2; 
+    }
+  }
+
+  // tiling version
+  int xx_top_length = BLX_MIS - 2 * (BLT_MIS - 1) - 1; // length of mountain top
+  int xx_num = (Nx + xx_top_length - 1) / xx_top_length;
+
+  // std::cout << "xx_num = " << xx_num << "\n";
+
+  // heads and tails for mountain bottom
+  std::vector<int> xx_heads(xx_num);
+  std::vector<int> xx_tails(xx_num);
+
+  // heads and tails for mountain top 
+  std::vector<int> xx_top_heads(xx_num);
+  std::vector<int> xx_top_tails(xx_num);
+
+  // fill xx_top_heads and xx_top_tails
+  for(int i=0; i<xx_num; i++) {
+    xx_top_heads[i] = i * xx_top_length;
+  }
+  for(int i=0; i<xx_num; i++) {
+    int temp = xx_top_heads[i] + xx_top_length - 1;
+    xx_top_tails[i] = (temp > Nx - 1)? Nx - 1 : temp;
+  }
+
+  // fill xx_heads and xx_tails
+  for(int i=0; i<xx_num; i++) {
+    int temp = xx_top_heads[i] - (BLT_MIS - 1);
+    xx_heads[i] = (temp < 0)? 0 : temp;
+  }
+  for(int i=0; i<xx_num; i++) {
+    int temp = xx_top_tails[i] + BLT_MIS;
+    xx_tails[i] = (temp > Nx - 1)? Nx - 1 : temp;
+  }
+
+  // check bounds  
+  // for(int i=0; i<xx_num; i++) {
+  //   printf("xx_heads[%d] = %d, xx_tails[%d] = %d, xx_top_heads[%d] = %d, xx_top_tails[%d] = %d\n", 
+  //           i, xx_heads[i], i, xx_tails[i], i, xx_top_heads[i], i, xx_top_tails[i]);
+  // }
+
+  int grid_size = xx_num; // we will launch xx_num blocks
+  for(size_t tt=0; tt<num_timesteps/BLT_MIS; tt++) {
+
+    
+    // launching kernel
+    for(int xx=0; xx<grid_size; xx++) { // xx is block id
+      
+      // declare shmem 
+      float E_shmem[BLX_MIS_EH]; 
+      float H_shmem[BLX_MIS_EH];
+
+      // load shmem
+      for(int local_x=0; local_x<BLX_MIS; local_x++) { // local_x is thread_id
+        int global_x = xx_heads[xx] + local_x;
+        int shared_H_x = local_x + 1;
+        int shared_E_x = local_x;
+        
+        if(global_x < Nx) {
+          H_shmem[shared_H_x] = H_simu_init[global_x];
+          // load HALO
+          if(local_x == 0 && global_x > 0) {
+            H_shmem[shared_H_x - 1] = H_simu_init[global_x - 1];
+          }
+        }
+
+        if(global_x < Nx) {
+          E_shmem[shared_E_x] = E_simu_init[global_x];
+          // load HALO
+          if(local_x == BLX_MIS-1 && global_x < Nx-1) {
+            E_shmem[shared_E_x + 1] = E_simu_init[global_x + 1];
+          }
+        }
+      }
+
+      // calculation
+      for(size_t t=0; t<BLT_MIS; t++) {
+
+        // update E
+        for(int local_x=0; local_x<BLX_MIS; local_x++) { // local_x is thread_id
+          int global_x = xx_heads[xx] + local_x; 
+          int shared_H_x = local_x + 1;
+          int shared_E_x = local_x;
+          if(global_x >= 1 && global_x <= Nx - 2 && global_x <= xx_tails[xx]) {
+            E_shmem[shared_E_x] = H_shmem[shared_H_x - 1] + H_shmem[shared_H_x] * 2;
+          }
+        }
+
+        // update H 
+        for(int local_x=0; local_x<BLX_MIS; local_x++) { // local_x is thread_id
+          int global_x = xx_heads[xx] + local_x; 
+          int shared_H_x = local_x + 1;
+          int shared_E_x = local_x;
+          if(global_x >= 1 && global_x <= Nx - 2 && global_x <= xx_tails[xx]) {
+            H_shmem[shared_H_x] = E_shmem[shared_E_x + 1] + E_shmem[shared_E_x] * 2;
+          }
+        }
+      }
+
+      // store back to global mem
+      for(int local_x=0; local_x<BLX_MIS; local_x++) { // local_x is thread_id
+        int global_x = xx_heads[xx] + local_x;
+        int shared_H_x = local_x + 1;
+        int shared_E_x = local_x;
+        if(global_x >= 1 && global_x <= Nx-2 && 
+           global_x >= xx_top_heads[xx] && global_x <= xx_top_tails[xx]) {
+
+          H_simu[global_x] = H_shmem[shared_H_x];
+          E_simu[global_x] = E_shmem[shared_E_x];
+          printf("xx = %d, E_simu[%d] = %f\n", xx, global_x, E_simu[global_x]);
+        }
+      }
+      std::cout << "after xx = " << xx << ", E_simu = ";
+      for(auto e : E_simu) {
+        std::cout << e << " ";
+      }
+      std::cout << "\n";
+    }
+
+    // memory transfer from dest to init
+    for(int i=0; i<Nx; i++) {
+      E_simu_init[i] = E_simu[i];
+      H_simu_init[i] = H_simu[i];
+    }
+  }
+    
+  std::cout << "E_seq = ";
+  for(int x=0; x<Nx; x++) {
+    std::cout << E_seq[x] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "E_simu = ";
+  for(int x=0; x<Nx; x++) {
+    std::cout << E_simu[x] << " ";
+  }
+  std::cout << "\n";
+
+  for(int x=0; x<Nx; x++) {
+    if(E_seq[x] != E_simu[x] || H_seq[x] != H_simu[x]) {
       std::cerr << "1-D demo results mismatch.\n";
       std::exit(EXIT_FAILURE);
     }

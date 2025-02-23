@@ -1,6 +1,7 @@
 #ifndef KERNELS_CUH
 #define KERNELS_CUH
 
+// for diamond tiling 
 #define BLX_GPU 8
 #define BLY_GPU 8
 #define BLZ_GPU 8
@@ -9,12 +10,22 @@
 #define BLY_EH (BLY_GPU + 1)
 #define BLZ_EH (BLZ_GPU + 1)
 
+// for parallelogram tiling
 #define BLX_GPU_PT 8
 #define BLY_GPU_PT 8
 #define BLT_GPU_PT 4 
 #define BLZ_GPU_PT (BLT_GPU_PT + 1) // ?, not sure 
 #define BLX_EH_PT (BLX_GPU_PT + 1)
 #define BLY_EH_PT (BLY_GPU_PT + 1)
+
+// for more is less tiling
+#define BLX_MIS 8
+#define BLY_MIS 8
+#define BLZ_MIS 8
+#define BLT_MIS 2 
+#define BLX_MIS_EH (BLX_MIS + 1)
+#define BLY_MIS_EH (BLY_MIS + 1)
+#define BLZ_MIS_EH (BLZ_MIS + 1)
 
 //
 // ----------------------------------- device function -----------------------------------
@@ -182,9 +193,16 @@ __global__ void updateE_3Dmap(float * Ex, float * Ey, float * Ez,
   unsigned int j = blockIdx.y * blockDim.y + threadIdx.y;
   unsigned int k = blockIdx.z * blockDim.z + threadIdx.z; 
 
+  // Jx source at _source_idx
+
   if (i >= 1 && i < Nx - 1 && j >= 1 && j < Ny - 1 && k >= 1 && k < Nz - 1)
   {
     int idx = i + j * Nx + k * (Nx * Ny);
+
+    // int temp = (idx == _source_idx)? source_cal_new_value : 0;
+
+    // Ex[idx] = Cax[idx] * Ex[idx] + Cbx[idx] *
+    //           ((Hz[idx] - Hz[idx - Nx]) - (Hy[idx] - Hy[idx - Nx * Ny]) - temp * dx);
 
     Ex[idx] = Cax[idx] * Ex[idx] + Cbx[idx] *
               ((Hz[idx] - Hz[idx - Nx]) - (Hy[idx] - Hy[idx - Nx * Ny]) - Jx[idx] * dx);
@@ -1039,6 +1057,8 @@ __global__ void updateEH_phase_shmem_EH(float *Ex, float *Ey, float *Ez,
         int s_E_idx = s_E_x + s_E_y * BLX_EH + s_E_z * BLX_EH * BLY_EH; // s memory idx for E
 
         int g_idx = g_x + g_y * Nx + g_z * Nx * Ny; // global idx
+
+        // int temp = (g_idx == source_idx)? Jx_source : 0;
 
         Ex_shmem[s_E_idx] = Cax[g_idx] * Ex_shmem[s_E_idx] + Cbx[g_idx] *
                 ((Hz_shmem[s_H_idx] - Hz_shmem[s_H_idx - BLX_EH]) - (Hy_shmem[s_H_idx] - Hy_shmem[s_H_idx - BLX_EH * BLY_EH]) - Jx[g_idx] * dx);
