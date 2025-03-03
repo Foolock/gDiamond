@@ -30,6 +30,34 @@ void gDiamond::update_FDTD_gpu_figures(size_t num_timesteps) { // only use for r
       std::exit(EXIT_FAILURE);
   }
 
+  // dft for Ey
+  // Monitor frequencies: from 0.96 to 1.04, step size 0.004
+  float freq_monitor_start = 0.9 * SOURCE_FREQUENCY;
+  float freq_monitor_end = 1.15 * SOURCE_FREQUENCY;
+  float freq_monitor_step = 0.01 * SOURCE_FREQUENCY;
+  int num_freqs = (int)((freq_monitor_end - freq_monitor_start) / freq_monitor_step) + 1;
+  printf("num_freqs = %d\n", num_freqs); 
+
+  // frequency monitors
+  float *freq_monitors = (float *)malloc(num_freqs * sizeof(float));
+  float *freq_monitors_device;
+  cudaMalloc((void **)&freq_monitors_device, num_freqs * sizeof(float));
+  for (int f = 0; f < num_freqs; ++f)
+  {
+      freq_monitors[f] = freq_monitor_start + f * freq_monitor_step;
+  }
+  cudaMemcpy(freq_monitors_device, freq_monitors, num_freqs * sizeof(float), cudaMemcpyHostToDevice);
+
+  // to record real and imag figures
+  float* real_host = (float *)malloc(_Nx * _Ny * sizeof(float));
+  float* imag_host = (float *)malloc(_Nx * _Ny * sizeof(float));
+  float *Ex_output_real_monitor, *Ex_output_imag_monitor;
+  int save_len = _Nx * _Ny;
+  cudaMalloc((void **)&Ex_output_real_monitor, num_freqs * save_len * sizeof(float));
+  cudaMalloc((void **)&Ex_output_imag_monitor, num_freqs * save_len * sizeof(float));
+  cudaMemset(Ex_output_real_monitor, 0, num_freqs * save_len * sizeof(float));
+  cudaMemset(Ex_output_imag_monitor, 0, num_freqs * save_len * sizeof(float));
+
   // E, H, J, M on device 
   float *Ex, *Ey, *Ez, *Hx, *Hy, *Hz, *Jx, *Jy, *Jz, *Mx, *My, *Mz;
 
@@ -120,7 +148,10 @@ void gDiamond::update_FDTD_gpu_figures(size_t num_timesteps) { // only use for r
   gpu_runtime = end - start;
 
   // set block and grid
-  size_t grid_size = (_Nx*_Ny*_Nz + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  size_t block_size = BLOCK_SIZE;
+  size_t grid_size = (_Nx*_Ny*_Nz + block_size - 1) / block_size;
+  size_t block_size_fft = BLOCK_SIZE;
+  size_t grid_size_fft = (_Nx * _Ny + block_size - 1) / block_size;
 
   for(size_t t=0; t<num_timesteps; t++) {
 
@@ -133,30 +164,35 @@ void gDiamond::update_FDTD_gpu_figures(size_t num_timesteps) { // only use for r
 
     // Current source
     // float Jx_value = J_source_amp * std::sin(SOURCE_OMEGA * t * dt);
-    // float Jx_value = J_source_amp * std::exp(-((t * dt - t_peak) * (t * dt - t_peak)) / (2 * t_sigma * t_sigma)) * std::sin(SOURCE_OMEGA * t * dt);
-    float Jx_value = J_source_amp * std::sin(SOURCE_OMEGA * t * dt);
+    float Jx_value = J_source_amp * std::exp(-((t * dt - t_peak) * (t * dt - t_peak)) / (2 * t_sigma * t_sigma)) * std::sin(SOURCE_OMEGA * t * dt);
+    // float Jx_value = J_source_amp * std::sin(SOURCE_OMEGA * t * dt);
 
     CUDACHECK(cudaMemcpy(Jx + _source_idx, &Jx_value, sizeof(float), cudaMemcpyHostToDevice));
     
     // update E
-    updateE_3Dmap_fix<<<grid_size, BLOCK_SIZE, 0>>>(Ex, Ey, Ez,
+    updateE_3Dmap_fix<<<grid_size, block_size, 0>>>(Ex, Ey, Ez,
           Hx, Hy, Hz, Cax, Cbx, Cay, Cby, Caz, Cbz,
           Jx, Jy, Jz, _dx, _Nx, _Ny, _Nz);
 
     // update H
-    updateH_3Dmap_fix<<<grid_size, BLOCK_SIZE, 0>>>(Ex, Ey, Ez,
+    updateH_3Dmap_fix<<<grid_size, block_size, 0>>>(Ex, Ey, Ez,
           Hx, Hy, Hz, Dax, Dbx, Day, Dby, Daz, Dbz,
           Mx, My, Mz, _dx, _Nx, _Ny, _Nz);
+
+    // calculate DFT for Ey
+    update_field_FFT_xy<<<grid_size_fft, block_size_fft>>>(Ex, _Nz / 2, _Nx, _Ny, _Nz, Ex_output_real_monitor,
+          Ex_output_imag_monitor, freq_monitors_device, num_freqs, t * dt, 50.0f / num_timesteps);
 
     auto end1 = std::chrono::high_resolution_clock::now();
 
     gpu_runtime += end1 - start1;
 
     // Record the field using a monitor, once in a while
-    if (t % (num_timesteps/10) == 39)
+    if (t % (num_timesteps/20) == 99)
     {
       printf("Iter: %ld / %ld \n", t, num_timesteps);
 
+      // ------------ plotting time domain
       float *E_time_monitor_xy;
       E_time_monitor_xy = (float *)malloc(_Nx * _Ny * sizeof(float));
       memset(E_time_monitor_xy, 0, _Nx * _Ny * sizeof(float));
@@ -173,11 +209,23 @@ void gDiamond::update_FDTD_gpu_figures(size_t num_timesteps) { // only use for r
         cudaMemcpy(host_ptr, device_ptr, slice_pitch, cudaMemcpyDeviceToHost);
       }
 
-      snprintf(field_filename, sizeof(field_filename), "gpu_figures/Ex_naive_gpu_%04ld.png", t);
+      snprintf(field_filename, sizeof(field_filename), "gpu_figures/Ex_naive_gpu_%04ld.png", (t+1));
       // save_field_png(E_time_monitor_xy, field_filename, _Nx, _Ny, 1.0 / sqrt(mu0 / eps0));
-      save_field_png(E_time_monitor_xy, field_filename, _Nx, _Ny, 10);
+      save_field_png(E_time_monitor_xy, field_filename, _Nx, _Ny, 5);
 
       free(E_time_monitor_xy);
+
+      // ------------ plotting frequency domain
+      int freq_check = 11;
+      cudaMemcpy(real_host, Ex_output_real_monitor + freq_check * _Nx * _Ny, _Nx * _Ny * sizeof(float), cudaMemcpyDeviceToHost);
+      cudaMemcpy(imag_host, Ex_output_imag_monitor + freq_check * _Nx * _Ny, _Nx * _Ny * sizeof(float), cudaMemcpyDeviceToHost);
+
+      char real_freq_filename[50];
+      snprintf(real_freq_filename, sizeof(real_freq_filename), "gpu_figures/fft_Ex_real_%04ld.png", (t+1));
+      save_field_png(real_host, real_freq_filename, _Nx, _Ny, 10);
+      char imag_freq_filename[50];
+      snprintf(imag_freq_filename, sizeof(imag_freq_filename), "gpu_figures/fft_Ex_imag_%04ld.png", (t+1));
+      save_field_png(imag_host, imag_freq_filename, _Nx, _Ny, 10);
     }
   }
   cudaDeviceSynchronize();
@@ -223,7 +271,12 @@ void gDiamond::update_FDTD_gpu_figures(size_t num_timesteps) { // only use for r
   CUDACHECK(cudaFree(Daz));
   CUDACHECK(cudaFree(Dbz));
 
-
+  free(freq_monitors);
+  free(real_host);
+  free(imag_host);
+  CUDACHECK(cudaFree(freq_monitors_device));
+  CUDACHECK(cudaFree(Ex_output_real_monitor));
+  CUDACHECK(cudaFree(Ex_output_imag_monitor));
 
 }
 
@@ -4433,6 +4486,7 @@ void gDiamond::update_FDTD_gpu_fuse_kernel_shmem_EH_mil(size_t num_timesteps) { 
   // calculation
   size_t block_size = BLX_MIL * BLY_MIL * BLZ_MIL; 
   size_t grid_size = xx_num * yy_num * zz_num;
+  std::cout << "block_size = " << block_size << ", grid_size = " << grid_size << "\n";
   for(size_t t=0; t<num_timesteps/BLT_MIL; t++) {
     updateEH_mil<<<grid_size, block_size>>>(Ex, Ey, Ez,
                                             Hx, Hy, Hz,
@@ -4454,6 +4508,11 @@ void gDiamond::update_FDTD_gpu_fuse_kernel_shmem_EH_mil(size_t num_timesteps) { 
                                             shmem_load_finish,
                                             block_size,
                                             grid_size); 
+    cudaError_t err = cudaGetLastError(); // Check for launch errors
+    if (err != cudaSuccess) {
+        printf("CUDA kernel launch failed: %s\n", cudaGetErrorString(err));
+    }
+
   }
 
   cudaDeviceSynchronize();
@@ -4856,6 +4915,12 @@ void gDiamond::_updateEH_mil_seq(std::vector<float>& Ex_init, std::vector<float>
       }
     }
   }
+}
+
+void gDiamond::update_FDTD_gpu_simulation_1_D_pt_pl(size_t num_tiemsteps) { // CPU single thread 1-D simulation of GPU workflow, parallelogram tiling, pipeline
+
+
+
 }
 
 void gDiamond::update_FDTD_gpu_simulation_1_D_mil(size_t num_timesteps) { // CPU single thread 1-D simulation of GPU workflow, more is less tiling

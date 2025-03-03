@@ -28,6 +28,65 @@
 #define BLZ_MIL_EH (BLZ_MIL + 1)
 
 //
+// ----------------------------------- dft -----------------------------------
+// 
+// Update rule for frequency-domain field monitor
+__global__ void update_field_FFT_yz(float *E, int i, int Nx, int Ny, int Nz, float *E_real,
+    float *E_imag, float *freq_monitors, int num_freqs, float t, float scale_factor)
+{
+  unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+  unsigned int j = tid % Ny;
+  unsigned int k = tid / Ny;
+
+  // Ensure indices are within bounds
+  if (j < Ny && k < Nz)
+  {
+      // 2D index for the yz-plane at given i
+      int idx_2D = j + k * Ny;
+
+      // 3D index for the full grid
+      int idx_3D = i + j * Nx + k * (Nx * Ny);
+
+      // Update the frequency-domain field for each frequency
+      for (int f = 0; f < num_freqs; ++f)
+      {
+          float omega = 2 * PI * freq_monitors[f];
+          E_real[f * Ny * Nz + idx_2D] += E[idx_3D] * cos(omega * t) * scale_factor;
+          E_imag[f * Ny * Nz + idx_2D] -= E[idx_3D] * sin(omega * t) * scale_factor;
+      }
+  }
+}
+
+__global__ void update_field_FFT_xy(float *E, int k, int Nx, int Ny, int Nz, float *E_real,
+    float *E_imag, float *freq_monitors, int num_freqs, float t, float scale_factor)
+{
+  unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+  unsigned int i = tid % Nx;
+  unsigned int j = tid / Nx;
+
+  // Ensure indices are within bounds
+  if (i < Nx && j < Ny)
+  {
+      // 2D index for the xy-plane at given k 
+      int idx_2D = i + j * Nx;
+
+      // 3D index for the full grid
+      int idx_3D = i + j * Nx + k * (Nx * Ny);
+
+      // Update the frequency-domain field for each frequency
+      for (int f = 0; f < num_freqs; ++f)
+      {
+          float omega = 2 * PI * freq_monitors[f];
+
+          E_real[f * Nx * Ny + idx_2D] += E[idx_3D] * cos(omega * t) * scale_factor;
+          E_imag[f * Nx * Ny + idx_2D] -= E[idx_3D] * sin(omega * t) * scale_factor;
+      }
+  }
+}
+
+//
 // ----------------------------------- device function -----------------------------------
 // 
 
@@ -1576,6 +1635,34 @@ __global__ void updateEH_mil(float *Ex, float *Ey, float *Ez,
   int shared_E_idx = shared_E_x + shared_E_y * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH;
 
   // declare shared memory
+  // 9*9*9*4*6 = 17496btyes
+  // block_size = 512
+  /*
+
+  block_size = 512, grid_size = 8000
+
+  BLX = 8
+  BLX_top = 5
+  100/5 = 20
+  20*20*20 = 8000
+
+  deviceProp.sharedMemPerBlockOptin = 101376
+  deviceProp.sharedMemPerBlock = 48.00 (KB)
+  deviceProp.sharedMemPerMultiprocessor = 100.00 (KB)
+
+  deviceProp.multiProcessorCount = 48
+  deviceProp.maxBlocksPerMultiProcessor = 16
+  deviceProp.maxThreadsPerBlock = 1024
+  deviceProp.maxThreadsPerMultiProcessor = 1536
+
+  deviceProp.regsPerBlock = 65536
+  deviceProp.regsPerMultiprocessor = 65536
+
+  deviceProp.maxGridSize[0] = 2147483647
+  deviceProp.maxGridSize[1] = 65535
+  deviceProp.maxGridSize[2] = 65535
+
+  */
   float Ex_shmem[BLX_MIL_EH * BLY_MIL_EH * BLZ_MIL_EH];
   float Ey_shmem[BLX_MIL_EH * BLY_MIL_EH * BLZ_MIL_EH];
   float Ez_shmem[BLX_MIL_EH * BLY_MIL_EH * BLZ_MIL_EH];
@@ -1583,50 +1670,50 @@ __global__ void updateEH_mil(float *Ex, float *Ey, float *Ez,
   float Hy_shmem[BLX_MIL_EH * BLY_MIL_EH * BLZ_MIL_EH];
   float Hz_shmem[BLX_MIL_EH * BLY_MIL_EH * BLZ_MIL_EH];
 
-  // // load shared memory
-  // if(global_x < Nx && global_y < Ny && global_z < Nz) {
+  // load shared memory
+  if(global_x < Nx && global_y < Ny && global_z < Nz) {
 
-  //   // load core
-  //   Hx_shmem[shared_H_idx] = Hx[global_idx];
-  //   Hy_shmem[shared_H_idx] = Hy[global_idx];
-  //   Hz_shmem[shared_H_idx] = Hz[global_idx];
+    // load core
+    Hx_shmem[shared_H_idx] = Hx[global_idx];
+    Hy_shmem[shared_H_idx] = Hy[global_idx];
+    Hz_shmem[shared_H_idx] = Hz[global_idx];
 
-  //   // load HALO region
-  //   if(local_x == 0 && global_x > 0) {
-  //     Hz_shmem[shared_H_x - 1 + shared_H_y * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH] = Hz[global_x - 1 + global_y * Nx + global_z * Nx * Ny];
-  //     Hy_shmem[shared_H_x - 1 + shared_H_y * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH] = Hy[global_x - 1 + global_y * Nx + global_z * Nx * Ny];
+    // load HALO region
+    if(local_x == 0 && global_x > 0) {
+      Hz_shmem[shared_H_x - 1 + shared_H_y * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH] = Hz[global_x - 1 + global_y * Nx + global_z * Nx * Ny];
+      Hy_shmem[shared_H_x - 1 + shared_H_y * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH] = Hy[global_x - 1 + global_y * Nx + global_z * Nx * Ny];
 
-  //   }
-  //   if(local_y == 0 && global_y > 0) {
-  //     Hx_shmem[shared_H_x + (shared_H_y - 1) * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH] = Hx[global_x + (global_y - 1) * Nx + global_z * Nx * Ny];
-  //     Hz_shmem[shared_H_x + (shared_H_y - 1) * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH] = Hz[global_x + (global_y - 1) * Nx + global_z * Nx * Ny];
-  //   }
-  //   if(local_z == 0 && global_z > 0) {
-  //     Hx_shmem[shared_H_x + shared_H_y * BLX_MIL_EH + (shared_H_z - 1) * BLX_MIL_EH * BLY_MIL_EH] = Hx[global_x + global_y * Nx + (global_z - 1) * Nx * Ny];
-  //     Hy_shmem[shared_H_x + shared_H_y * BLX_MIL_EH + (shared_H_z - 1) * BLX_MIL_EH * BLY_MIL_EH] = Hy[global_x + global_y * Nx + (global_z - 1) * Nx * Ny];
-  //   }
-  // }
+    }
+    if(local_y == 0 && global_y > 0) {
+      Hx_shmem[shared_H_x + (shared_H_y - 1) * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH] = Hx[global_x + (global_y - 1) * Nx + global_z * Nx * Ny];
+      Hz_shmem[shared_H_x + (shared_H_y - 1) * BLX_MIL_EH + shared_H_z * BLX_MIL_EH * BLY_MIL_EH] = Hz[global_x + (global_y - 1) * Nx + global_z * Nx * Ny];
+    }
+    if(local_z == 0 && global_z > 0) {
+      Hx_shmem[shared_H_x + shared_H_y * BLX_MIL_EH + (shared_H_z - 1) * BLX_MIL_EH * BLY_MIL_EH] = Hx[global_x + global_y * Nx + (global_z - 1) * Nx * Ny];
+      Hy_shmem[shared_H_x + shared_H_y * BLX_MIL_EH + (shared_H_z - 1) * BLX_MIL_EH * BLY_MIL_EH] = Hy[global_x + global_y * Nx + (global_z - 1) * Nx * Ny];
+    }
+  }
 
-  // if(global_x < Nx && global_y < Ny && global_z < Nz) {
+  if(global_x < Nx && global_y < Ny && global_z < Nz) {
 
-  //   Ex_shmem[shared_E_idx] = Ex[global_idx];
-  //   Ey_shmem[shared_E_idx] = Ey[global_idx];
-  //   Ez_shmem[shared_E_idx] = Ez[global_idx];
+    Ex_shmem[shared_E_idx] = Ex[global_idx];
+    Ey_shmem[shared_E_idx] = Ey[global_idx];
+    Ez_shmem[shared_E_idx] = Ez[global_idx];
 
-  //   // load HALO region
-  //   if(local_x == BLX_GPU - 1 && global_x < Nx - 1) {
-  //     Ez_shmem[shared_E_x + 1 + shared_E_y * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH] = Ez[global_x + 1 + global_y * Nx + global_z * Nx * Ny];
-  //     Ey_shmem[shared_E_x + 1 + shared_E_y * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH] = Ey[global_x + 1 + global_y * Nx + global_z * Nx * Ny];
-  //   }
-  //   if(local_y == BLY_GPU - 1 && global_y < Ny - 1) {
-  //     Ex_shmem[shared_E_x + (shared_E_y + 1) * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH] = Ex[global_x + (global_y + 1) * Nx + global_z * Nx * Ny];
-  //     Ez_shmem[shared_E_x + (shared_E_y + 1) * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH] = Ez[global_x + (global_y + 1) * Nx + global_z * Nx * Ny];
-  //   }
-  //   if(local_z == BLZ_GPU - 1 && global_z < Nz - 1) {
-  //     Ex_shmem[shared_E_x + shared_E_y * BLX_MIL_EH + (shared_E_z + 1) * BLX_MIL_EH * BLY_MIL_EH] = Ex[global_x + global_y * Nx + (global_z + 1) * Nx * Ny];
-  //     Ey_shmem[shared_E_x + shared_E_y * BLX_MIL_EH + (shared_E_z + 1) * BLX_MIL_EH * BLY_MIL_EH] = Ey[global_x + global_y * Nx + (global_z + 1) * Nx * Ny];
-  //   }
-  // }
+    // load HALO region
+    if(local_x == BLX_GPU - 1 && global_x < Nx - 1) {
+      Ez_shmem[shared_E_x + 1 + shared_E_y * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH] = Ez[global_x + 1 + global_y * Nx + global_z * Nx * Ny];
+      Ey_shmem[shared_E_x + 1 + shared_E_y * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH] = Ey[global_x + 1 + global_y * Nx + global_z * Nx * Ny];
+    }
+    if(local_y == BLY_GPU - 1 && global_y < Ny - 1) {
+      Ex_shmem[shared_E_x + (shared_E_y + 1) * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH] = Ex[global_x + (global_y + 1) * Nx + global_z * Nx * Ny];
+      Ez_shmem[shared_E_x + (shared_E_y + 1) * BLX_MIL_EH + shared_E_z * BLX_MIL_EH * BLY_MIL_EH] = Ez[global_x + (global_y + 1) * Nx + global_z * Nx * Ny];
+    }
+    if(local_z == BLZ_GPU - 1 && global_z < Nz - 1) {
+      Ex_shmem[shared_E_x + shared_E_y * BLX_MIL_EH + (shared_E_z + 1) * BLX_MIL_EH * BLY_MIL_EH] = Ex[global_x + global_y * Nx + (global_z + 1) * Nx * Ny];
+      Ey_shmem[shared_E_x + shared_E_y * BLX_MIL_EH + (shared_E_z + 1) * BLX_MIL_EH * BLY_MIL_EH] = Ey[global_x + global_y * Nx + (global_z + 1) * Nx * Ny];
+    }
+  }
 
   __syncthreads();
 
