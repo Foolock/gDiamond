@@ -56,7 +56,7 @@ class gDiamond {
       int k_mid = Nz / 2;
       int slab_k_min = k_mid - t_slab_grid / 2;
       int slab_k_max = slab_k_min + t_slab_grid;
-      float h_PML = 0.5 * um;  // Thickness of PMLCHECK(cudaSetDevice(source_gpu_index));
+      float h_PML = 1 * um;  // Thickness of PML, change according to prof. gu
       int t_PML = std::ceil(h_PML / _dx);
       set_FDTD_matrices_3D_structure(_Cax, _Cbx, _Cay, _Cby, _Caz, _Cbz,
                                      _Dax, _Dbx, _Day, _Dby, _Daz, _Dbz,
@@ -116,6 +116,9 @@ class gDiamond {
     void update_FDTD_gpu_fuse_kernel_shmem_EH_pt(size_t num_timesteps); // 2-D mapping, using diamond tiling on X, Y dimension to fuse kernels, put EH in shared memory 
                                                                         // for shared memory flushing, no optimization used, all loaded from globalmem directly
     void update_FDTD_gpu_fuse_kernel_shmem_EH_mil(size_t num_timesteps); // 3-D mapping, using more is less tiling on X, Y, Z dimension to fuse kernels, put EH in shared memory 
+
+    // my parallelogram tiling idea
+    void update_FDTD_cpu_simulation_1_D_pt(size_t num_timesteps); // CPU single thread 1-D simulation of parallelogram tiling
 
     // check correctness
     bool check_correctness_gpu_2D();

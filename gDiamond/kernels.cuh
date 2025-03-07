@@ -27,6 +27,12 @@
 #define BLY_MIL_EH (BLY_MIL + 1)
 #define BLZ_MIL_EH (BLZ_MIL + 1)
 
+// parallelogram tiling for pipeline idea
+#define BLX_PT 8
+#define BLY_PT 8
+#define BLZ_PT 8
+#define BLT_PT 4 
+
 //
 // ----------------------------------- dft -----------------------------------
 // 

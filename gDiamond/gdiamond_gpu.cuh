@@ -211,7 +211,7 @@ void gDiamond::update_FDTD_gpu_figures(size_t num_timesteps) { // only use for r
 
       snprintf(field_filename, sizeof(field_filename), "gpu_figures/Ex_naive_gpu_%04ld.png", (t+1));
       // save_field_png(E_time_monitor_xy, field_filename, _Nx, _Ny, 1.0 / sqrt(mu0 / eps0));
-      save_field_png(E_time_monitor_xy, field_filename, _Nx, _Ny, 5);
+      save_field_png(E_time_monitor_xy, field_filename, _Nx, _Ny, 1);
 
       free(E_time_monitor_xy);
 
@@ -5592,6 +5592,180 @@ void gDiamond::update_FDTD_gpu_fuse_kernel_globalmem_pt(size_t num_timesteps) { 
   CUDACHECK(cudaFree(valley_heads_Y_d));
   CUDACHECK(cudaFree(valley_tails_Y_d));
 
+}
+
+void gDiamond::update_FDTD_cpu_simulation_1_D_pt(size_t num_timesteps) { // CPU single thread 1-D simulation of parallelogram tiling
+
+  // write 1 dimension just to check
+  std::vector<float> E_simu(_Nx, 1);
+  std::vector<float> H_simu(_Nx, 1);
+  std::vector<float> E_seq(_Nx, 1);
+  std::vector<float> H_seq(_Nx, 1);
+
+  int Nx = _Nx;
+
+  // seq version
+  for(size_t t=0; t<num_timesteps; t++) {
+
+    // update E
+    for(int x=1; x<Nx-1; x++) {
+      E_seq[x] = H_seq[x-1] + H_seq[x] * 2; 
+    }
+
+    std::cout << "t = " << t << ", E_seq =";
+    for(int x=0; x<Nx; x++) {
+      std::cout << E_seq[x] << " ";
+    }
+    std::cout << "\n";
+
+    // update H 
+    for(int x=1; x<Nx-1; x++) {
+      H_seq[x] = E_seq[x+1] + E_seq[x] * 2; 
+    }
+  }
+
+  // tiling version
+  int num_pts = (Nx - (BLX_PT - BLT_PT) + BLX_PT - 1) / BLX_PT + 1; 
+  std::cout << "num_pts = " << num_pts << "\n";
+
+  // we will need to calculate the head and tail index for each parallelogram tile
+  std::vector<int> pt_heads(num_pts, 0);
+  std::vector<int> pt_tails(num_pts);
+  for(int idx=1; idx<num_pts; idx++) {
+    int step = (idx == 1)? BLX_PT - BLT_PT : BLX_PT;
+    pt_heads[idx] = pt_heads[idx-1] + step;
+  } 
+  for(int idx=0; idx<num_pts; idx++) {
+    int step = (idx == 0)? BLX_PT - 1 : BLX_PT + BLT_PT - 1;
+    pt_tails[idx] = (pt_heads[idx] + step > Nx - 1)? Nx - 1 : pt_heads[idx] + step;
+  }
+  pt_heads[0] = 0 - BLT_PT;
+
+  std::cout << "pt_heads = [";
+  for(auto idx : pt_heads) {
+    std::cout << idx << " ";
+  }
+  std::cout << "}\n";
+
+  std::cout << "pt_tails = [";
+  for(auto idx : pt_tails) {
+    std::cout << idx << " ";
+  }
+  std::cout << "}\n";
+
+  int block_size = 8;
+
+  for(size_t tt=0; tt<num_timesteps/BLT_PT; tt++) {
+    
+    // compute each parallelogram tile one by one
+    for(int pt=0; pt<num_pts; pt++) {
+
+      // head and tail for this parallelogram tile
+      int head = pt_heads[pt];
+      int tail = pt_tails[pt];
+
+      // declare shared memory
+      std::vector<float> E_shmem(BLX_PT + BLT_PT); 
+      std::vector<float> H_shmem(BLX_PT + BLT_PT); 
+
+      // load shared memory
+      for(int tid=0; tid<block_size; tid++) {
+        for(int local_idx=tid; local_idx<(BLX_PT + BLT_PT); local_idx+=BLX_PT) {
+          int global_idx = local_idx + pt_heads[pt]; 
+          if(global_idx >= 0 && global_idx <= Nx-1) {
+            E_shmem[local_idx] = E_simu[global_idx];
+            H_shmem[local_idx] = H_simu[global_idx];
+          }
+        }
+      }
+
+      // check shmem
+      if(pt == 0) {
+        std::cout << "before calculation: \n";
+        std::cout << "E_shmem = ";
+        for(auto e : E_shmem) {
+          std::cout << e << " ";
+        }
+        std::cout << "\n";
+
+        std::cout << "H_shmem = ";
+        for(auto e : H_shmem) {
+          std::cout << e << " ";
+        }
+        std::cout << "\n";
+      }
+
+      // update  
+      for(int t=0; t<BLT_PT; t++) {
+        int offset = BLT_PT - t;
+
+        // update E
+        for(int local_idx=0; local_idx<block_size; local_idx++) {
+          int global_idx = local_idx + offset + pt_heads[pt];
+          int shared_E_idx = local_idx + offset; 
+          if(global_idx >= 1 && global_idx <= Nx-2) {
+            E_shmem[shared_E_idx] = H_shmem[shared_E_idx-1] + H_shmem[shared_E_idx] * 2; 
+          }
+        }
+
+        // update H
+        for(int local_idx=0; local_idx<block_size; local_idx++) {
+          int global_idx = local_idx + offset + pt_heads[pt] - 1;
+          int shared_H_idx = local_idx + offset - 1; 
+          if(global_idx >= 1 && global_idx <= Nx-2) {
+            H_shmem[shared_H_idx] = E_shmem[shared_H_idx+1] + E_shmem[shared_H_idx] * 2; 
+          }
+        }
+      }
+
+      if(pt == 0) {
+        std::cout << "after calculation: \n";
+        std::cout << "E_shmem = ";
+        for(auto e : E_shmem) {
+          std::cout << e << " ";
+        }
+        std::cout << "\n";
+
+        std::cout << "H_shmem = ";
+        for(auto e : H_shmem) {
+          std::cout << e << " ";
+        }
+        std::cout << "\n";
+      }
+
+      // store global memory
+      for(int tid=0; tid<block_size; tid++) {
+        for(int local_idx=tid; local_idx<(BLX_PT + BLT_PT); local_idx+=BLX_PT) {
+          int global_idx = local_idx + pt_heads[pt]; 
+          if(global_idx >= 0 && global_idx <= Nx-1) {
+            E_simu[global_idx] = E_shmem[local_idx];
+            H_simu[global_idx] = H_shmem[local_idx];
+          }
+        }
+      }
+
+    }
+
+  }
+ 
+  std::cout << "E_seq = ";
+  for(int x=0; x<Nx; x++) {
+    std::cout << E_seq[x] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "E_simu = ";
+  for(int x=0; x<Nx; x++) {
+    std::cout << E_simu[x] << " ";
+  }
+  std::cout << "\n";
+
+  for(int x=0; x<Nx; x++) {
+    if(E_seq[x] != E_simu[x] || H_seq[x] != H_simu[x]) {
+      std::cerr << "1-D demo results mismatch.\n";
+      std::exit(EXIT_FAILURE);
+    }
+  }
 }
 
 } // end of namespace gdiamond
