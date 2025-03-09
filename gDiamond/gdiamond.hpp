@@ -119,6 +119,7 @@ class gDiamond {
 
     // my parallelogram tiling idea
     void update_FDTD_cpu_simulation_1_D_pt(size_t num_timesteps); // CPU single thread 1-D simulation of parallelogram tiling
+    void update_FDTD_cpu_simulation_3_D_pt(size_t num_timesteps); // CPU single thread 3-D simulation of parallelogram tiling
 
     // check correctness
     bool check_correctness_gpu_2D();
@@ -131,7 +132,38 @@ class gDiamond {
     
     void print_results();
 
+    struct Pt_idx {
+      int x, y, z; 
+    };
+
   private:
+
+    // for parallelogram tiling CPU simulation
+    void _find_diagonal_hyperplanes(int Nx, int Ny, int Nz, 
+                                    std::vector<Pt_idx>& hyperplanes, 
+                                    std::vector<int>& hyperplane_heads, 
+                                    std::vector<int>& hyperplanes_sizes);
+
+    void _updateEH_pt_seq(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
+                          std::vector<float>& Hx, std::vector<float>& Hy, std::vector<float>& Hz,
+                          std::vector<float>& Cax, std::vector<float>& Cbx,
+                          std::vector<float>& Cay, std::vector<float>& Cby,
+                          std::vector<float>& Caz, std::vector<float>& Cbz,
+                          std::vector<float>& Dax, std::vector<float>& Dbx,
+                          std::vector<float>& Day, std::vector<float>& Dby,
+                          std::vector<float>& Daz, std::vector<float>& Dbz,
+                          std::vector<float>& Jx, std::vector<float>& Jy, std::vector<float>& Jz,
+                          std::vector<float>& Mx, std::vector<float>& My, std::vector<float>& Mz,
+                          float dx, 
+                          int Nx, int Ny, int Nz,
+                          int xx_num, int yy_num, int zz_num, // number of tiles in each dimensions
+                          std::vector<int> xx_heads, 
+                          std::vector<int> yy_heads, 
+                          std::vector<int> zz_heads,
+                          const std::vector<Pt_idx>& hyperplanes,
+                          int hyperplane_head,
+                          size_t block_size,
+                          size_t grid_size); 
 
     // for update_FDTD_gpu_simulation
     void _updateEH_phase_seq(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,

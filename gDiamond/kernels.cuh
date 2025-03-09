@@ -34,6 +34,13 @@
 #define BLT_PT 4 
 
 //
+// ----------------------------------- struct for parallelogram tiling -----------------------------------
+//
+struct pt_idx { // index of a parallelogram tile
+  int x, y, z;
+};
+
+//
 // ----------------------------------- dft -----------------------------------
 // 
 // Update rule for frequency-domain field monitor
