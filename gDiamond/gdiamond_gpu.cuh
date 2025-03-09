@@ -5851,7 +5851,7 @@ void gDiamond::update_FDTD_cpu_simulation_3_D_pt(size_t num_timesteps) { // CPU 
   std::vector<Pt_idx> hyperplanes;
   std::vector<int> hyperplane_heads;
   std::vector<int> hyperplane_sizes;
-  _find_diagonal_hyperplanes(_Nx, _Ny, _Nz, 
+  _find_diagonal_hyperplanes(xx_num, yy_num, zz_num, 
                              hyperplanes, 
                              hyperplane_heads, 
                              hyperplane_sizes);
@@ -5920,13 +5920,15 @@ void gDiamond::_updateEH_pt_seq(std::vector<float>& Ex, std::vector<float>& Ey, 
     int yy = p.y;
     int zz = p.z;
 
+    // std::cout << "grid_size = " << grid_size << ", x = " << xx << ", y = " << yy << ", zz = " << zz << "\n";
+
     // declare shared memory
-    float Ex_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)];
-    float Ey_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)];
-    float Ez_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)];
-    float Hx_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)];
-    float Hy_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)];
-    float Hz_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)];
+    float Ex_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)] = {};
+    float Ey_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)] = {};
+    float Ez_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)] = {};
+    float Hx_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)] = {};
+    float Hy_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)] = {};
+    float Hz_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)] = {};
 
     // load shared memory
     for(size_t thread_id=0; thread_id<block_size; thread_id++) {
@@ -5938,7 +5940,7 @@ void gDiamond::_updateEH_pt_seq(std::vector<float>& Ex, std::vector<float>& Ey, 
             int global_z = local_z + zz_heads[zz];
 
             int global_idx = global_x + global_y * Nx + global_z * Nx * Ny;
-            int local_idx = local_x + local_y * BLX_PT + local_z * BLX_PT * BLY_PT;
+            int local_idx = local_x + local_y * (BLX_PT + BLT_PT) + local_z * (BLX_PT + BLT_PT) * (BLY_PT + BLT_PT);
 
             if(global_x >= 0 && global_x <= Nx-1 &&
                global_y >= 0 && global_y <= Ny-1 &&
@@ -6030,7 +6032,7 @@ void gDiamond::_updateEH_pt_seq(std::vector<float>& Ex, std::vector<float>& Ey, 
             int global_z = local_z + zz_heads[zz];
 
             int global_idx = global_x + global_y * Nx + global_z * Nx * Ny;
-            int local_idx = local_x + local_y * BLX_PT + local_z * BLX_PT * BLY_PT;
+            int local_idx = local_x + local_y * (BLX_PT + BLT_PT) + local_z * (BLX_PT + BLT_PT) * (BLY_PT + BLT_PT);
 
             if(global_x >= 0 && global_x <= Nx-1 &&
                global_y >= 0 && global_y <= Ny-1 &&
