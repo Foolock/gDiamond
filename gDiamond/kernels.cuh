@@ -1,6 +1,8 @@
 #ifndef KERNELS_CUH
 #define KERNELS_CUH
 
+#include "gdiamond.hpp"
+
 // for diamond tiling 
 #define BLX_GPU 8
 #define BLY_GPU 8
@@ -31,14 +33,7 @@
 #define BLX_PT 8
 #define BLY_PT 8
 #define BLZ_PT 8
-#define BLT_PT 4 
-
-//
-// ----------------------------------- struct for parallelogram tiling -----------------------------------
-//
-struct pt_idx { // index of a parallelogram tile
-  int x, y, z;
-};
+#define BLT_PT 5 
 
 //
 // ----------------------------------- dft -----------------------------------
@@ -1816,7 +1811,168 @@ __global__ void updateEH_mil(float *Ex, float *Ey, float *Ez,
 
 }
 
+//
+// -------------------------------------------------- parallelogram tiling --------------------------------------------------
+//
+__global__ void updateEH_pt(float *Ex, float *Ey, float *Ez,
+                            float *Hx, float *Hy, float *Hz,
+                            float *Cax, float *Cbx,
+                            float *Cay, float *Cby,
+                            float *Caz, float *Cbz,
+                            float *Dax, float *Dbx,
+                            float *Day, float *Dby,
+                            float *Daz, float *Dbz,
+                            float *Jx, float *Jy, float *Jz,
+                            float *Mx, float *My, float *Mz,
+                            float dx, 
+                            int Nx, int Ny, int Nz,
+                            int xx_num, int yy_num, int zz_num, // number of tiles in each dimensions
+                            int *xx_heads, 
+                            int *yy_heads, 
+                            int *zz_heads,
+                            gdiamond::Pt_idx *hyperplanes,
+                            int hyperplane_head) {
 
+  int block_id = blockIdx.x;  
+  int thread_id = threadIdx.x;
+  int local_x = thread_id % BLX_PT;
+  int local_y = (thread_id / BLX_PT) % BLY_PT;
+  int local_z = thread_id / (BLX_PT * BLY_PT);
+
+  // get the index of paralellogram tile of this block
+  gdiamond::Pt_idx p = hyperplanes[hyperplane_head + block_id];
+  int xx = p.x;
+  int yy = p.y;
+  int zz = p.z;
+
+  // declare shared memory
+  float Ex_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)];
+  float Ey_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)];
+  float Ez_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)];
+  float Hx_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)];
+  float Hy_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)];
+  float Hz_shmem[(BLX_PT + BLT_PT) * (BLY_PT + BLT_PT) * (BLZ_PT + BLT_PT)];
+
+  // load shared memory
+  for(int l_z = local_z; l_z < (BLZ_PT + BLT_PT); l_z += BLZ_PT) {
+    for(int l_y = local_y; l_y < (BLY_PT + BLT_PT); l_y += BLY_PT) {
+      for(int l_x = local_x; l_x < (BLX_PT + BLT_PT); l_x += BLX_PT) {
+        int g_x = l_x + xx_heads[xx];
+        int g_y = l_y + yy_heads[yy];
+        int g_z = l_z + zz_heads[zz];
+
+        int g_idx = g_x + g_y * Nx + g_z * Nx * Ny;
+        int l_idx = l_x + l_y * (BLX_PT + BLT_PT) + l_z * (BLX_PT + BLT_PT) * (BLY_PT + BLT_PT);
+
+        if(g_x >= 0 && g_x <= Nx-1 &&
+           g_y >= 0 && g_y <= Ny-1 &&
+           g_z >= 0 && g_z <= Nz-1) {
+          Ex_shmem[l_idx] = Ex[g_idx];
+          Ey_shmem[l_idx] = Ey[g_idx];
+          Ez_shmem[l_idx] = Ez[g_idx];
+          Hx_shmem[l_idx] = Hx[g_idx];
+          Hy_shmem[l_idx] = Hy[g_idx];
+          Hz_shmem[l_idx] = Hz[g_idx];
+        }
+      }
+    }
+  }
+
+  __syncthreads();
+
+  // update
+  int shared_E_x;
+  int shared_E_y;
+  int shared_E_z;
+  int shared_H_x;
+  int shared_H_y;
+  int shared_H_z;
+  int global_x;
+  int global_y;
+  int global_z;
+  int shared_E_idx;
+  int shared_H_idx;
+  int global_idx;
+  for(int t=0; t<BLT_PT; t++) {
+    int offset = BLT_PT - t;
+
+    // update E
+    shared_E_x = local_x + offset;
+    shared_E_y = local_y + offset;
+    shared_E_z = local_z + offset;
+    global_x = local_x + offset + xx_heads[xx];
+    global_y = local_y + offset + yy_heads[yy];
+    global_z = local_z + offset + zz_heads[zz];
+    shared_E_idx = shared_E_x + shared_E_y * (BLX_PT + BLT_PT) + shared_E_z * (BLX_PT + BLT_PT) * (BLY_PT + BLT_PT);
+    global_idx = global_x + global_y * Nx + global_z * Nx * Ny;
+
+    if(global_x >= 1 && global_x <= Nx-2 &&
+       global_y >= 1 && global_y <= Ny-2 &&
+       global_z >= 1 && global_z <= Nz-2) {
+
+      Ex_shmem[shared_E_idx] = Cax[global_idx] * Ex_shmem[shared_E_idx] + Cbx[global_idx] *
+                ((Hz_shmem[shared_E_idx] - Hz_shmem[shared_E_idx - (BLX_PT + BLT_PT)]) - (Hy_shmem[shared_E_idx] - Hy_shmem[shared_E_idx - (BLX_PT + BLT_PT) * (BLY_PT + BLT_PT)]) - Jx[global_idx] * dx);
+      Ey_shmem[shared_E_idx] = Cay[global_idx] * Ey_shmem[shared_E_idx] + Cby[global_idx] *
+                ((Hx_shmem[shared_E_idx] - Hx_shmem[shared_E_idx - (BLX_PT + BLT_PT) * (BLY_PT + BLT_PT)]) - (Hz_shmem[shared_E_idx] - Hz_shmem[shared_E_idx - 1]) - Jy[global_idx] * dx);
+      Ez_shmem[shared_E_idx] = Caz[global_idx] * Ez_shmem[shared_E_idx] + Cbz[global_idx] *
+                ((Hy_shmem[shared_E_idx] - Hy_shmem[shared_E_idx - 1]) - (Hx_shmem[shared_E_idx] - Hx_shmem[shared_E_idx - (BLX_PT + BLT_PT)]) - Jz[global_idx] * dx);
+    }
+
+    __syncthreads();
+
+    // update H
+    shared_H_x = local_x + offset - 1;
+    shared_H_y = local_y + offset - 1;
+    shared_H_z = local_z + offset - 1;
+
+    global_x = local_x + offset + xx_heads[xx] - 1;
+    global_y = local_y + offset + yy_heads[yy] - 1;
+    global_z = local_z + offset + zz_heads[zz] - 1;
+
+    shared_H_idx = shared_H_x + shared_H_y * (BLX_PT + BLT_PT) + shared_H_z * (BLX_PT + BLT_PT) * (BLY_PT + BLT_PT);
+    global_idx = global_x + global_y * Nx + global_z * Nx * Ny;
+
+    if(global_x >= 1 && global_x <= Nx-2 &&
+       global_y >= 1 && global_y <= Ny-2 &&
+       global_z >= 1 && global_z <= Nz-2) {
+
+      Hx_shmem[shared_H_idx] = Dax[global_idx] * Hx_shmem[shared_H_idx] + Dbx[global_idx] *
+                ((Ey_shmem[shared_H_idx + (BLX_PT + BLT_PT) * (BLY_PT + BLT_PT)] - Ey_shmem[shared_H_idx]) - (Ez_shmem[shared_H_idx + (BLX_PT + BLT_PT)] - Ez_shmem[shared_H_idx]) - Mx[global_idx] * dx);
+      Hy_shmem[shared_H_idx] = Day[global_idx] * Hy_shmem[shared_H_idx] + Dby[global_idx] *
+                ((Ez_shmem[shared_H_idx + 1] - Ez_shmem[shared_H_idx]) - (Ex_shmem[shared_H_idx + (BLX_PT + BLT_PT) * (BLY_PT + BLT_PT)] - Ex_shmem[shared_H_idx]) - My[global_idx] * dx);
+      Hz_shmem[shared_H_idx] = Daz[global_idx] * Hz_shmem[shared_H_idx] + Dbz[global_idx] *
+                ((Ex_shmem[shared_H_idx + (BLX_PT + BLT_PT)] - Ex_shmem[shared_H_idx]) - (Ey_shmem[shared_H_idx + 1] - Ey_shmem[shared_H_idx]) - Mz[global_idx] * dx);
+    }
+
+    __syncthreads();
+  }
+
+  // store global memory
+  for(int l_z = local_z; l_z < (BLZ_PT + BLT_PT); l_z += BLZ_PT) {
+    for(int l_y = local_y; l_y < (BLY_PT + BLT_PT); l_y += BLY_PT) {
+      for(int l_x = local_x; l_x < (BLX_PT + BLT_PT); l_x += BLX_PT) {
+        int g_x = l_x + xx_heads[xx];
+        int g_y = l_y + yy_heads[yy];
+        int g_z = l_z + zz_heads[zz];
+
+        int g_idx = g_x + g_y * Nx + g_z * Nx * Ny;
+        int l_idx = l_x + l_y * (BLX_PT + BLT_PT) + l_z * (BLX_PT + BLT_PT) * (BLY_PT + BLT_PT);
+
+        if(g_x >= 0 && g_x <= Nx-1 &&
+           g_y >= 0 && g_y <= Ny-1 &&
+           g_z >= 0 && g_z <= Nz-1) {
+          Ex[g_idx] = Ex_shmem[l_idx];
+          Ey[g_idx] = Ey_shmem[l_idx];
+          Ez[g_idx] = Ez_shmem[l_idx];
+          Hx[g_idx] = Hx_shmem[l_idx];
+          Hy[g_idx] = Hy_shmem[l_idx];
+          Hz[g_idx] = Hz_shmem[l_idx];
+        }
+      }
+    }
+  }
+
+}
 
 
 #endif

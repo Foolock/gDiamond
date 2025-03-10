@@ -6051,7 +6051,227 @@ void gDiamond::_updateEH_pt_seq(std::vector<float>& Ex, std::vector<float>& Ey, 
 
   }
 
-} 
+}
+
+void gDiamond::update_FDTD_gpu_pt(size_t num_timesteps) { // GPU 3-D implementation of parallelogram tiling
+
+  // clear source Mz for experiments
+  _Mz.clear();
+
+  // transfer source
+  for(size_t t=0; t<num_timesteps; t++) {
+    float Mz_value = M_source_amp * std::sin(SOURCE_OMEGA * t * dt);
+    _Mz[_source_idx] = Mz_value;
+  }
+
+  int Nx = _Nx;
+  int Ny = _Ny;
+  int Nz = _Nz;
+
+  // number of parallelogram tiles in each dimension 
+  int xx_num = (Nx - (BLX_PT - BLT_PT) + BLX_PT - 1) / BLX_PT + 1; 
+  int yy_num = (Ny - (BLY_PT - BLT_PT) + BLY_PT - 1) / BLY_PT + 1; 
+  int zz_num = (Nz - (BLZ_PT - BLT_PT) + BLZ_PT - 1) / BLZ_PT + 1; 
+
+  std::vector<int> xx_heads(xx_num, 0); 
+  for(int idx=1; idx<xx_num; idx++) {
+    int step = (idx == 1)? BLX_PT - BLT_PT : BLX_PT;
+    xx_heads[idx] = xx_heads[idx-1] + step;
+  } 
+  xx_heads[0] = 0 - BLT_PT;
+
+  std::vector<int> yy_heads(yy_num, 0); 
+  for(int idx=1; idx<yy_num; idx++) {
+    int step = (idx == 1)? BLY_PT - BLT_PT : BLY_PT;
+    yy_heads[idx] = yy_heads[idx-1] + step;
+  } 
+  yy_heads[0] = 0 - BLT_PT;
+
+  std::vector<int> zz_heads(zz_num, 0); 
+  for(int idx=1; idx<zz_num; idx++) {
+    int step = (idx == 1)? BLZ_PT - BLT_PT : BLZ_PT;
+    zz_heads[idx] = zz_heads[idx-1] + step;
+  } 
+  zz_heads[0] = 0 - BLT_PT;
+
+  // find hyperplanes of tiles given Nx, Ny, Nz
+  std::vector<Pt_idx> hyperplanes;
+  std::vector<int> hyperplane_heads;
+  std::vector<int> hyperplane_sizes;
+  _find_diagonal_hyperplanes(xx_num, yy_num, zz_num, 
+                             hyperplanes, 
+                             hyperplane_heads, 
+                             hyperplane_sizes);
+
+  // E, H, J, M on device 
+  float *Ex, *Ey, *Ez, *Hx, *Hy, *Hz, *Jx, *Jy, *Jz, *Mx, *My, *Mz;
+
+  // Ca, Cb, Da, Db on device
+  float *Cax, *Cay, *Caz, *Cbx, *Cby, *Cbz;
+  float *Dax, *Day, *Daz, *Dbx, *Dby, *Dbz;
+
+  // data for parallelogram tiling
+  Pt_idx *hyperplanes_d;  
+  int *xx_heads_d, *yy_heads_d, *zz_heads_d;
+
+  CUDACHECK(cudaMalloc(&Ex, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Ey, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Ez, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Hx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Hy, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Hz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Jx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Jy, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Jz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Mx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&My, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Mz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cax, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cbx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cay, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cby, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Caz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cbz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Dax, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Dbx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Day, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Dby, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Daz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Dbz, sizeof(float) * _Nx * _Ny * _Nz)); 
+  CUDACHECK(cudaMalloc(&hyperplanes_d, sizeof(Pt_idx) * hyperplanes.size()));
+  CUDACHECK(cudaMalloc(&xx_heads_d, sizeof(int) * xx_heads.size()));
+  CUDACHECK(cudaMalloc(&yy_heads_d, sizeof(int) * yy_heads.size()));
+  CUDACHECK(cudaMalloc(&zz_heads_d, sizeof(int) * zz_heads.size()));
+
+  // initialize E, H as 0 
+  CUDACHECK(cudaMemset(Ex, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Ey, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Ez, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Hx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Hy, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Hz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+
+  // initialize J, M, Ca, Cb, Da, Db as 0 
+  CUDACHECK(cudaMemset(Jx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Jy, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Jz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Mx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(My, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Mz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cax, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cbx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cay, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cby, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Caz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cbz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Dax, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Dbx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Day, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Dby, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Daz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Dbz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+
+  // transfer source
+  for(size_t t=0; t<num_timesteps; t++) {
+    float Mz_value = M_source_amp * std::sin(SOURCE_OMEGA * t * dt);
+    CUDACHECK(cudaMemcpy(Mz + _source_idx, &Mz_value, sizeof(float), cudaMemcpyHostToDevice));
+  } 
+
+  auto start = std::chrono::high_resolution_clock::now();
+
+  // copy Ca, Cb, Da, Db
+  CUDACHECK(cudaMemcpyAsync(Cax, _Cax.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Cay, _Cay.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Caz, _Caz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Cbx, _Cbx.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Cby, _Cby.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Cbz, _Cbz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Dax, _Dax.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Day, _Day.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Daz, _Daz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Dbx, _Dbx.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Dby, _Dby.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Dbz, _Dbz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+
+  // copy data for parallelogram tiling
+  CUDACHECK(cudaMemcpyAsync(hyperplanes_d, hyperplanes.data(), sizeof(Pt_idx) * hyperplanes.size(), cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(xx_heads_d, xx_heads.data(), sizeof(int) * xx_heads.size(), cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(yy_heads_d, yy_heads.data(), sizeof(int) * yy_heads.size(), cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(zz_heads_d, zz_heads.data(), sizeof(int) * zz_heads.size(), cudaMemcpyHostToDevice));
+
+  size_t block_size = BLX_PT * BLY_PT * BLZ_PT;
+  size_t grid_size;
+
+  for(size_t tt=0; tt<num_timesteps/BLT_PT; tt++) {
+    size_t num_hyperplanes = hyperplane_heads.size();
+    for(size_t h=0; h<num_hyperplanes; h++) {
+      grid_size = hyperplane_sizes[h];
+      updateEH_pt<<<grid_size, block_size>>>(Ex, Ey, Ez,
+                                             Hx, Hy, Hz,
+                                             Cax, Cbx,
+                                             Cay, Cby,
+                                             Caz, Cbz,
+                                             Dax, Dbx,
+                                             Day, Dby,
+                                             Daz, Dbz,
+                                             Jx, Jy, Jz,
+                                             Mx, My, Mz,
+                                             _dx, 
+                                             Nx, Ny, Nz,
+                                             xx_num, yy_num, zz_num, // number of tiles in each dimensions
+                                             xx_heads_d, 
+                                             yy_heads_d, 
+                                             zz_heads_d,
+                                             hyperplanes_d,
+                                             hyperplane_heads[h]); 
+    }
+  }
+
+  cudaDeviceSynchronize();
+
+  // copy E, H back to host
+  CUDACHECK(cudaMemcpy(_Ex_gpu_shEH.data(), Ex, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Ey_gpu_shEH.data(), Ey, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Ez_gpu_shEH.data(), Ez, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hx_gpu_shEH.data(), Hx, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hy_gpu_shEH.data(), Hy, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hz_gpu_shEH.data(), Hz, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+
+  auto end = std::chrono::high_resolution_clock::now();
+  std::cout << "gpu runtime (parallelogram tiling 3-D mapping, shared memory for EH only): " << std::chrono::duration<double>(end-start).count() << "s\n";
+  std::cout << "gpu performance: " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / std::chrono::duration<double>(end-start).count() << "Mcells/s\n";
+
+  CUDACHECK(cudaFree(Ex));
+  CUDACHECK(cudaFree(Ey));
+  CUDACHECK(cudaFree(Ez));
+  CUDACHECK(cudaFree(Hx));
+  CUDACHECK(cudaFree(Hy));
+  CUDACHECK(cudaFree(Hz));
+  CUDACHECK(cudaFree(Jx));
+  CUDACHECK(cudaFree(Jy));
+  CUDACHECK(cudaFree(Jz));
+  CUDACHECK(cudaFree(Mx));
+  CUDACHECK(cudaFree(My));
+  CUDACHECK(cudaFree(Mz));
+  CUDACHECK(cudaFree(Cax));
+  CUDACHECK(cudaFree(Cbx));
+  CUDACHECK(cudaFree(Cay));
+  CUDACHECK(cudaFree(Cby));
+  CUDACHECK(cudaFree(Caz));
+  CUDACHECK(cudaFree(Cbz));
+  CUDACHECK(cudaFree(Dax));
+  CUDACHECK(cudaFree(Dbx));
+  CUDACHECK(cudaFree(Day));
+  CUDACHECK(cudaFree(Dby));
+  CUDACHECK(cudaFree(Daz));
+  CUDACHECK(cudaFree(Dbz));
+
+  CUDACHECK(cudaFree(hyperplanes_d));
+  CUDACHECK(cudaFree(xx_heads_d));
+  CUDACHECK(cudaFree(yy_heads_d));
+  CUDACHECK(cudaFree(zz_heads_d));
+
+}
 
 
 } // end of namespace gdiamond

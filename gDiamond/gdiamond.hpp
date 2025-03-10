@@ -10,6 +10,10 @@
 
 namespace gdiamond {
 
+struct Pt_idx {
+  int x, y, z; 
+};
+
 class gDiamond {
 
   public:
@@ -132,10 +136,6 @@ class gDiamond {
     bool check_correctness_simu_shmem();
     
     void print_results();
-
-    struct Pt_idx {
-      int x, y, z; 
-    };
 
   private:
 
