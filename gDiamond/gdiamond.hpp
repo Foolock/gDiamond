@@ -126,6 +126,12 @@ class gDiamond {
     void update_FDTD_cpu_simulation_3_D_pt(size_t num_timesteps); // CPU single thread 3-D simulation of parallelogram tiling
     void update_FDTD_gpu_pt(size_t num_timesteps); // GPU 3-D implementation of parallelogram tiling
 
+    // fuse equations
+    void update_FDTD_gpu_fq(size_t num_timesteps); // GPU fuse equation try 
+
+    // check shared memory without limitation of dependencies, upper bound speedup check
+    void update_FDTD_gpu_shmem_no_deps_obeyed(size_t num_timesteps); // GPU 3-D implementation naive, with shared memory, but does not obey dependencies
+
     // check correctness
     bool check_correctness_gpu_2D();
     bool check_correctness_gpu();
@@ -1668,9 +1674,9 @@ void gDiamond::_setup_diamond_tiling_gpu(size_t BLX, size_t BLY, size_t BLZ, siz
 
 void gDiamond::print_results() {
 
-  std::cout << "Ex_simu = ";
+  std::cout << "Ex_gpu = ";
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    std::cout << _Ex_simu[i] << " ";
+    std::cout << _Ex_gpu[i] << " ";
   }
   std::cout << "\n";
   std::cout << "\n";

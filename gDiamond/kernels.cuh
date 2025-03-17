@@ -33,7 +33,13 @@
 #define BLX_PT 8
 #define BLY_PT 8
 #define BLZ_PT 8
-#define BLT_PT 5 
+#define BLT_PT 3 
+
+// upper bound check
+#define BLX_UB 32 
+#define BLY_UB 4
+#define BLZ_UB 4
+#define BLT_UB 4
 
 //
 // ----------------------------------- dft -----------------------------------
@@ -378,6 +384,87 @@ __global__ void updateH_3Dmap_fix(float * Ex, float * Ey, float * Ez,
     Hz[idx] = Daz[idx] * Hz[idx] + Dbz[idx] *
               ((Ex[idx + Nx] - Ex[idx]) - (Ey[idx + 1] - Ey[idx]) - Mz[idx] * dx);
   }
+}
+
+__global__ void updateEH_3Dmap_fq(float * Ex, float * Ey, float * Ez,
+                                  float * Hx, float * Hy, float * Hz,
+                                  float * Hx_temp, float * Hy_temp, float * Hz_temp,
+                                  float * Cax, float * Cbx, float * Cay,
+                                  float * Cby, float * Caz, float * Cbz,
+                                  float * Jx, float * Jy, float * Jz,
+                                  float * Dax, float * Dbx,
+                                  float * Day, float * Dby,
+                                  float * Daz, float * Dbz,
+                                  float * Mx, float * My, float * Mz,
+                                  float dx, int Nx, int Ny, int Nz) 
+{
+
+  unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+  unsigned int i = tid % Nx;
+  unsigned int j = (tid % (Nx * Ny)) / Nx;
+  unsigned int k = tid / (Nx * Ny);
+
+  if (i >= 1 && i < Nx - 1 && j >= 1 && j < Ny - 1 && k >= 1 && k < Nz - 1)
+  {
+    int idx = i + j * Nx + k * (Nx * Ny);
+
+    // E are registers
+    // new Ex[idx]
+    float Ex_reg1 = Cax[idx] * Ex[idx] + Cbx[idx] *
+              ((Hz_temp[idx] - Hz_temp[idx - Nx]) - (Hy_temp[idx] - Hy_temp[idx - Nx * Ny]) - Jx[idx] * dx);
+
+    // new Ex[idx + Nx]
+    float Ex_reg2 = Cax[idx + Nx] * Ex[idx + Nx] + Cbx[idx + Nx] *
+              ((Hz_temp[idx + Nx] - Hz_temp[idx]) - (Hy_temp[idx + Nx] - Hy_temp[idx + Nx - Nx * Ny]) - Jx[idx + Nx] * dx);
+
+    // new Ex[idx + Nx * Ny]
+    float Ex_reg3 = Cax[idx + Nx * Ny] * Ex[idx + Nx * Ny] + Cbx[idx + Nx * Ny] *
+              ((Hz_temp[idx + Nx * Ny] - Hz_temp[idx + Nx * Ny - Nx]) - (Hy_temp[idx + Nx * Ny] - Hy_temp[idx]) - Jx[idx + Nx * Ny] * dx);
+
+    // new Ey[idx]
+    float Ey_reg1 = Cay[idx] * Ey[idx] + Cby[idx] *
+              ((Hx_temp[idx] - Hx_temp[idx - Nx * Ny]) - (Hz_temp[idx] - Hz_temp[idx - 1]) - Jy[idx] * dx);
+
+    // new Ey[idx + 1]
+    float Ey_reg2 = Cay[idx + 1] * Ey[idx + 1] + Cby[idx + 1] *
+              ((Hx_temp[idx + 1] - Hx_temp[idx + 1 - Nx * Ny]) - (Hz_temp[idx + 1] - Hz_temp[idx]) - Jy[idx + 1] * dx);
+
+    // new Ey[idx + Nx * Ny]
+    float Ey_reg3 = Cay[idx + Nx * Ny] * Ey[idx + Nx * Ny] + Cby[idx + Nx * Ny] *
+              ((Hx_temp[idx + Nx * Ny] - Hx_temp[idx]) - (Hz_temp[idx + Nx * Ny] - Hz_temp[idx + Nx * Ny - 1]) - Jy[idx + Nx * Ny] * dx);
+
+    // new Ez[idx]
+    float Ez_reg1 = Caz[idx] * Ez[idx] + Cbz[idx] *
+              ((Hy_temp[idx] - Hy_temp[idx - 1]) - (Hx_temp[idx] - Hx_temp[idx - Nx]) - Jz[idx] * dx);
+
+    // new Ez[idx + Nx]
+    float Ez_reg2 = Caz[idx + Nx] * Ez[idx + Nx] + Cbz[idx + Nx] *
+              ((Hy_temp[idx + Nx] - Hy_temp[idx + Nx - 1]) - (Hx_temp[idx + Nx] - Hx_temp[idx]) - Jz[idx + Nx] * dx);
+
+    // new Ez[idx + 1]
+    float Ez_reg3 = Caz[idx + 1] * Ez[idx + 1] + Cbz[idx + 1] *
+              ((Hy_temp[idx + 1] - Hy_temp[idx]) - (Hx_temp[idx + 1] - Hx_temp[idx + 1 - Nx]) - Jz[idx + 1] * dx);
+
+    // H are from global memory
+    Hx[idx] = Dax[idx] * Hx[idx] + Dbx[idx] *
+              ((Ey_reg3 - Ey_reg1) - (Ez_reg2 - Ez_reg1) - Mx[idx] * dx);
+
+    Hy[idx] = Day[idx] * Hy[idx] + Dby[idx] *
+              ((Ez_reg3 - Ez_reg1) - (Ex_reg3 - Ex_reg1) - My[idx] * dx);
+
+    Hz[idx] = Daz[idx] * Hz[idx] + Dbz[idx] *
+              ((Ex_reg2 - Ex_reg1) - (Ey_reg2 - Ey_reg1) - Mz[idx] * dx);
+
+    // we will need to store Ex[idx], Ex[idx + Nx], Ex[idx + Nx * Ny]
+    //                       Ey[idx], Ey[idx + 1], Ey[idx + Nx * Ny]
+    //                       Ez[idx], Ez[idx + Nx], Ez[idx + 1] 
+    // back to global memory
+    Ex[idx] = Ex_reg1;
+    Ey[idx] = Ey_reg1;
+    Ez[idx] = Ez_reg1;
+  }
+
 }
 
 //
@@ -1971,6 +2058,238 @@ __global__ void updateEH_pt(float *Ex, float *Ey, float *Ez,
       }
     }
   }
+
+}
+
+//
+// --------------------------------------------- upper bound speedup check
+//
+
+__global__ void updateE_ub_globalmem_only(float *Ex, float *Ey, float *Ez,
+                                          float *Hx, float *Hy, float *Hz,
+                                          float *Cax, float *Cbx,
+                                          float *Cay, float *Cby,
+                                          float *Caz, float *Cbz,
+                                          float *Dax, float *Dbx,
+                                          float *Day, float *Dby,
+                                          float *Daz, float *Dbz,
+                                          float *Jx, float *Jy, float *Jz,
+                                          float *Mx, float *My, float *Mz,
+                                          float dx, 
+                                          int Nx, int Ny, int Nz,
+                                          int xx_num, int yy_num, int zz_num,
+                                          int *xx_heads, int *yy_heads, int *zz_heads) 
+{
+  // first we map each (xx, yy, zz) to a block
+  const int xx = blockIdx.x % xx_num;
+  const int yy = (blockIdx.x % (xx_num * yy_num)) / xx_num;
+  const int zz = blockIdx.x / (xx_num * yy_num);
+
+  // map each thread in the block to a global index
+  const int tid = threadIdx.x;
+  const int local_x = tid % BLX_UB;                     // X coordinate within the tile
+  const int local_y = (tid % (BLX_UB * BLY_UB)) / BLX_UB; 
+  const int local_z = tid / (BLX_UB * BLY_UB);     // Z coordinate within the tile
+  const int global_x = xx_heads[xx] + local_x; // Global X coordinate
+  const int global_y = yy_heads[yy] + local_y; // Global Y coordinate
+  const int global_z = zz_heads[zz] + local_z; // Global Z coordinate
+  const int global_idx = global_x + global_y * Nx + global_z * Nx * Ny;
+
+  if(global_x >= 1 && global_x <= Nx-2 &&
+     global_y >= 1 && global_y <= Ny-2 &&
+     global_z >= 1 && global_z <= Nz-2) {
+
+    Ex[global_idx] = Cax[global_idx] * Ex[global_idx] + Cbx[global_idx] *
+              ((Hz[global_idx] - Hz[global_idx - Nx]) - (Hy[global_idx] - Hy[global_idx - Nx * Ny]) - Jx[global_idx] * dx);
+
+    Ey[global_idx] = Cay[global_idx] * Ey[global_idx] + Cby[global_idx] *
+              ((Hx[global_idx] - Hx[global_idx - Nx * Ny]) - (Hz[global_idx] - Hz[global_idx - 1]) - Jy[global_idx] * dx);
+
+    Ez[global_idx] = Caz[global_idx] * Ez[global_idx] + Cbz[global_idx] *
+              ((Hy[global_idx] - Hy[global_idx - 1]) - (Hx[global_idx] - Hx[global_idx - Nx]) - Jz[global_idx] * dx);
+  }
+
+}
+
+__global__ void updateH_ub_globalmem_only(float *Ex, float *Ey, float *Ez,
+                                          float *Hx, float *Hy, float *Hz,
+                                          float *Cax, float *Cbx,
+                                          float *Cay, float *Cby,
+                                          float *Caz, float *Cbz,
+                                          float *Dax, float *Dbx,
+                                          float *Day, float *Dby,
+                                          float *Daz, float *Dbz,
+                                          float *Jx, float *Jy, float *Jz,
+                                          float *Mx, float *My, float *Mz,
+                                          float dx, 
+                                          int Nx, int Ny, int Nz,
+                                          int xx_num, int yy_num, int zz_num,
+                                          int *xx_heads, int *yy_heads, int *zz_heads) 
+{
+  // first we map each (xx, yy, zz) to a block
+  const int xx = blockIdx.x % xx_num;
+  const int yy = (blockIdx.x % (xx_num * yy_num)) / xx_num;
+  const int zz = blockIdx.x / (xx_num * yy_num);
+
+  // map each thread in the block to a global index
+  const int tid = threadIdx.x;
+  const int local_x = tid % BLX_UB;                     // X coordinate within the tile
+  const int local_y = (tid / BLX_UB) % BLY_UB;     // Y coordinate within the tile
+  const int local_z = tid / (BLX_UB * BLY_UB);     // Z coordinate within the tile
+  const int global_x = xx_heads[xx] + local_x; // Global X coordinate
+  const int global_y = yy_heads[yy] + local_y; // Global Y coordinate
+  const int global_z = zz_heads[zz] + local_z; // Global Z coordinate
+  const int global_idx = global_x + global_y * Nx + global_z * Nx * Ny;
+
+  if(global_x >= 1 && global_x <= Nx-2 &&
+     global_y >= 1 && global_y <= Ny-2 &&
+     global_z >= 1 && global_z <= Nz-2) {
+
+    Hx[global_idx] = Dax[global_idx] * Hx[global_idx] + Dbx[global_idx] *
+              ((Ey[global_idx + Nx * Ny] - Ey[global_idx]) - (Ez[global_idx + Nx] - Ez[global_idx]) - Mx[global_idx] * dx);
+
+    Hy[global_idx] = Day[global_idx] * Hy[global_idx] + Dby[global_idx] *
+              ((Ez[global_idx + 1] - Ez[global_idx]) - (Ex[global_idx + Nx * Ny] - Ex[global_idx]) - My[global_idx] * dx);
+
+    Hz[global_idx] = Daz[global_idx] * Hz[global_idx] + Dbz[global_idx] *
+              ((Ex[global_idx + Nx] - Ex[global_idx]) - (Ey[global_idx + 1] - Ey[global_idx]) - Mz[global_idx] * dx);
+  }
+
+}
+
+__global__ void updateEH_ub(float *Ex, float *Ey, float *Ez,
+                            float *Hx, float *Hy, float *Hz,
+                            float *Cax, float *Cbx,
+                            float *Cay, float *Cby,
+                            float *Caz, float *Cbz,
+                            float *Dax, float *Dbx,
+                            float *Day, float *Dby,
+                            float *Daz, float *Dbz,
+                            float *Jx, float *Jy, float *Jz,
+                            float *Mx, float *My, float *Mz,
+                            float dx, 
+                            int Nx, int Ny, int Nz,
+                            int xx_num, int yy_num, int zz_num,
+                            int *xx_heads, int *yy_heads, int *zz_heads) 
+{
+
+
+  // // Compute x, y, z in the same order as naive mapping
+  // const int thread_id = threadIdx.x;
+  // int x = thread_id % Nx;
+  // int y = (thread_id % (Nx * Ny)) / Nx;
+  // int z = thread_id / (Nx * Ny);
+
+  // // Find which tile (xx, yy, zz) the thread belongs to
+  // int xx = x / BLX_UB;
+  // int yy = y / BLY_UB;
+  // int zz = z / BLZ_UB;
+
+  // // Compute local position inside the tile
+  // int local_x = x % BLX_UB;
+  // int local_y = y % BLY_UB;
+  // int local_z = z % BLZ_UB;
+
+  // // Compute global indices based on tile offsets
+  // int global_x = xx_heads[xx] + local_x;
+  // int global_y = yy_heads[yy] + local_y;
+  // int global_z = zz_heads[zz] + local_z;
+ 
+
+  // first we map each (xx, yy, zz) to a block
+  const int xx = blockIdx.x % xx_num;
+  const int yy = (blockIdx.x % (xx_num * yy_num)) / xx_num;
+  const int zz = blockIdx.x / (xx_num * yy_num);
+
+  // // map each thread in the block to a global index
+  const int tid = threadIdx.x;
+  const int local_x = tid % BLX_UB;                     // X coordinate within the tile
+  const int local_y = (tid / BLX_UB) % BLY_UB;     // Y coordinate within the tile
+  const int local_z = tid / (BLX_UB * BLY_UB);     // Z coordinate within the tile
+  const int global_x = xx_heads[xx] + local_x; // Global X coordinate
+  const int global_y = yy_heads[yy] + local_y; // Global Y coordinate
+  const int global_z = zz_heads[zz] + local_z; // Global Z coordinate
+  const int global_idx = global_x + global_y * Nx + global_z * Nx * Ny;
+
+  // only put E, H array into shared memory 
+  __shared__ float Ex_shmem[(BLX_UB + 1) * (BLY_UB + 1) * (BLZ_UB + 1)];
+  __shared__ float Ey_shmem[(BLX_UB + 1) * (BLY_UB + 1) * (BLZ_UB + 1)];
+  __shared__ float Ez_shmem[(BLX_UB + 1) * (BLY_UB + 1) * (BLZ_UB + 1)];
+  __shared__ float Hx_shmem[(BLX_UB + 1) * (BLY_UB + 1) * (BLZ_UB + 1)];
+  __shared__ float Hy_shmem[(BLX_UB + 1) * (BLY_UB + 1) * (BLZ_UB + 1)];
+  __shared__ float Hz_shmem[(BLX_UB + 1) * (BLY_UB + 1) * (BLZ_UB + 1)];
+
+  // shared memory index
+  const int shared_H_x = local_x;
+  const int shared_H_y = local_y;
+  const int shared_H_z = local_z;
+  const int shared_H_idx = shared_H_x + shared_H_y * BLX_UB + shared_H_z * BLX_UB * BLY_UB;
+  const int shared_E_x = local_x;
+  const int shared_E_y = local_y;
+  const int shared_E_z = local_z;
+  const int shared_E_idx = shared_E_x + shared_E_y * BLX_UB + shared_E_z * BLX_UB * BLY_UB;
+
+  // load H shmem
+  if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz) {
+    Hx_shmem[shared_H_idx] = Hx[global_idx];
+    Hy_shmem[shared_H_idx] = Hy[global_idx];
+    Hz_shmem[shared_H_idx] = Hz[global_idx];
+  }
+
+  // load E shmem
+  if(global_x >= 0 && global_x < Nx && global_y >= 0 && global_y < Ny && global_z >= 0 && global_z < Nz) {
+    Ex_shmem[shared_E_idx] = Ex[global_idx];
+    Ey_shmem[shared_E_idx] = Ey[global_idx];
+    Ez_shmem[shared_E_idx] = Ez[global_idx];
+  }
+
+  __syncthreads();
+
+  for(int t=0; t<BLT_UB; t++) {
+
+    if(global_x >= 1 && global_x <= Nx-2 &&
+       global_y >= 1 && global_y <= Ny-2 &&
+       global_z >= 1 && global_z <= Nz-2) {
+
+      Ex_shmem[shared_E_idx] = Cax[global_idx] * Ex_shmem[shared_E_idx] + Cbx[global_idx] *
+                ((Hz_shmem[shared_E_idx] - Hz_shmem[shared_E_idx - (BLX_PT + BLT_PT)]) - (Hy_shmem[shared_E_idx] - Hy_shmem[shared_E_idx - (BLX_PT + BLT_PT) * (BLY_PT + BLT_PT)]) - Jx[global_idx] * dx);
+      Ey_shmem[shared_E_idx] = Cay[global_idx] * Ey_shmem[shared_E_idx] + Cby[global_idx] *
+                ((Hx_shmem[shared_E_idx] - Hx_shmem[shared_E_idx - (BLX_PT + BLT_PT) * (BLY_PT + BLT_PT)]) - (Hz_shmem[shared_E_idx] - Hz_shmem[shared_E_idx - 1]) - Jy[global_idx] * dx);
+      Ez_shmem[shared_E_idx] = Caz[global_idx] * Ez_shmem[shared_E_idx] + Cbz[global_idx] *
+                ((Hy_shmem[shared_E_idx] - Hy_shmem[shared_E_idx - 1]) - (Hx_shmem[shared_E_idx] - Hx_shmem[shared_E_idx - (BLX_PT + BLT_PT)]) - Jz[global_idx] * dx);
+    }
+
+    __syncthreads();
+
+    if(global_x >= 1 && global_x <= Nx-2 &&
+       global_y >= 1 && global_y <= Ny-2 &&
+       global_z >= 1 && global_z <= Nz-2) {
+
+      Hx_shmem[shared_H_idx] = Dax[global_idx] * Hx_shmem[shared_H_idx] + Dbx[global_idx] *
+                ((Ey_shmem[shared_H_idx + (BLX_PT + BLT_PT) * (BLY_PT + BLT_PT)] - Ey_shmem[shared_H_idx]) - (Ez_shmem[shared_H_idx + (BLX_PT + BLT_PT)] - Ez_shmem[shared_H_idx]) - Mx[global_idx] * dx);
+      Hy_shmem[shared_H_idx] = Day[global_idx] * Hy_shmem[shared_H_idx] + Dby[global_idx] *
+                ((Ez_shmem[shared_H_idx + 1] - Ez_shmem[shared_H_idx]) - (Ex_shmem[shared_H_idx + (BLX_PT + BLT_PT) * (BLY_PT + BLT_PT)] - Ex_shmem[shared_H_idx]) - My[global_idx] * dx);
+      Hz_shmem[shared_H_idx] = Daz[global_idx] * Hz_shmem[shared_H_idx] + Dbz[global_idx] *
+                ((Ex_shmem[shared_H_idx + (BLX_PT + BLT_PT)] - Ex_shmem[shared_H_idx]) - (Ey_shmem[shared_H_idx + 1] - Ey_shmem[shared_H_idx]) - Mz[global_idx] * dx);
+    }
+
+    __syncthreads();
+  } 
+
+  // store back to global memory
+  if(global_x >= 1 && global_x <= Nx-2 &&
+     global_y >= 1 && global_y <= Ny-2 &&
+     global_z >= 1 && global_z <= Nz-2) {
+  
+    Ex[global_idx] = Ex_shmem[shared_E_idx];
+    Ey[global_idx] = Ey_shmem[shared_E_idx];
+    Ez[global_idx] = Ez_shmem[shared_E_idx];
+    Hx[global_idx] = Hx_shmem[shared_H_idx];
+    Hy[global_idx] = Hy_shmem[shared_H_idx];
+    Hz[global_idx] = Hz_shmem[shared_H_idx];
+
+  }
+
 
 }
 

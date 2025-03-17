@@ -5,7 +5,7 @@
 #include "kernels.cuh"
 #include <cuda_runtime.h>
 
-#define BLOCK_SIZE 1024
+#define BLOCK_SIZE 512 
 
 // handle errors in CUDA call
 #define CUDACHECK(call)                                                        \
@@ -647,6 +647,165 @@ void gDiamond::update_FDTD_gpu_2D(size_t num_timesteps) {
   CUDACHECK(cudaFree(Dbz));
 }
 
+void gDiamond::update_FDTD_gpu_fq(size_t num_timesteps) { // GPU fuse equation try 
+
+  // E, H, J, M on device 
+  float *Ex, *Ey, *Ez, *Hx, *Hy, *Hz, *Jx, *Jy, *Jz, *Mx, *My, *Mz;
+  float *Hx_temp, *Hy_temp, *Hz_temp;
+
+  // Ca, Cb, Da, Db on device
+  float *Cax, *Cay, *Caz, *Cbx, *Cby, *Cbz;
+  float *Dax, *Day, *Daz, *Dbx, *Dby, *Dbz;
+
+  CUDACHECK(cudaMalloc(&Ex, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Ey, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Ez, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Hx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Hy, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Hz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Jx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Jy, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Jz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Mx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&My, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Mz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cax, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cbx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cay, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cby, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Caz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cbz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Dax, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Dbx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Day, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Dby, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Daz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Dbz, sizeof(float) * _Nx * _Ny * _Nz)); 
+
+  CUDACHECK(cudaMalloc(&Hx_temp, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Hy_temp, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Hz_temp, sizeof(float) * _Nx * _Ny * _Nz));
+
+  // initialize E, H as 0 
+  CUDACHECK(cudaMemset(Ex, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Ey, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Ez, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Hx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Hy, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Hz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+
+  CUDACHECK(cudaMemset(Hx_temp, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Hy_temp, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Hz_temp, 0, sizeof(float) * _Nx * _Ny * _Nz));
+
+  // initialize J, M, Ca, Cb, Da, Db as 0 
+  CUDACHECK(cudaMemset(Jx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Jy, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Jz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Mx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(My, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Mz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cax, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cbx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cay, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cby, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Caz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cbz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Dax, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Dbx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Day, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Dby, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Daz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Dbz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+
+  // transfer source
+  for(size_t t=0; t<num_timesteps; t++) {
+    float Mz_value = M_source_amp * std::sin(SOURCE_OMEGA * t * dt);
+    CUDACHECK(cudaMemcpy(Mz + _source_idx, &Mz_value, sizeof(float), cudaMemcpyHostToDevice));
+  }
+  
+  auto start = std::chrono::high_resolution_clock::now();
+
+  // copy Ca, Cb, Da, Db
+  CUDACHECK(cudaMemcpy(Cax, _Cax.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Cay, _Cay.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Caz, _Caz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Cbx, _Cbx.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Cby, _Cby.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Cbz, _Cbz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Dax, _Dax.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Day, _Day.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Daz, _Daz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Dbx, _Dbx.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Dby, _Dby.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Dbz, _Dbz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+
+  // set block and grid
+  size_t grid_size = (_Nx*_Ny*_Nz + BLOCK_SIZE - 1) / BLOCK_SIZE;
+
+  for(size_t t=0; t<num_timesteps; t++) {
+
+    updateEH_3Dmap_fq<<<grid_size, BLOCK_SIZE, 0>>>(Ex, Ey, Ez,
+          Hx, Hy, Hz, 
+          Hx_temp, Hy_temp, Hz_temp,
+          Cax, Cbx, Cay, Cby, Caz, Cbz,
+          Jx, Jy, Jz, 
+          Dax, Dbx, Day, Dby, Daz, Dbz,
+          Mx, My, Mz, 
+          _dx, _Nx, _Ny, _Nz);
+
+    CUDACHECK(cudaMemcpy(Hx_temp, Hx, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToDevice));
+    CUDACHECK(cudaMemcpy(Hy_temp, Hy, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToDevice));
+    CUDACHECK(cudaMemcpy(Hz_temp, Hz, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToDevice));
+
+  }
+  cudaDeviceSynchronize();
+
+  // copy E, H back to host 
+  CUDACHECK(cudaMemcpy(_Ex_gpu.data(), Ex, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Ey_gpu.data(), Ey, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Ez_gpu.data(), Ez, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hx_gpu.data(), Hx, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hy_gpu.data(), Hy, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hz_gpu.data(), Hz, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+
+  auto end = std::chrono::high_resolution_clock::now();
+  std::cout << "gpu runtime (3-D mapping): " << std::chrono::duration<double>(end-start).count() << "s\n"; 
+  std::cout << "gpu performance: " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / std::chrono::duration<double>(end-start).count() << "Mcells/s\n";
+
+  CUDACHECK(cudaFree(Ex));
+  CUDACHECK(cudaFree(Ey));
+  CUDACHECK(cudaFree(Ez));
+  CUDACHECK(cudaFree(Hx));
+  CUDACHECK(cudaFree(Hy));
+  CUDACHECK(cudaFree(Hz));
+  CUDACHECK(cudaFree(Jx));
+  CUDACHECK(cudaFree(Jy));
+  CUDACHECK(cudaFree(Jz));
+  CUDACHECK(cudaFree(Mx));
+  CUDACHECK(cudaFree(My));
+  CUDACHECK(cudaFree(Mz));
+  CUDACHECK(cudaFree(Cax));
+  CUDACHECK(cudaFree(Cbx));
+  CUDACHECK(cudaFree(Cay));
+  CUDACHECK(cudaFree(Cby));
+  CUDACHECK(cudaFree(Caz));
+  CUDACHECK(cudaFree(Cbz));
+  CUDACHECK(cudaFree(Dax));
+  CUDACHECK(cudaFree(Dbx));
+  CUDACHECK(cudaFree(Day));
+  CUDACHECK(cudaFree(Dby));
+  CUDACHECK(cudaFree(Daz));
+  CUDACHECK(cudaFree(Dbz));
+
+  CUDACHECK(cudaFree(Hx_temp));
+  CUDACHECK(cudaFree(Hy_temp));
+  CUDACHECK(cudaFree(Hz_temp));
+
+
+
+}
+
 void gDiamond::update_FDTD_gpu_3D_warp_underutilization_fix(size_t num_timesteps) {
 
   // E, H, J, M on device 
@@ -755,12 +914,12 @@ void gDiamond::update_FDTD_gpu_3D_warp_underutilization_fix(size_t num_timesteps
   cudaDeviceSynchronize();
 
   // copy E, H back to host 
-  CUDACHECK(cudaMemcpy(_Ex_gpu_bl.data(), Ex, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
-  CUDACHECK(cudaMemcpy(_Ey_gpu_bl.data(), Ey, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
-  CUDACHECK(cudaMemcpy(_Ez_gpu_bl.data(), Ez, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
-  CUDACHECK(cudaMemcpy(_Hx_gpu_bl.data(), Hx, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
-  CUDACHECK(cudaMemcpy(_Hy_gpu_bl.data(), Hy, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
-  CUDACHECK(cudaMemcpy(_Hz_gpu_bl.data(), Hz, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Ex_gpu.data(), Ex, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Ey_gpu.data(), Ey, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Ez_gpu.data(), Ez, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hx_gpu.data(), Hx, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hy_gpu.data(), Hy, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hz_gpu.data(), Hz, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
 
   auto end = std::chrono::high_resolution_clock::now();
   std::cout << "gpu runtime (3-D mapping): " << std::chrono::duration<double>(end-start).count() << "s\n"; 
@@ -6267,6 +6426,226 @@ void gDiamond::update_FDTD_gpu_pt(size_t num_timesteps) { // GPU 3-D implementat
   CUDACHECK(cudaFree(Dbz));
 
   CUDACHECK(cudaFree(hyperplanes_d));
+  CUDACHECK(cudaFree(xx_heads_d));
+  CUDACHECK(cudaFree(yy_heads_d));
+  CUDACHECK(cudaFree(zz_heads_d));
+
+}
+
+void gDiamond::update_FDTD_gpu_shmem_no_deps_obeyed(size_t num_timesteps) { // GPU 3-D implementation naive, with shared memory, but does not obey dependencies
+
+  // E, H, J, M on device 
+  float *Ex, *Ey, *Ez, *Hx, *Hy, *Hz, *Jx, *Jy, *Jz, *Mx, *My, *Mz;
+
+  // Ca, Cb, Da, Db on device
+  float *Cax, *Cay, *Caz, *Cbx, *Cby, *Cbz;
+  float *Dax, *Day, *Daz, *Dbx, *Dby, *Dbz;
+
+  CUDACHECK(cudaMalloc(&Ex, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Ey, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Ez, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Hx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Hy, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Hz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Jx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Jy, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Jz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Mx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&My, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Mz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cax, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cbx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cay, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cby, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Caz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Cbz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Dax, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Dbx, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Day, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Dby, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Daz, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMalloc(&Dbz, sizeof(float) * _Nx * _Ny * _Nz)); 
+
+  // initialize E, H as 0 
+  CUDACHECK(cudaMemset(Ex, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Ey, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Ez, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Hx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Hy, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Hz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+
+  // initialize J, M, Ca, Cb, Da, Db as 0 
+  CUDACHECK(cudaMemset(Jx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Jy, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Jz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Mx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(My, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Mz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cax, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cbx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cay, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cby, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Caz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Cbz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Dax, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Dbx, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Day, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Dby, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Daz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+  CUDACHECK(cudaMemset(Dbz, 0, sizeof(float) * _Nx * _Ny * _Nz));
+
+  // transfer source
+  for(size_t t=0; t<num_timesteps; t++) {
+    float Mz_value = M_source_amp * std::sin(SOURCE_OMEGA * t * dt);
+    CUDACHECK(cudaMemcpy(Mz + _source_idx, &Mz_value, sizeof(float), cudaMemcpyHostToDevice));
+  }
+
+  // get xx_num, yy_num, zz_num
+  int xx_num = (_Nx + BLX_UB - 1) / BLX_UB;
+  int yy_num = (_Ny + BLY_UB - 1) / BLY_UB;
+  int zz_num = (_Nz + BLZ_UB - 1) / BLZ_UB;
+
+  // get xx_heads, yy_heads, zz_heads
+  std::vector<int> xx_heads(xx_num, 0);
+  std::vector<int> yy_heads(yy_num, 0);
+  std::vector<int> zz_heads(zz_num, 0);
+  for(int i=0; i<xx_num; i++) {
+    xx_heads[i] = i * BLX_UB;
+  }
+  for(int i=0; i<yy_num; i++) {
+    yy_heads[i] = i * BLY_UB;
+  }
+  for(int i=0; i<zz_num; i++) {
+    zz_heads[i] = i * BLZ_UB;
+  }
+
+  int *xx_heads_d, *yy_heads_d, *zz_heads_d;
+
+  CUDACHECK(cudaMalloc(&xx_heads_d, sizeof(int) * xx_num));
+  CUDACHECK(cudaMalloc(&yy_heads_d, sizeof(int) * yy_num));
+  CUDACHECK(cudaMalloc(&zz_heads_d, sizeof(int) * zz_num));
+  
+  auto start = std::chrono::high_resolution_clock::now();
+
+  // copy Ca, Cb, Da, Db
+  CUDACHECK(cudaMemcpy(Cax, _Cax.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Cay, _Cay.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Caz, _Caz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Cbx, _Cbx.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Cby, _Cby.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Cbz, _Cbz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Dax, _Dax.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Day, _Day.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Daz, _Daz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Dbx, _Dbx.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Dby, _Dby.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(Dbz, _Dbz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
+  
+  // copy upper bound parameters
+  CUDACHECK(cudaMemcpy(xx_heads_d, xx_heads.data(), sizeof(int) * xx_num, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(yy_heads_d, yy_heads.data(), sizeof(int) * yy_num, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpy(zz_heads_d, zz_heads.data(), sizeof(int) * zz_num, cudaMemcpyHostToDevice));
+
+  // set block and grid
+  size_t block_size = BLX_UB * BLY_UB * BLZ_UB;
+  size_t grid_size = xx_num * yy_num * zz_num;
+
+  for(size_t t=0; t<num_timesteps; t++) {
+    updateE_ub_globalmem_only<<<grid_size, block_size>>>(Ex, Ey, Ez,
+                                                         Hx, Hy, Hz,
+                                                         Cax, Cbx,
+                                                         Cay, Cby,
+                                                         Caz, Cbz,
+                                                         Dax, Dbx,
+                                                         Day, Dby,
+                                                         Daz, Dbz,
+                                                         Jx, Jy, Jz,
+                                                         Mx, My, Mz,
+                                                         _dx, 
+                                                         _Nx, _Ny, _Nz,
+                                                         xx_num, yy_num, zz_num,
+                                                         xx_heads_d, yy_heads_d, zz_heads_d);
+
+    updateH_ub_globalmem_only<<<grid_size, block_size>>>(Ex, Ey, Ez,
+                                                         Hx, Hy, Hz,
+                                                         Cax, Cbx,
+                                                         Cay, Cby,
+                                                         Caz, Cbz,
+                                                         Dax, Dbx,
+                                                         Day, Dby,
+                                                         Daz, Dbz,
+                                                         Jx, Jy, Jz,
+                                                         Mx, My, Mz,
+                                                         _dx, 
+                                                         _Nx, _Ny, _Nz,
+                                                         xx_num, yy_num, zz_num,
+                                                         xx_heads_d, yy_heads_d, zz_heads_d);
+  
+  }
+  
+  // for(size_t t=0; t<num_timesteps/BLT_UB; t++) {
+  //   updateEH_ub<<<grid_size, block_size>>>(Ex, Ey, Ez,
+  //                                          Hx, Hy, Hz,
+  //                                          Cax, Cbx,
+  //                                          Cay, Cby,
+  //                                          Caz, Cbz,
+  //                                          Dax, Dbx,
+  //                                          Day, Dby,
+  //                                          Daz, Dbz,
+  //                                          Jx, Jy, Jz,
+  //                                          Mx, My, Mz,
+  //                                          _dx, 
+  //                                          _Nx, _Ny, _Nz,
+  //                                          xx_num, yy_num, zz_num,
+  //                                          xx_heads_d, yy_heads_d, zz_heads_d);
+
+  //   cudaError_t err = cudaGetLastError();
+  //   if (err != cudaSuccess) {
+  //       std::cerr << "CUDA kernel launch failed: " << cudaGetErrorString(err) << std::endl;
+  //   }
+
+  // }
+
+  cudaDeviceSynchronize();
+
+  // copy E, H back to host 
+  CUDACHECK(cudaMemcpy(_Ex_gpu.data(), Ex, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Ey_gpu.data(), Ey, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Ez_gpu.data(), Ez, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hx_gpu.data(), Hx, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hy_gpu.data(), Hy, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hz_gpu.data(), Hz, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+
+  auto end = std::chrono::high_resolution_clock::now();
+  // std::cout << "gpu runtime (3-D mapping, naive, upper bound, shared memory in E, H): " << std::chrono::duration<double>(end-start).count() << "s\n"; 
+  std::cout << "gpu runtime (3-D mapping, naive, upper bound, global memory): " << std::chrono::duration<double>(end-start).count() << "s\n"; 
+  std::cout << "gpu performance: " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / std::chrono::duration<double>(end-start).count() << "Mcells/s\n";
+
+  CUDACHECK(cudaFree(Ex));
+  CUDACHECK(cudaFree(Ey));
+  CUDACHECK(cudaFree(Ez));
+  CUDACHECK(cudaFree(Hx));
+  CUDACHECK(cudaFree(Hy));
+  CUDACHECK(cudaFree(Hz));
+  CUDACHECK(cudaFree(Jx));
+  CUDACHECK(cudaFree(Jy));
+  CUDACHECK(cudaFree(Jz));
+  CUDACHECK(cudaFree(Mx));
+  CUDACHECK(cudaFree(My));
+  CUDACHECK(cudaFree(Mz));
+  CUDACHECK(cudaFree(Cax));
+  CUDACHECK(cudaFree(Cbx));
+  CUDACHECK(cudaFree(Cay));
+  CUDACHECK(cudaFree(Cby));
+  CUDACHECK(cudaFree(Caz));
+  CUDACHECK(cudaFree(Cbz));
+  CUDACHECK(cudaFree(Dax));
+  CUDACHECK(cudaFree(Dbx));
+  CUDACHECK(cudaFree(Day));
+  CUDACHECK(cudaFree(Dby));
+  CUDACHECK(cudaFree(Daz));
+  CUDACHECK(cudaFree(Dbz));
+
   CUDACHECK(cudaFree(xx_heads_d));
   CUDACHECK(cudaFree(yy_heads_d));
   CUDACHECK(cudaFree(zz_heads_d));

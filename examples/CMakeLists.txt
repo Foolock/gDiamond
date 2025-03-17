@@ -3,6 +3,8 @@ add_executable(gpu ${GDIAMOND_EXAMPLE_DIR}/gpu.cu)
 add_executable(gpu_figures ${GDIAMOND_EXAMPLE_DIR}/gpu_figures.cu)
 add_executable(gpu_dt ${GDIAMOND_EXAMPLE_DIR}/gpu_dt.cu)
 add_executable(gpu_pt ${GDIAMOND_EXAMPLE_DIR}/gpu_pt.cu)
+add_executable(gpu_fq ${GDIAMOND_EXAMPLE_DIR}/gpu_fq.cu)
+add_executable(gpu_upper_bound ${GDIAMOND_EXAMPLE_DIR}/gpu_upper_bound.cu)
 add_executable(omp ${GDIAMOND_EXAMPLE_DIR}/omp.cpp)
 add_executable(omp_figures ${GDIAMOND_EXAMPLE_DIR}/omp_figures.cpp)
 add_executable(omp_dt ${GDIAMOND_EXAMPLE_DIR}/omp_dt.cpp)
@@ -14,6 +16,8 @@ list(APPEND GDIAMOND_EXAMPLES
   gpu_figures
   gpu_dt
   gpu_pt
+  gpu_fq 
+  gpu_upper_bound
   omp
   omp_figures
   omp_dt
