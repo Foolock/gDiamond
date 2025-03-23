@@ -6685,16 +6685,17 @@ void gDiamond::update_FDTD_cpu_simulation_dt_1_D(size_t num_timesteps, size_t Tx
   // diamond tiling
 
   // before tiling, zero padding E and H
-  int pad_size = BLT_UB - 1;
-  int Nx_pad = Nx + 2 * pad_size;
+  int left_pad = BLT_UB - 1 + 1; // + 1 for shmem load
+  int right_pad = BLT_UB - 1;
+  int Nx_pad = Nx + left_pad + right_pad;
 
   std::vector<float> E_pad(Nx_pad, 0);
   std::vector<float> H_pad(Nx_pad, 0);
 
   // copy E, H to padded array
   for(int i=0; i<Nx; i++) {
-    E_pad[i + pad_size] = E_simu[i]; 
-    H_pad[i + pad_size] = H_simu[i]; 
+    E_pad[i + left_pad] = E_simu[i]; 
+    H_pad[i + left_pad] = H_simu[i]; 
   }
 
   std::cout << "E_pad = ";
@@ -6706,17 +6707,17 @@ void gDiamond::update_FDTD_cpu_simulation_dt_1_D(size_t num_timesteps, size_t Tx
   int xx_num_mountains = 1 + Tx;
   int xx_num_valleys = Tx + 1;
 
+  // xx_heads_mountain[xx] is 1 element left offset to the actual mountain
   std::vector<int> xx_heads_mountain(xx_num_mountains, 0);
   std::vector<int> xx_heads_valley(xx_num_valleys, 0);
 
   for(int index=0; index<xx_num_mountains; index++) {
-    xx_heads_mountain[index] = (index == 0)? 0 : 
-                               (index == 1)? xx_heads_mountain[index-1] + (8 + 4) : 
+    xx_heads_mountain[index] = (index == 0)? 0 :
                                xx_heads_mountain[index-1] + (11 + 4);
   }
 
   for(int index=0; index<xx_num_valleys; index++) {
-    xx_heads_valley[index] = (index == 0)? 4 : 
+    xx_heads_valley[index] = (index == 0)? 8 : 
                              xx_heads_valley[index-1] + (11 + 4);
   }
 
@@ -6738,102 +6739,158 @@ void gDiamond::update_FDTD_cpu_simulation_dt_1_D(size_t num_timesteps, size_t Tx
   for(size_t tt=0; tt<num_timesteps/BLT_UB; tt++) {
     // phase 1: mountain
     is_mountain = true;
-    for(int xx=0; xx<xx_num_mountains; xx++) { // map one mountain to one block 
-      
+    for(int xx=0; xx<xx_num_mountains; xx++) {
+ 
       // declare shared memory
-      float H_shmem[shmem_size] = {0};
-      float E_shmem[shmem_size] = {0};
+      float E_shmem[shmem_size];
+      float H_shmem[shmem_size];
 
       // load shared memory
-      // same for mountain or valley
-      // when loading, we treat E and H samely
-      // meaning there will be extra load, we just dont use it
-      int load_bound = ((is_mountain && xx == 0) || (!is_mountain && xx == xx_num_valleys - 1)) ? shmem_size - BLT_UB + 1 : 
-                                                                                                  shmem_size;
-      int load_offset = (is_mountain)? 1 : 0;  
       for(int tid=0; tid<block_size; tid++) {
-        for(int shared_idx=tid + load_offset; shared_idx<load_bound; shared_idx+=block_size) {
-          int global_idx = xx_heads_mountain[xx] + shared_idx - load_offset;
-          if(global_idx >= 0 && global_idx <= Nx - 1) {
-            // std::cout << "loading, xx = " << xx << ", shared_idx = " << shared_idx << ", global_idx = " << global_idx << "\n";
-            E_shmem[shared_idx] = E_simu[global_idx];
-            H_shmem[shared_idx] = H_simu[global_idx];
-          }
+        for(int shared_idx=tid; shared_idx<shmem_size; shared_idx+=block_size) {
+          int global_idx = xx_heads_mountain[xx] + shared_idx;
+          E_shmem[shared_idx] = E_pad[global_idx];
+          H_shmem[shared_idx] = H_pad[global_idx];
         }
       }
-      std::cout << "xx = " << xx << ", load_bound = " << load_bound << "\n";
 
       // calculation
+      int cal_offsetE, cal_offsetH;
+      int cal_boundE, cal_boundH;
       for(int t=0; t<BLT_UB; t++) {
-        int cal_offsetE, cal_offsetH;
-        int boundE, boundH; // when used, refer to ), not ]
-        if(is_mountain) {
-          cal_offsetE = (xx == 0) ? 1 : t + 1;
-          cal_offsetH = cal_offsetE;
-          boundE = (xx == 0)? shmem_size - BLT_UB + 1 - t: shmem_size - t;
-          boundH = boundE - 1;
-        } else {
-          cal_offsetE = BLT_UB - t;
-          cal_offsetH = cal_offsetE - 1;
-          boundE = (xx == xx_num_valleys - 1)? shmem_size - (BLT_UB - 1) : 
-                                               shmem_size - (BLT_UB - t - 1);
-          boundH = boundE;
-        }
-
-        std::cout << "xx = " << xx << ", t = " << t
-                                   << ", cal_offsetE = " << cal_offsetE 
-                                   << ", cal_offsetH = " << cal_offsetH
-                                   << ", boundE = " << boundE 
-                                   << ", boundH = " << boundH 
-                                   << "\n";
+        cal_offsetE = (is_mountain)? t + 1 : BLT_UB - t;
+        cal_offsetH = (is_mountain)? cal_offsetE : cal_offsetE - 1;
+        cal_boundE = (is_mountain)? shmem_size - t : shmem_size - (BLT_UB - t - 1);
+        cal_boundH = (is_mountain)? cal_boundE - 1 : cal_boundE;
 
         // update E
         for(int tid=0; tid<block_size; tid++) {
-          for(int shared_E_idx=tid+cal_offsetE; shared_E_idx<boundE; shared_E_idx+=block_size) {
-            int global_idx = shared_E_idx + xx_heads_mountain[xx] - cal_offsetE;
-            if(global_idx >= 1 && global_idx <= Nx-2) {
-              // std::cout << "calculating E, xx = " << xx << ", shared_E_idx = " << shared_E_idx << ", global_idx = " << global_idx <<"\n";
-              E_shmem[shared_E_idx] = H_shmem[shared_E_idx-1] + H_shmem[shared_E_idx] * 2; 
+          for(int shared_idx=tid+cal_offsetE; shared_idx<cal_boundE; shared_idx+=block_size) {
+            int global_idx = xx_heads_mountain[xx] + shared_idx;
+            // std::cout << "t = " << t << ", ";
+            // std::cout << "xx = " << xx << ", shared_idx = " << shared_idx << ", global_idx = " << global_idx << "\n";
+            if(global_idx >= 1 + left_pad && global_idx <= Nx - 2 + left_pad) {
+              E_shmem[shared_idx] = H_shmem[shared_idx-1] + H_shmem[shared_idx] * 2;
             }
           }
         }
 
         // update H
         for(int tid=0; tid<block_size; tid++) {
-          for(int shared_H_idx=tid+cal_offsetH; shared_H_idx<boundH; shared_H_idx+=block_size) {
-            int global_idx = shared_H_idx + xx_heads_mountain[xx] - cal_offsetH;
-            if(global_idx >= 1 && global_idx <= Nx-2) {
-              // std::cout << "calculating H, xx = " << xx << ", shared_H_idx = " << shared_H_idx << ", global_idx = " << global_idx <<"\n";
-              H_shmem[shared_H_idx] = E_shmem[shared_H_idx+1] + E_shmem[shared_H_idx] * 2;
+          for(int shared_idx=tid+cal_offsetH; shared_idx<cal_boundH; shared_idx+=block_size) {
+            int global_idx = xx_heads_mountain[xx] + shared_idx;
+            // std::cout << "t = " << t << ", ";
+            // std::cout << "xx = " << xx << ", shared_idx = " << shared_idx << ", global_idx = " << global_idx << "\n";
+            if(global_idx >= 1 + left_pad && global_idx <= Nx - 2 + left_pad) {
+              H_shmem[shared_idx] = E_shmem[shared_idx+1] + E_shmem[shared_idx] * 2;
             }
           }
-        } 
+        }
       }
 
-      // store global memory
-      int store_bound = load_bound;
-      int store_offset = (is_mountain)? 1 : 0;
+      // store to global memory
+      int store_offsetE, store_offsetH;
+      int store_boundE, store_boundH;
+      store_offsetE = 1;
+      store_offsetH = (is_mountain)? 1 : 0;
+      store_boundE = (is_mountain)? shmem_size : shmem_size - 1;
+      store_boundH = shmem_size - 1;
       for(int tid=0; tid<block_size; tid++) {
+
         // store E
-        for(int shared_idx=tid + store_offset; shared_idx<store_bound; shared_idx+=block_size) {
-          int global_idx = xx_heads_mountain[xx] + shared_idx - store_offset;
-          if(global_idx >= 1 && global_idx <= Nx-2) {
-            // std::cout << "storing E, xx = " << xx << ", shared_idx = " << shared_idx << ", global_idx = " << global_idx << "\n";
-            E_simu[global_idx] = E_shmem[shared_idx];
-          }
+        for(int shared_idx=tid + store_offsetE; shared_idx<store_boundE; shared_idx+=block_size) {
+          int global_idx = xx_heads_mountain[xx] + shared_idx;
+          E_pad[global_idx] = E_shmem[shared_idx];
         }
-        // store H
-        for(int shared_idx=tid + store_offset; shared_idx<store_bound - 1; shared_idx+=block_size) {
-          int global_idx = xx_heads_mountain[xx] + shared_idx - store_offset;
-          if(global_idx >= 1 && global_idx <= Nx-2) {
-            std::cout << "storing H, xx = " << xx << ", shared_idx = " << shared_idx << ", global_idx = " << global_idx << "\n";
-            H_simu[global_idx] = H_shmem[shared_idx];
-          }
+
+        // update H
+        for(int shared_idx=tid + store_offsetH; shared_idx<store_boundH; shared_idx+=block_size) {
+          int global_idx = xx_heads_mountain[xx] + shared_idx;
+          H_pad[global_idx] = H_shmem[shared_idx];
         }
+
       }
     }
 
+    // phase 2: valley 
+    is_mountain = false;
+    for(int xx=0; xx<xx_num_valleys; xx++) {
+ 
+      // declare shared memory
+      float E_shmem[shmem_size];
+      float H_shmem[shmem_size];
+
+      // load shared memory
+      for(int tid=0; tid<block_size; tid++) {
+        for(int shared_idx=tid; shared_idx<shmem_size; shared_idx+=block_size) {
+          int global_idx = xx_heads_valley[xx] + shared_idx;
+          E_shmem[shared_idx] = E_pad[global_idx];
+          H_shmem[shared_idx] = H_pad[global_idx];
+        }
+      }
+
+      // calculation
+      int cal_offsetE, cal_offsetH;
+      int cal_boundE, cal_boundH;
+      for(int t=0; t<BLT_UB; t++) {
+        cal_offsetE = (is_mountain)? t + 1 : BLT_UB - t;
+        cal_offsetH = (is_mountain)? cal_offsetE : cal_offsetE - 1;
+        cal_boundE = (is_mountain)? shmem_size - t : shmem_size - (BLT_UB - t);
+        cal_boundH = (is_mountain)? cal_boundE - 1 : cal_boundE;
+
+        // update E
+        for(int tid=0; tid<block_size; tid++) {
+          for(int shared_idx=tid+cal_offsetE; shared_idx<cal_boundE; shared_idx+=block_size) {
+            int global_idx = xx_heads_valley[xx] + shared_idx;
+            if(global_idx >= 1 + left_pad && global_idx <= Nx - 2 + left_pad) {
+              E_shmem[shared_idx] = H_shmem[shared_idx-1] + H_shmem[shared_idx] * 2;
+            }
+          }
+        }
+
+        // update H
+        for(int tid=0; tid<block_size; tid++) {
+          for(int shared_idx=tid+cal_offsetH; shared_idx<cal_boundH; shared_idx+=block_size) {
+            int global_idx = xx_heads_valley[xx] + shared_idx;
+            // std::cout << "t = " << t << ", ";
+            // std::cout << "xx = " << xx << ", shared_idx = " << shared_idx << ", global_idx = " << global_idx << "\n";
+            if(global_idx >= 1 + left_pad && global_idx <= Nx - 2 + left_pad) {
+              H_shmem[shared_idx] = E_shmem[shared_idx+1] + E_shmem[shared_idx] * 2;
+            }
+          }
+        }
+      }
+
+      // store to global memory
+      int store_offsetE, store_offsetH;
+      int store_boundE, store_boundH;
+      store_offsetE = 1;
+      store_offsetH = (is_mountain)? 1 : 0;
+      store_boundE = (is_mountain)? shmem_size : shmem_size - 1;
+      store_boundH = shmem_size - 1;
+      for(int tid=0; tid<block_size; tid++) {
+
+        // store E
+        for(int shared_idx=tid + store_offsetE; shared_idx<store_boundE; shared_idx+=block_size) {
+          int global_idx = xx_heads_valley[xx] + shared_idx;
+          E_pad[global_idx] = E_shmem[shared_idx];
+        }
+
+        // update H
+        for(int shared_idx=tid + store_offsetH; shared_idx<store_boundH; shared_idx+=block_size) {
+          int global_idx = xx_heads_valley[xx] + shared_idx;
+          H_pad[global_idx] = H_shmem[shared_idx];
+        }
+
+      }
+    }
   }
+
+  // copy E_pad back to E_simu
+  for(int i=0; i<Nx; i++) {
+    E_simu[i] = E_pad[i + left_pad];
+    H_simu[i] = H_pad[i + left_pad];
+  } 
 
   std::cout << "E_seq = ";
   for(int x=0; x<Nx; x++) {
