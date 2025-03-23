@@ -3312,12 +3312,12 @@ void gDiamond::update_FDTD_gpu_fuse_kernel_shmem_EH(size_t num_timesteps) { // 3
   cudaDeviceSynchronize();
 
   // copy E, H back to host 
-  CUDACHECK(cudaMemcpy(_Ex_gpu_shEH.data(), Ex, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
-  CUDACHECK(cudaMemcpy(_Ey_gpu_shEH.data(), Ey, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
-  CUDACHECK(cudaMemcpy(_Ez_gpu_shEH.data(), Ez, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
-  CUDACHECK(cudaMemcpy(_Hx_gpu_shEH.data(), Hx, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
-  CUDACHECK(cudaMemcpy(_Hy_gpu_shEH.data(), Hy, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
-  CUDACHECK(cudaMemcpy(_Hz_gpu_shEH.data(), Hz, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Ex_gpu.data(), Ex, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Ey_gpu.data(), Ey, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Ez_gpu.data(), Ez, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hx_gpu.data(), Hx, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hy_gpu.data(), Hy, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpy(_Hz_gpu.data(), Hz, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
 
   auto end = std::chrono::high_resolution_clock::now();
   std::cout << "gpu runtime (3-D mapping, shared memory for EH only): " << std::chrono::duration<double>(end-start).count() << "s\n"; 
@@ -6649,6 +6649,211 @@ void gDiamond::update_FDTD_gpu_shmem_no_deps_obeyed(size_t num_timesteps) { // G
   CUDACHECK(cudaFree(xx_heads_d));
   CUDACHECK(cudaFree(yy_heads_d));
   CUDACHECK(cudaFree(zz_heads_d));
+
+}
+
+void gDiamond::update_FDTD_cpu_simulation_dt_1_D(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz) { // CPU single thread 1-D simulation of diamond tiling, reimplemented
+
+  // write 1 dimension just to check
+  std::vector<float> E_simu(_Nx, 1);
+  std::vector<float> H_simu(_Nx, 1);
+  std::vector<float> E_seq(_Nx, 1);
+  std::vector<float> H_seq(_Nx, 1);
+
+  int Nx = _Nx;
+
+  // seq version
+  for(size_t t=0; t<num_timesteps; t++) {
+
+    // update E
+    for(int x=1; x<Nx-1; x++) {
+      E_seq[x] = H_seq[x-1] + H_seq[x] * 2; 
+    }
+
+    std::cout << "t = " << t << ", E_seq =";
+    for(int x=0; x<Nx; x++) {
+      std::cout << E_seq[x] << " ";
+    }
+    std::cout << "\n";
+
+    // update H 
+    for(int x=1; x<Nx-1; x++) {
+      H_seq[x] = E_seq[x+1] + E_seq[x] * 2; 
+    }
+  }
+
+  // diamond tiling
+
+  // before tiling, zero padding E and H
+  int pad_size = BLT_UB - 1;
+  int Nx_pad = Nx + 2 * pad_size;
+
+  std::vector<float> E_pad(Nx_pad, 0);
+  std::vector<float> H_pad(Nx_pad, 0);
+
+  // copy E, H to padded array
+  for(int i=0; i<Nx; i++) {
+    E_pad[i + pad_size] = E_simu[i]; 
+    H_pad[i + pad_size] = H_simu[i]; 
+  }
+
+  std::cout << "E_pad = ";
+  for(const auto& data : E_pad) {
+    std::cout << data << " ";
+  }
+  std::cout << "\n";
+
+  int xx_num_mountains = 1 + Tx;
+  int xx_num_valleys = Tx + 1;
+
+  std::vector<int> xx_heads_mountain(xx_num_mountains, 0);
+  std::vector<int> xx_heads_valley(xx_num_valleys, 0);
+
+  for(int index=0; index<xx_num_mountains; index++) {
+    xx_heads_mountain[index] = (index == 0)? 0 : 
+                               (index == 1)? xx_heads_mountain[index-1] + (8 + 4) : 
+                               xx_heads_mountain[index-1] + (11 + 4);
+  }
+
+  for(int index=0; index<xx_num_valleys; index++) {
+    xx_heads_valley[index] = (index == 0)? 4 : 
+                             xx_heads_valley[index-1] + (11 + 4);
+  }
+
+  std::cout << "xx_heads_mountain = ";
+  for(const auto& index : xx_heads_mountain) {
+    std::cout << index << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "xx_heads_valley = ";
+  for(const auto& index : xx_heads_valley) {
+    std::cout << index << " ";
+  }
+  std::cout << "\n";
+
+  int block_size = 4; // each block has 4 threads
+  bool is_mountain; // true : mountain, false : valley
+  int shmem_size = block_size + 2 * (BLT_UB - 1) + 1 + 1; // BLX + 1
+  for(size_t tt=0; tt<num_timesteps/BLT_UB; tt++) {
+    // phase 1: mountain
+    is_mountain = true;
+    for(int xx=0; xx<xx_num_mountains; xx++) { // map one mountain to one block 
+      
+      // declare shared memory
+      float H_shmem[shmem_size] = {0};
+      float E_shmem[shmem_size] = {0};
+
+      // load shared memory
+      // same for mountain or valley
+      // when loading, we treat E and H samely
+      // meaning there will be extra load, we just dont use it
+      int load_bound = ((is_mountain && xx == 0) || (!is_mountain && xx == xx_num_valleys - 1)) ? shmem_size - BLT_UB + 1 : 
+                                                                                                  shmem_size;
+      int load_offset = (is_mountain)? 1 : 0;  
+      for(int tid=0; tid<block_size; tid++) {
+        for(int shared_idx=tid + load_offset; shared_idx<load_bound; shared_idx+=block_size) {
+          int global_idx = xx_heads_mountain[xx] + shared_idx - load_offset;
+          if(global_idx >= 0 && global_idx <= Nx - 1) {
+            // std::cout << "loading, xx = " << xx << ", shared_idx = " << shared_idx << ", global_idx = " << global_idx << "\n";
+            E_shmem[shared_idx] = E_simu[global_idx];
+            H_shmem[shared_idx] = H_simu[global_idx];
+          }
+        }
+      }
+      std::cout << "xx = " << xx << ", load_bound = " << load_bound << "\n";
+
+      // calculation
+      for(int t=0; t<BLT_UB; t++) {
+        int cal_offsetE, cal_offsetH;
+        int boundE, boundH; // when used, refer to ), not ]
+        if(is_mountain) {
+          cal_offsetE = (xx == 0) ? 1 : t + 1;
+          cal_offsetH = cal_offsetE;
+          boundE = (xx == 0)? shmem_size - BLT_UB + 1 - t: shmem_size - t;
+          boundH = boundE - 1;
+        } else {
+          cal_offsetE = BLT_UB - t;
+          cal_offsetH = cal_offsetE - 1;
+          boundE = (xx == xx_num_valleys - 1)? shmem_size - (BLT_UB - 1) : 
+                                               shmem_size - (BLT_UB - t - 1);
+          boundH = boundE;
+        }
+
+        std::cout << "xx = " << xx << ", t = " << t
+                                   << ", cal_offsetE = " << cal_offsetE 
+                                   << ", cal_offsetH = " << cal_offsetH
+                                   << ", boundE = " << boundE 
+                                   << ", boundH = " << boundH 
+                                   << "\n";
+
+        // update E
+        for(int tid=0; tid<block_size; tid++) {
+          for(int shared_E_idx=tid+cal_offsetE; shared_E_idx<boundE; shared_E_idx+=block_size) {
+            int global_idx = shared_E_idx + xx_heads_mountain[xx] - cal_offsetE;
+            if(global_idx >= 1 && global_idx <= Nx-2) {
+              // std::cout << "calculating E, xx = " << xx << ", shared_E_idx = " << shared_E_idx << ", global_idx = " << global_idx <<"\n";
+              E_shmem[shared_E_idx] = H_shmem[shared_E_idx-1] + H_shmem[shared_E_idx] * 2; 
+            }
+          }
+        }
+
+        // update H
+        for(int tid=0; tid<block_size; tid++) {
+          for(int shared_H_idx=tid+cal_offsetH; shared_H_idx<boundH; shared_H_idx+=block_size) {
+            int global_idx = shared_H_idx + xx_heads_mountain[xx] - cal_offsetH;
+            if(global_idx >= 1 && global_idx <= Nx-2) {
+              // std::cout << "calculating H, xx = " << xx << ", shared_H_idx = " << shared_H_idx << ", global_idx = " << global_idx <<"\n";
+              H_shmem[shared_H_idx] = E_shmem[shared_H_idx+1] + E_shmem[shared_H_idx] * 2;
+            }
+          }
+        } 
+      }
+
+      // store global memory
+      int store_bound = load_bound;
+      int store_offset = (is_mountain)? 1 : 0;
+      for(int tid=0; tid<block_size; tid++) {
+        // store E
+        for(int shared_idx=tid + store_offset; shared_idx<store_bound; shared_idx+=block_size) {
+          int global_idx = xx_heads_mountain[xx] + shared_idx - store_offset;
+          if(global_idx >= 1 && global_idx <= Nx-2) {
+            // std::cout << "storing E, xx = " << xx << ", shared_idx = " << shared_idx << ", global_idx = " << global_idx << "\n";
+            E_simu[global_idx] = E_shmem[shared_idx];
+          }
+        }
+        // store H
+        for(int shared_idx=tid + store_offset; shared_idx<store_bound - 1; shared_idx+=block_size) {
+          int global_idx = xx_heads_mountain[xx] + shared_idx - store_offset;
+          if(global_idx >= 1 && global_idx <= Nx-2) {
+            std::cout << "storing H, xx = " << xx << ", shared_idx = " << shared_idx << ", global_idx = " << global_idx << "\n";
+            H_simu[global_idx] = H_shmem[shared_idx];
+          }
+        }
+      }
+    }
+
+  }
+
+  std::cout << "E_seq = ";
+  for(int x=0; x<Nx; x++) {
+    std::cout << E_seq[x] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "E_simu = ";
+  for(int x=0; x<Nx; x++) {
+    std::cout << E_simu[x] << " ";
+  }
+  std::cout << "\n";
+
+  for(int x=0; x<Nx; x++) {
+    if(E_seq[x] != E_simu[x] || H_seq[x] != H_simu[x]) {
+      std::cerr << "1-D demo results mismatch.\n";
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
 
 }
 

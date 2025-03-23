@@ -132,6 +132,9 @@ class gDiamond {
     // check shared memory without limitation of dependencies, upper bound speedup check
     void update_FDTD_gpu_shmem_no_deps_obeyed(size_t num_timesteps); // GPU 3-D implementation naive, with shared memory, but does not obey dependencies
 
+    // reimplemented diamond tiling based on proper global memory access pattern
+    void update_FDTD_cpu_simulation_dt_1_D(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // CPU single thread 1-D simulation of diamond tiling, reimplemented
+
     // check correctness
     bool check_correctness_gpu_2D();
     bool check_correctness_gpu();

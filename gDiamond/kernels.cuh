@@ -4,10 +4,10 @@
 #include "gdiamond.hpp"
 
 // for diamond tiling 
-#define BLX_GPU 8
+#define BLX_GPU 8 
 #define BLY_GPU 8
 #define BLZ_GPU 8
-#define BLT_GPU 4 
+#define BLT_GPU 2 
 #define BLX_EH (BLX_GPU + 1)
 #define BLY_EH (BLY_GPU + 1)
 #define BLZ_EH (BLZ_GPU + 1)
@@ -37,9 +37,11 @@
 
 // upper bound check
 #define BLX_UB 32 
-#define BLY_UB 4
-#define BLZ_UB 4
+#define BLY_UB 16 
+#define BLZ_UB 1 
 #define BLT_UB 4
+
+// reimplemented diamond tiling
 
 //
 // ----------------------------------- dft -----------------------------------
@@ -271,11 +273,6 @@ __global__ void updateE_3Dmap(float * Ex, float * Ey, float * Ez,
   if (i >= 1 && i < Nx - 1 && j >= 1 && j < Ny - 1 && k >= 1 && k < Nz - 1)
   {
     int idx = i + j * Nx + k * (Nx * Ny);
-
-    // int temp = (idx == _source_idx)? source_cal_new_value : 0;
-
-    // Ex[idx] = Cax[idx] * Ex[idx] + Cbx[idx] *
-    //           ((Hz[idx] - Hz[idx - Nx]) - (Hy[idx] - Hy[idx - Nx * Ny]) - temp * dx);
 
     Ex[idx] = Cax[idx] * Ex[idx] + Cbx[idx] *
               ((Hz[idx] - Hz[idx - Nx]) - (Hy[idx] - Hy[idx - Nx * Ny]) - Jx[idx] * dx);

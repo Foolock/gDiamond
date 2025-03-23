@@ -2,13 +2,13 @@
 #include <vector>
 #include <tuple>
 
-#define BLX_UB 32 
-#define BLY_UB 4
-#define BLZ_UB 4
+#define BLX_UB 1 
+#define BLY_UB 32 
+#define BLZ_UB 16
 
-const int Nx = 100;  // Number of elements along X-axis
-const int Ny = 100;  // Number of elements along Y-axis
-const int Nz = 100;  // Number of elements along Z-axis
+const int Nx = 32;  // Number of elements along X-axis
+const int Ny = 32;  // Number of elements along Y-axis
+const int Nz = 32;  // Number of elements along Z-axis
 
 std::tuple<int, int, int> naive_mapping(int thread_id, int Nx, int Ny, int Nz) {
     int x = thread_id % Nx;
