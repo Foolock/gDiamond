@@ -42,6 +42,14 @@
 #define BLT_UB 4
 
 // reimplemented diamond tiling
+// for NTX = 32, NTY = 16, shared mem requirement = 40 * 24 * 2 * 4 * 6 = 46080 
+#define NTX 32 // number of threads in X dimension
+#define NTY 16 // number of threads in Y dimension
+#define BLT_DTR 4
+#define BLX_DTR (NTX + 2 * (BLT_DTR - 1) + 1) // tile length, mountain bottom
+#define BLY_DTR (NTY + 2 * (BLT_DTR - 1) + 1) 
+#define SHX (BLX_DTR + 1)
+#define SHY (BLY_DTR + 1)
 
 //
 // ----------------------------------- dft -----------------------------------

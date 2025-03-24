@@ -134,6 +134,8 @@ class gDiamond {
 
     // reimplemented diamond tiling based on proper global memory access pattern
     void update_FDTD_cpu_simulation_dt_1_D(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // CPU single thread 1-D simulation of diamond tiling, reimplemented
+    void update_FDTD_cpu_simulation_dt_2_D(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // CPU single thread 3-D simulation of diamond tiling, reimplemented
+                                                                                                   // 2-D mapping used
 
     // check correctness
     bool check_correctness_gpu_2D();
@@ -148,6 +150,49 @@ class gDiamond {
 
   private:
 
+    // for diamond tiling reimplementation
+    void _extract_original_from_padded(const std::vector<float>& padded,
+                                       std::vector<float>& origin,
+                                       int Nx, int Ny, int Nz,
+                                       int Nx_pad, int Ny_pad,
+                                       int left_pad) {
+
+      for (int z = 0; z < Nz; ++z) {
+        for (int y = 0; y < Ny; ++y) {
+          for (int x = 0; x < Nx; ++x) {
+            int origin_idx = x + Nx * (y + Ny * z);
+            int x_out = x + left_pad;
+            int y_out = y + left_pad;
+            int padded_idx = x_out + Nx_pad * (y_out + Ny_pad * z);
+            origin[origin_idx] = padded[padded_idx];
+          }
+        }
+      }
+    }
+
+    void _updateEH_dt_2D_seq(const std::vector<float>& Ex_src, const std::vector<float>& Ey_src, const std::vector<float>& Ez_src,
+                             const std::vector<float>& Hx_src, const std::vector<float>& Hy_src, const std::vector<float>& Hz_src,
+                             std::vector<float>& Ex_dst, std::vector<float>& Ey_dst, std::vector<float>& Ez_dst,
+                             std::vector<float>& Hx_dst, std::vector<float>& Hy_dst, std::vector<float>& Hz_dst,
+                             const std::vector<float>& Cax, const std::vector<float>& Cbx,
+                             const std::vector<float>& Cay, const std::vector<float>& Cby,
+                             const std::vector<float>& Caz, const std::vector<float>& Cbz,
+                             const std::vector<float>& Dax, const std::vector<float>& Dbx,
+                             const std::vector<float>& Day, const std::vector<float>& Dby,
+                             const std::vector<float>& Daz, const std::vector<float>& Dbz,
+                             const std::vector<float>& Jx, const std::vector<float>& Jy, const std::vector<float>& Jz,
+                             const std::vector<float>& Mx, const std::vector<float>& My, const std::vector<float>& Mz,
+                             float dx, 
+                             int Nx, int Ny, int Nz,
+                             int Nx_pad, int Ny_pad,
+                             int xx_num, int yy_num, // number of tiles in each dimensions
+                             bool is_mountain_X, bool is_mountain_Y,
+                             std::vector<int> xx_heads, 
+                             std::vector<int> yy_heads, 
+                             int left_pad,
+                             size_t block_size,
+                             size_t grid_size); 
+    
     // for parallelogram tiling CPU simulation
     void _find_diagonal_hyperplanes(int Nx, int Ny, int Nz, 
                                     std::vector<Pt_idx>& hyperplanes, 
@@ -1677,16 +1722,20 @@ void gDiamond::_setup_diamond_tiling_gpu(size_t BLX, size_t BLY, size_t BLZ, siz
 
 void gDiamond::print_results() {
 
-  std::cout << "Ex_gpu = ";
+  std::cout << "Ex_simu = ";
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    std::cout << _Ex_gpu[i] << " ";
+    if(_Ex_simu[i] != 0) { 
+      std::cout << _Ex_simu[i] << " ";
+    }
   }
   std::cout << "\n";
   std::cout << "\n";
 
   std::cout << "Ex_seq = ";
   for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    std::cout << _Ex_seq[i] << " ";
+    if(_Ex_seq[i] != 0) { 
+      std::cout << _Ex_seq[i] << " ";
+    }
   }
   std::cout << "\n";
 
