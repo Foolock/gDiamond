@@ -29,7 +29,7 @@ void checkCudaErrors(cudaError_t err, const char *msg) {
 int main() {
     int grid_size = 5000;    // Change this as needed
     int block_size = 512;  // Change this as needed
-    int shared_mem_size = 48438; // Adjust this value to test limits
+    int shared_mem_size = 48 * 1024; // Adjust this value to test limits
 
     int *d_out, *h_out;
     h_out = (int*)malloc(grid_size * sizeof(int));

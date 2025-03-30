@@ -6961,6 +6961,33 @@ void gDiamond::update_FDTD_cpu_simulation_dt_2_D(size_t num_timesteps, size_t Tx
                              yy_heads_valley[index-1] + (BLY_DTR + NTY);
   }
 
+  std::cout << "xx_heads_mountain = ";
+  for(const auto& index : xx_heads_mountain) {
+    std::cout << index << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "xx_heads_valley = ";
+  for(const auto& index : xx_heads_valley) {
+    std::cout << index << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "yy_heads_mountain = ";
+  for(const auto& index : yy_heads_mountain) {
+    std::cout << index << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "yy_heads_valley = ";
+  for(const auto& index : yy_heads_valley) {
+    std::cout << index << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "SHX = " << SHX << "\n";
+  std::cout << "SHY = " << SHY << "\n";
+
   // padded E, H
   std::vector<float> Ex_src(Nx_pad * Ny_pad * Nz, 0); 
   std::vector<float> Ey_src(Nx_pad * Ny_pad * Nz, 0); 
@@ -6976,14 +7003,222 @@ void gDiamond::update_FDTD_cpu_simulation_dt_2_D(size_t num_timesteps, size_t Tx
   std::vector<float> Hy_dst(Nx_pad * Ny_pad * Nz, 0); 
   std::vector<float> Hz_dst(Nx_pad * Ny_pad * Nz, 0); 
 
+  // padded Ca, Cb, Da, Db, J, M
+  std::vector<float> Cax_pad(Nx_pad * Ny_pad * Nz, 0); 
+  std::vector<float> Cay_pad(Nx_pad * Ny_pad * Nz, 0); 
+  std::vector<float> Caz_pad(Nx_pad * Ny_pad * Nz, 0); 
+  std::vector<float> Cbx_pad(Nx_pad * Ny_pad * Nz, 0); 
+  std::vector<float> Cby_pad(Nx_pad * Ny_pad * Nz, 0); 
+  std::vector<float> Cbz_pad(Nx_pad * Ny_pad * Nz, 0); 
+  std::vector<float> Dax_pad(Nx_pad * Ny_pad * Nz, 0); 
+  std::vector<float> Day_pad(Nx_pad * Ny_pad * Nz, 0); 
+  std::vector<float> Daz_pad(Nx_pad * Ny_pad * Nz, 0); 
+  std::vector<float> Dbx_pad(Nx_pad * Ny_pad * Nz, 0); 
+  std::vector<float> Dby_pad(Nx_pad * Ny_pad * Nz, 0); 
+  std::vector<float> Dbz_pad(Nx_pad * Ny_pad * Nz, 0); 
+  std::vector<float> Jx_pad(Nx_pad * Ny_pad * Nz, 0); 
+  std::vector<float> Jy_pad(Nx_pad * Ny_pad * Nz, 0); 
+  std::vector<float> Jz_pad(Nx_pad * Ny_pad * Nz, 0); 
+  std::vector<float> Mx_pad(Nx_pad * Ny_pad * Nz, 0); 
+  std::vector<float> My_pad(Nx_pad * Ny_pad * Nz, 0); 
+  std::vector<float> Mz_pad(Nx_pad * Ny_pad * Nz, 0); 
+
+  padXY_1D_col_major(_Cax, Cax_pad, Nx, Ny, Nz, left_pad, right_pad); 
+  padXY_1D_col_major(_Cay, Cay_pad, Nx, Ny, Nz, left_pad, right_pad); 
+  padXY_1D_col_major(_Caz, Caz_pad, Nx, Ny, Nz, left_pad, right_pad); 
+  padXY_1D_col_major(_Cbx, Cbx_pad, Nx, Ny, Nz, left_pad, right_pad); 
+  padXY_1D_col_major(_Cby, Cby_pad, Nx, Ny, Nz, left_pad, right_pad); 
+  padXY_1D_col_major(_Cbz, Cbz_pad, Nx, Ny, Nz, left_pad, right_pad); 
+  padXY_1D_col_major(_Dax, Dax_pad, Nx, Ny, Nz, left_pad, right_pad); 
+  padXY_1D_col_major(_Day, Day_pad, Nx, Ny, Nz, left_pad, right_pad); 
+  padXY_1D_col_major(_Daz, Daz_pad, Nx, Ny, Nz, left_pad, right_pad); 
+  padXY_1D_col_major(_Dbx, Dbx_pad, Nx, Ny, Nz, left_pad, right_pad); 
+  padXY_1D_col_major(_Dby, Dby_pad, Nx, Ny, Nz, left_pad, right_pad); 
+  padXY_1D_col_major(_Dbz, Dbz_pad, Nx, Ny, Nz, left_pad, right_pad); 
+  padXY_1D_col_major(_Jx, Jx_pad, Nx, Ny, Nz, left_pad, right_pad); 
+  padXY_1D_col_major(_Jy, Jy_pad, Nx, Ny, Nz, left_pad, right_pad); 
+  padXY_1D_col_major(_Jz, Jz_pad, Nx, Ny, Nz, left_pad, right_pad); 
+  padXY_1D_col_major(_Mx, Mx_pad, Nx, Ny, Nz, left_pad, right_pad); 
+  padXY_1D_col_major(_My, My_pad, Nx, Ny, Nz, left_pad, right_pad); 
+  padXY_1D_col_major(_Mz, Mz_pad, Nx, Ny, Nz, left_pad, right_pad); 
+
   // define block size and grid size
   size_t block_size = NTX * NTY;
   size_t grid_size; // grid_size = xx_num * yy_num * Nz;
 
+  // // initialize E to check shared memory load
+  // float data = 1;
+  // for(int z=0; z<Nz; z++) {
+  //   for(int y=0; y<Ny; y++) {
+  //     for(int x=0; x<Nx; x++) {
+  //       int idx = (x + left_pad) + (y + left_pad) * Nx_pad + z * Nx_pad * Ny_pad;
+  //       Ex_src[idx] = data;
+  //       Ey_src[idx] = data;
+  //       Ez_src[idx] = data;
+  //       Hx_src[idx] = data;
+  //       Hy_src[idx] = data;
+  //       Hz_src[idx] = data;
+  //       data++;
+  //     }
+  //   }
+  // }
+
+  // initialize E to check shared memory load
+  for(int z=0; z<Nz; z++) {
+    for(int y=0; y<Ny_pad; y++) {
+      for(int x=0; x<Nx_pad; x++) {
+        int idx = x + y * Nx_pad + z * Nx_pad * Ny_pad;
+        float data = 1.0 * idx;
+        Ex_src[idx] = data;
+        Ey_src[idx] = data;
+        Ez_src[idx] = data;
+        Hx_src[idx] = data;
+        Hy_src[idx] = data;
+        Hz_src[idx] = data;
+      }
+    }
+  }
+
+  /*
   for(size_t tt=0; tt<num_timesteps/BLT_DTR; tt++) {
 
     // phase 1: (m, m)
-    grid_size = xx_num_mountains * yy_num_mountains; 
+    grid_size = xx_num_mountains * yy_num_mountains * Nz; 
+    _updateEH_dt_2D_seq(Ex_src, Ey_src, Ez_src,
+                        Hx_src, Hy_src, Hz_src,
+                        Ex_dst, Ey_dst, Ez_dst,
+                        Hx_dst, Hy_dst, Hz_dst,
+                        Cax_pad, Cbx_pad,
+                        Cay_pad, Cby_pad,
+                        Caz_pad, Cbz_pad,
+                        Dax_pad, Dbx_pad,
+                        Day_pad, Dby_pad,
+                        Daz_pad, Dbz_pad,
+                        Jx_pad, Jy_pad, Jz_pad,
+                        Mx_pad, My_pad, Mz_pad,
+                        _dx, 
+                        Nx, Ny, Nz,
+                        Nx_pad, Ny_pad,
+                        xx_num_mountains, yy_num_mountains, // number of tiles in each dimensions
+                        true, true,
+                        xx_heads_mountain, 
+                        yy_heads_mountain, 
+                        left_pad,
+                        block_size,
+                        grid_size); 
+
+    std::swap(Ex_src, Ex_dst);
+    std::swap(Ey_src, Ey_dst);
+    std::swap(Ez_src, Ez_dst);
+    std::swap(Hx_src, Hx_dst);
+    std::swap(Hy_src, Hy_dst);
+    std::swap(Hz_src, Hz_dst);
+  
+    // phase 2: (v, m)
+    grid_size = xx_num_valleys * yy_num_mountains * Nz; 
+    _updateEH_dt_2D_seq(Ex_src, Ey_src, Ez_src,
+                        Hx_src, Hy_src, Hz_src,
+                        Ex_dst, Ey_dst, Ez_dst,
+                        Hx_dst, Hy_dst, Hz_dst,
+                        Cax_pad, Cbx_pad,
+                        Cay_pad, Cby_pad,
+                        Caz_pad, Cbz_pad,
+                        Dax_pad, Dbx_pad,
+                        Day_pad, Dby_pad,
+                        Daz_pad, Dbz_pad,
+                        Jx_pad, Jy_pad, Jz_pad,
+                        Mx_pad, My_pad, Mz_pad,
+                        _dx, 
+                        Nx, Ny, Nz,
+                        Nx_pad, Ny_pad,
+                        xx_num_valleys, yy_num_mountains, // number of tiles in each dimensions
+                        false, true,
+                        xx_heads_valley, 
+                        yy_heads_mountain, 
+                        left_pad,
+                        block_size,
+                        grid_size); 
+
+    std::swap(Ex_src, Ex_dst);
+    std::swap(Ey_src, Ey_dst);
+    std::swap(Ez_src, Ez_dst);
+    std::swap(Hx_src, Hx_dst);
+    std::swap(Hy_src, Hy_dst);
+    std::swap(Hz_src, Hz_dst);
+
+    // phase 3: (m, v)
+    grid_size = xx_num_mountains * yy_num_valleys * Nz; 
+    _updateEH_dt_2D_seq(Ex_src, Ey_src, Ez_src,
+                        Hx_src, Hy_src, Hz_src,
+                        Ex_dst, Ey_dst, Ez_dst,
+                        Hx_dst, Hy_dst, Hz_dst,
+                        Cax_pad, Cbx_pad,
+                        Cay_pad, Cby_pad,
+                        Caz_pad, Cbz_pad,
+                        Dax_pad, Dbx_pad,
+                        Day_pad, Dby_pad,
+                        Daz_pad, Dbz_pad,
+                        Jx_pad, Jy_pad, Jz_pad,
+                        Mx_pad, My_pad, Mz_pad,
+                        _dx, 
+                        Nx, Ny, Nz,
+                        Nx_pad, Ny_pad,
+                        xx_num_mountains, yy_num_valleys, // number of tiles in each dimensions
+                        true, false,
+                        xx_heads_mountain, 
+                        yy_heads_valley, 
+                        left_pad,
+                        block_size,
+                        grid_size); 
+
+    std::swap(Ex_src, Ex_dst);
+    std::swap(Ey_src, Ey_dst);
+    std::swap(Ez_src, Ez_dst);
+    std::swap(Hx_src, Hx_dst);
+    std::swap(Hy_src, Hy_dst);
+    std::swap(Hz_src, Hz_dst);
+
+    // phase 4: (v, v)
+    grid_size = xx_num_valleys * yy_num_valleys * Nz; 
+    _updateEH_dt_2D_seq(Ex_src, Ey_src, Ez_src,
+                        Hx_src, Hy_src, Hz_src,
+                        Ex_dst, Ey_dst, Ez_dst,
+                        Hx_dst, Hy_dst, Hz_dst,
+                        Cax_pad, Cbx_pad,
+                        Cay_pad, Cby_pad,
+                        Caz_pad, Cbz_pad,
+                        Dax_pad, Dbx_pad,
+                        Day_pad, Dby_pad,
+                        Daz_pad, Dbz_pad,
+                        Jx_pad, Jy_pad, Jz_pad,
+                        Mx_pad, My_pad, Mz_pad,
+                        _dx, 
+                        Nx, Ny, Nz,
+                        Nx_pad, Ny_pad,
+                        xx_num_valleys, yy_num_valleys, // number of tiles in each dimensions
+                        false, false,
+                        xx_heads_valley, 
+                        yy_heads_valley, 
+                        left_pad,
+                        block_size,
+                        grid_size); 
+
+    std::swap(Ex_src, Ex_dst);
+    std::swap(Ey_src, Ey_dst);
+    std::swap(Ez_src, Ez_dst);
+    std::swap(Hx_src, Hx_dst);
+    std::swap(Hy_src, Hy_dst);
+    std::swap(Hz_src, Hz_dst);
+
+  }
+  */
+      
+  std::cout << "A : Ex_src[1164] = " << Ex_src[1164] << "\n";
+
+  for(size_t tt=0; tt<num_timesteps/BLT_DTR; tt++) {
+
+    // phase 1: (m, m)
+    grid_size = xx_num_mountains * yy_num_mountains * Nz; 
     _updateEH_dt_2D_seq(Ex_src, Ey_src, Ez_src,
                         Hx_src, Hy_src, Hz_src,
                         Ex_dst, Ey_dst, Ez_dst,
@@ -7006,81 +7241,6 @@ void gDiamond::update_FDTD_cpu_simulation_dt_2_D(size_t num_timesteps, size_t Tx
                         left_pad,
                         block_size,
                         grid_size); 
-  
-    // phase 2: (v, m)
-    grid_size = xx_num_valleys * yy_num_mountains; 
-    _updateEH_dt_2D_seq(Ex_src, Ey_src, Ez_src,
-                        Hx_src, Hy_src, Hz_src,
-                        Ex_dst, Ey_dst, Ez_dst,
-                        Hx_dst, Hy_dst, Hz_dst,
-                        _Cax, _Cbx,
-                        _Cay, _Cby,
-                        _Caz, _Cbz,
-                        _Dax, _Dbx,
-                        _Day, _Dby,
-                        _Daz, _Dbz,
-                        _Jx, _Jy, _Jz,
-                        _Mx, _My, _Mz,
-                        _dx, 
-                        Nx, Ny, Nz,
-                        Nx_pad, Ny_pad,
-                        xx_num_valleys, yy_num_mountains, // number of tiles in each dimensions
-                        false, true,
-                        xx_heads_valley, 
-                        yy_heads_mountain, 
-                        left_pad,
-                        block_size,
-                        grid_size); 
-
-    // phase 3: (m, v)
-    grid_size = xx_num_mountains * yy_num_valleys; 
-    _updateEH_dt_2D_seq(Ex_src, Ey_src, Ez_src,
-                        Hx_src, Hy_src, Hz_src,
-                        Ex_dst, Ey_dst, Ez_dst,
-                        Hx_dst, Hy_dst, Hz_dst,
-                        _Cax, _Cbx,
-                        _Cay, _Cby,
-                        _Caz, _Cbz,
-                        _Dax, _Dbx,
-                        _Day, _Dby,
-                        _Daz, _Dbz,
-                        _Jx, _Jy, _Jz,
-                        _Mx, _My, _Mz,
-                        _dx, 
-                        Nx, Ny, Nz,
-                        Nx_pad, Ny_pad,
-                        xx_num_mountains, yy_num_valleys, // number of tiles in each dimensions
-                        true, false,
-                        xx_heads_mountain, 
-                        yy_heads_valley, 
-                        left_pad,
-                        block_size,
-                        grid_size); 
-
-    // phase 4: (v, v)
-    grid_size = xx_num_valleys * yy_num_valleys; 
-    _updateEH_dt_2D_seq(Ex_src, Ey_src, Ez_src,
-                        Hx_src, Hy_src, Hz_src,
-                        Ex_dst, Ey_dst, Ez_dst,
-                        Hx_dst, Hy_dst, Hz_dst,
-                        _Cax, _Cbx,
-                        _Cay, _Cby,
-                        _Caz, _Cbz,
-                        _Dax, _Dbx,
-                        _Day, _Dby,
-                        _Daz, _Dbz,
-                        _Jx, _Jy, _Jz,
-                        _Mx, _My, _Mz,
-                        _dx, 
-                        Nx, Ny, Nz,
-                        Nx_pad, Ny_pad,
-                        xx_num_valleys, yy_num_valleys, // number of tiles in each dimensions
-                        false, false,
-                        xx_heads_valley, 
-                        yy_heads_valley, 
-                        left_pad,
-                        block_size,
-                        grid_size); 
 
     std::swap(Ex_src, Ex_dst);
     std::swap(Ey_src, Ey_dst);
@@ -7089,7 +7249,118 @@ void gDiamond::update_FDTD_cpu_simulation_dt_2_D(size_t num_timesteps, size_t Tx
     std::swap(Hy_src, Hy_dst);
     std::swap(Hz_src, Hz_dst);
 
+    std::cout << "phase 1 : Ex_src[1164] = " << Ex_src[1164] << "\n";
+  
+    // // phase 2: (v, m)
+    // grid_size = xx_num_valleys * yy_num_mountains * Nz; 
+    // _updateEH_dt_2D_seq(Ex_src, Ey_src, Ez_src,
+    //                     Hx_src, Hy_src, Hz_src,
+    //                     Ex_dst, Ey_dst, Ez_dst,
+    //                     Hx_dst, Hy_dst, Hz_dst,
+    //                     _Cax, _Cbx,
+    //                     _Cay, _Cby,
+    //                     _Caz, _Cbz,
+    //                     _Dax, _Dbx,
+    //                     _Day, _Dby,
+    //                     _Daz, _Dbz,
+    //                     _Jx, _Jy, _Jz,
+    //                     _Mx, _My, _Mz,
+    //                     _dx, 
+    //                     Nx, Ny, Nz,
+    //                     Nx_pad, Ny_pad,
+    //                     xx_num_valleys, yy_num_mountains, // number of tiles in each dimensions
+    //                     false, true,
+    //                     xx_heads_valley, 
+    //                     yy_heads_mountain, 
+    //                     left_pad,
+    //                     block_size,
+    //                     grid_size); 
+
+    // std::swap(Ex_src, Ex_dst);
+    // std::swap(Ey_src, Ey_dst);
+    // std::swap(Ez_src, Ez_dst);
+    // std::swap(Hx_src, Hx_dst);
+    // std::swap(Hy_src, Hy_dst);
+    // std::swap(Hz_src, Hz_dst);
+
+    // std::cout << "phase 2 : Ex_src[1164] = " << Ex_src[1164] << "\n";
+
+    // // phase 3: (m, v)
+    // grid_size = xx_num_mountains * yy_num_valleys * Nz; 
+    // _updateEH_dt_2D_seq(Ex_src, Ey_src, Ez_src,
+    //                     Hx_src, Hy_src, Hz_src,
+    //                     Ex_dst, Ey_dst, Ez_dst,
+    //                     Hx_dst, Hy_dst, Hz_dst,
+    //                     _Cax, _Cbx,
+    //                     _Cay, _Cby,
+    //                     _Caz, _Cbz,
+    //                     _Dax, _Dbx,
+    //                     _Day, _Dby,
+    //                     _Daz, _Dbz,
+    //                     _Jx, _Jy, _Jz,
+    //                     _Mx, _My, _Mz,
+    //                     _dx, 
+    //                     Nx, Ny, Nz,
+    //                     Nx_pad, Ny_pad,
+    //                     xx_num_mountains, yy_num_valleys, // number of tiles in each dimensions
+    //                     true, false,
+    //                     xx_heads_mountain, 
+    //                     yy_heads_valley, 
+    //                     left_pad,
+    //                     block_size,
+    //                     grid_size); 
+
+    // std::swap(Ex_src, Ex_dst);
+    // std::swap(Ey_src, Ey_dst);
+    // std::swap(Ez_src, Ez_dst);
+    // std::swap(Hx_src, Hx_dst);
+    // std::swap(Hy_src, Hy_dst);
+    // std::swap(Hz_src, Hz_dst);
+
+    // std::cout << "phase 3 : Ex_src[1164] = " << Ex_src[1164] << "\n";
+
+    // // phase 4: (v, v)
+    // grid_size = xx_num_valleys * yy_num_valleys * Nz; 
+    // _updateEH_dt_2D_seq(Ex_src, Ey_src, Ez_src,
+    //                     Hx_src, Hy_src, Hz_src,
+    //                     Ex_dst, Ey_dst, Ez_dst,
+    //                     Hx_dst, Hy_dst, Hz_dst,
+    //                     _Cax, _Cbx,
+    //                     _Cay, _Cby,
+    //                     _Caz, _Cbz,
+    //                     _Dax, _Dbx,
+    //                     _Day, _Dby,
+    //                     _Daz, _Dbz,
+    //                     _Jx, _Jy, _Jz,
+    //                     _Mx, _My, _Mz,
+    //                     _dx, 
+    //                     Nx, Ny, Nz,
+    //                     Nx_pad, Ny_pad,
+    //                     xx_num_valleys, yy_num_valleys, // number of tiles in each dimensions
+    //                     false, false,
+    //                     xx_heads_valley, 
+    //                     yy_heads_valley, 
+    //                     left_pad,
+    //                     block_size,
+    //                     grid_size); 
+
+    // std::swap(Ex_src, Ex_dst);
+    // std::swap(Ey_src, Ey_dst);
+    // std::swap(Ez_src, Ez_dst);
+    // std::swap(Hx_src, Hx_dst);
+    // std::swap(Hy_src, Hy_dst);
+    // std::swap(Hz_src, Hz_dst);
+
+    // std::cout << "phase 4 : Ex_src[1164] = " << Ex_src[1164] << "\n";
+
   }
+
+  // std::cout << "Ex_src = ";
+  // for(int i=0; i<Nx_pad*Ny_pad*Nz; i++) {
+  //   if(Ex_src[i] != 0) { 
+  //     std::cout << Ex_src[i] << " ";
+  //   }
+  // }
 
   _extract_original_from_padded(Ex_src, _Ex_simu, Nx, Ny, Nz, Nx_pad, Ny_pad, left_pad);
   _extract_original_from_padded(Ey_src, _Ey_simu, Nx, Ny, Nz, Nx_pad, Ny_pad, left_pad);
@@ -7123,9 +7394,6 @@ void gDiamond::_updateEH_dt_2D_seq(const std::vector<float>& Ex_src, const std::
                                    size_t block_size,
                                    size_t grid_size) {
 
-  std::cout << "SHX = " << SHX << "\n";
-  std::cout << "SHY = " << SHY << "\n";
-
   for(size_t block_id=0; block_id<grid_size; block_id++) {
     const int zz = block_id / (xx_num * yy_num);
     const int rem = block_id % (xx_num * yy_num); 
@@ -7133,6 +7401,10 @@ void gDiamond::_updateEH_dt_2D_seq(const std::vector<float>& Ex_src, const std::
     const int yy = rem / xx_num;
 
     const int global_z = zz; // global_z is always zz
+
+    if(global_z < 1 || global_z > Nz-2) {
+      continue;
+    }
 
     // declare shared memory
     float Ex_shmem[SHX * SHY * 2] = {0};
@@ -7156,7 +7428,14 @@ void gDiamond::_updateEH_dt_2D_seq(const std::vector<float>& Ex_src, const std::
           int global_x = xx_heads[xx] + shared_x; 
           int global_y = yy_heads[yy] + shared_y;
           int global_idx;
-      
+
+          if(!is_mountain_X && !is_mountain_Y && xx == 0 && yy == 0 && zz == 1 && shared_y == 5) {
+            std::cout << "(xx, yy, zz) = " << xx << ", " << yy << ", " << zz << ", ";
+            std::cout << "local_x = " << local_x << ", local_y = " << local_y << ", ";
+            std::cout << "shared_x = " << shared_x << ", ";
+            std::cout << "global_x = " << global_x << "\n";
+          }
+
           // load z plane for E_shmem, H_shmem 
           shared_z_E = 0; // z plane at first layer
           shared_z_H = 1; // z plane at second layer 
@@ -7193,6 +7472,13 @@ void gDiamond::_updateEH_dt_2D_seq(const std::vector<float>& Ex_src, const std::
       }
     }
 
+    // check shared memory
+    // if(!is_mountain_X && !is_mountain_Y) {
+    //   std::cout << "Ex_src[1164] = " << Ex_src[1164] << "\n";
+    //   std::cout << "check shared memory\n";
+    // }
+
+    /*
     // calculation
     int cal_offsetX_E, cal_offsetY_E, cal_offsetX_H, cal_offsetY_H;
     int cal_boundX_E, cal_boundY_E, cal_boundX_H, cal_boundY_H;
@@ -7206,8 +7492,6 @@ void gDiamond::_updateEH_dt_2D_seq(const std::vector<float>& Ex_src, const std::
       cal_boundY_E = (is_mountain_Y)? SHY - t : SHY - (BLT_DTR - t);
       cal_boundY_H = (is_mountain_Y)? cal_boundY_E - 1 : cal_boundY_E; 
 
-      int constant_offsetX = (is_mountain_X)? 1 : 0;
-      int constant_offsetY = (is_mountain_Y)? 1 : 0;
       for(size_t tid=0; tid<block_size; tid++) {
         int local_x = tid % NTX; 
         int local_y = tid / NTY;
@@ -7220,10 +7504,18 @@ void gDiamond::_updateEH_dt_2D_seq(const std::vector<float>& Ex_src, const std::
             int shared_z_H = 1; // z plane
             int shared_idx_E = shared_x + shared_y * SHX + shared_z_E * SHX * SHY;
             int shared_idx_H = shared_x + shared_y * SHX + shared_z_H * SHX * SHY;
-            int global_x = xx_heads[xx] + shared_x - left_pad + constant_offsetX; // - left_pad since constant arrays has not been padded  
-            int global_y = yy_heads[yy] + shared_y - left_pad + constant_offsetY;
+            int global_x = xx_heads[xx] + shared_x - left_pad; // - left_pad since constant arrays has not been padded  
+            int global_y = yy_heads[yy] + shared_y - left_pad;
             int global_idx = global_x + global_y * Nx + global_z * Nx * Ny; // notice that here we are accessing the unpadded constant array
                                                                             // so we are using the original array size
+
+            // if(!is_mountain_X && !is_mountain_Y) {
+            //   std::cout << "t = " << t << ", ";
+            //   std::cout << "(xx, yy, zz) = " << xx << ", " << yy << ", " << zz << ", ";
+            //   std::cout << "local_x = " << local_x << ", local_y = " << local_y << ", ";
+            //   std::cout << "shared_x = " << shared_x << ", shared_y = " << shared_y << ", ";
+            //   std::cout << "global_x = " << global_x << ", global_y = " << global_y << "\n";
+            // }
 
             if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
 
@@ -7251,7 +7543,7 @@ void gDiamond::_updateEH_dt_2D_seq(const std::vector<float>& Ex_src, const std::
                                                                             // so we are using the original array size
 
             if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
-
+             
               Hx_shmem[shared_idx_H] = Dax[global_idx] * Hx_shmem[shared_idx_H] + Dbx[global_idx] *
                         ((Ey_shmem[shared_idx_E + SHX * SHY] - Ey_shmem[shared_idx_E]) - (Ez_shmem[shared_idx_E + SHX] - Ez_shmem[shared_idx_E]) - Mx[global_idx] * dx);
               Hy_shmem[shared_idx_H] = Day[global_idx] * Hy_shmem[shared_idx_H] + Dby[global_idx] *
@@ -7263,6 +7555,7 @@ void gDiamond::_updateEH_dt_2D_seq(const std::vector<float>& Ex_src, const std::
         }
       }
     }
+    */
 
     // store to global memory
     int store_offsetX_E, store_offsetY_E, store_offsetX_H, store_offsetY_H;
@@ -7288,9 +7581,18 @@ void gDiamond::_updateEH_dt_2D_seq(const std::vector<float>& Ex_src, const std::
           int global_y = yy_heads[yy] + shared_y;
           int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad; 
 
-          Ex_dst[global_idx] = Ex_shmem[shared_idx];
-          Ey_dst[global_idx] = Ey_shmem[shared_idx];
-          Ez_dst[global_idx] = Ez_shmem[shared_idx];
+          if(is_mountain_X && is_mountain_Y && xx == 0 && yy == 0 && zz == 1 && shared_y == 1) {
+            std::cout << "(xx, yy, zz) = " << xx << ", " << yy << ", " << zz << ", ";
+            std::cout << "local_x = " << local_x << ", local_y = " << local_y << ", ";
+            std::cout << "shared_x = " << shared_x << ", ";
+            std::cout << "global_x = " << global_x << "\n";
+          }
+
+          if(global_x >= 1 + left_pad && global_x <= Nx-2 + left_pad && global_y >= 1 + left_pad && global_y <= Ny-2 + left_pad && global_z >= 1 && global_z <= Nz-2) {
+            Ex_dst[global_idx] = Ex_shmem[shared_idx];
+            Ey_dst[global_idx] = Ey_shmem[shared_idx];
+            Ez_dst[global_idx] = Ez_shmem[shared_idx];
+          }
         }
       }
 
@@ -7303,15 +7605,23 @@ void gDiamond::_updateEH_dt_2D_seq(const std::vector<float>& Ex_src, const std::
           int global_y = yy_heads[yy] + shared_y;
           int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad; 
 
-          Hx_dst[global_idx] = Hx_shmem[shared_idx];
-          Hy_dst[global_idx] = Hy_shmem[shared_idx];
-          Hz_dst[global_idx] = Hz_shmem[shared_idx];
+          if(global_x >= 1 + left_pad && global_x <= Nx-2 + left_pad && global_y >= 1 + left_pad && global_y <= Ny-2 + left_pad && global_z >= 1 && global_z <= Nz-2) {
+            Hx_dst[global_idx] = Hx_shmem[shared_idx];
+            Hy_dst[global_idx] = Hy_shmem[shared_idx];
+            Hz_dst[global_idx] = Hz_shmem[shared_idx];
+          }
         }
       }
 
     }
 
   }
+
+}
+
+void gDiamond::update_FDTD_cpu_simulation_dt_1_D_sdf(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz) { // CPU single thread 1-D simulation of diamond tiling, reimplemented
+
+
 
 }
 

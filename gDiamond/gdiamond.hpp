@@ -136,6 +136,8 @@ class gDiamond {
     void update_FDTD_cpu_simulation_dt_1_D(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // CPU single thread 1-D simulation of diamond tiling, reimplemented
     void update_FDTD_cpu_simulation_dt_2_D(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // CPU single thread 3-D simulation of diamond tiling, reimplemented
                                                                                                    // 2-D mapping used
+    void update_FDTD_cpu_simulation_dt_1_D_sdf(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // CPU single thread 1-D simulation of diamond tiling, reimplemented
+                                                                                                       // sdf stands for src, dst, final array
 
     // check correctness
     bool check_correctness_gpu_2D();
@@ -151,6 +153,29 @@ class gDiamond {
   private:
 
     // for diamond tiling reimplementation
+    void padXY_1D_col_major(
+      const std::vector<float>& input,
+      std::vector<float>& output,
+      int Nx, int Ny, int Nz,
+      int left_pad,
+      int right_pad) 
+    {
+      int Nx_pad = left_pad + Nx + right_pad;
+      int Ny_pad = left_pad + Ny + right_pad;
+
+      for (int z = 0; z < Nz; ++z) {
+        for (int y = 0; y < Ny; ++y) {
+          for (int x = 0; x < Nx; ++x) {
+            int input_idx = x + y * Nx + z * Nx * Ny;
+            int out_x = x + left_pad;
+            int out_y = y + left_pad;
+            int output_idx = out_x + out_y * Nx_pad + z * Nx_pad * Ny_pad;
+            output[output_idx] = input[input_idx];
+          }
+        }
+      }
+    }
+
     void _extract_original_from_padded(const std::vector<float>& padded,
                                        std::vector<float>& origin,
                                        int Nx, int Ny, int Nz,
@@ -1728,6 +1753,16 @@ void gDiamond::print_results() {
       std::cout << _Ex_simu[i] << " ";
     }
   }
+  // for(size_t z=0; z<_Nz; z++) {
+  //   for(size_t y=0; y<_Ny; y++) {
+  //     for(size_t x=0; x<_Nx; x++) {
+  //       size_t idx = x + y * _Nx + z * _Nx * _Ny;
+  //       if(_Ex_simu[idx] != 0) { 
+  //         std::cout << _Ex_simu[idx] << ", (x, y, z) = " << x << ", " << y << ", " << z << "\n";
+  //       }
+  //     }
+  //   }
+  // }
   std::cout << "\n";
   std::cout << "\n";
 
