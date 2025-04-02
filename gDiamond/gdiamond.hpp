@@ -134,9 +134,11 @@ class gDiamond {
 
     // reimplemented diamond tiling based on proper global memory access pattern
     void update_FDTD_cpu_simulation_dt_1_D(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // CPU single thread 1-D simulation of diamond tiling, reimplemented
-    void update_FDTD_cpu_simulation_dt_2_D(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // CPU single thread 3-D simulation of diamond tiling, reimplemented
+    void update_FDTD_cpu_simulation_dt_3_D(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // CPU single thread 3-D simulation of diamond tiling, reimplemented
                                                                                                    // 2-D mapping used
     void update_FDTD_cpu_simulation_dt_1_D_sdf(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // CPU single thread 1-D simulation of diamond tiling, reimplemented
+                                                                                                       // sdf stands for src, dst, final array
+    void update_FDTD_cpu_simulation_dt_3_D_sdf(size_t num_timesteps, size_t Tx); // CPU single thread 3-D simulation of diamond tiling, reimplemented
                                                                                                        // sdf stands for src, dst, final array
 
     // check correctness
@@ -153,6 +155,50 @@ class gDiamond {
   private:
 
     // for diamond tiling reimplementation
+    void _updateEH_dt_1D_mountain_seq(const std::vector<float>& Ex_src, const std::vector<float>& Ey_src, const std::vector<float>& Ez_src,
+                                      const std::vector<float>& Hx_src, const std::vector<float>& Hy_src, const std::vector<float>& Hz_src,
+                                      std::vector<float>& Ex_dst, std::vector<float>& Ey_dst, std::vector<float>& Ez_dst,
+                                      std::vector<float>& Hx_dst, std::vector<float>& Hy_dst, std::vector<float>& Hz_dst,
+                                      std::vector<float>& Ex_final, std::vector<float>& Ey_final, std::vector<float>& Ez_final,
+                                      std::vector<float>& Hx_final, std::vector<float>& Hy_final, std::vector<float>& Hz_final,
+                                      const std::vector<float>& Cax, const std::vector<float>& Cbx,
+                                      const std::vector<float>& Cay, const std::vector<float>& Cby,
+                                      const std::vector<float>& Caz, const std::vector<float>& Cbz,
+                                      const std::vector<float>& Dax, const std::vector<float>& Dbx,
+                                      const std::vector<float>& Day, const std::vector<float>& Dby,
+                                      const std::vector<float>& Daz, const std::vector<float>& Dbz,
+                                      const std::vector<float>& Jx, const std::vector<float>& Jy, const std::vector<float>& Jz,
+                                      const std::vector<float>& Mx, const std::vector<float>& My, const std::vector<float>& Mz,
+                                      float dx, 
+                                      int Nx, int Ny, int Nz,
+                                      int Nx_pad, 
+                                      int xx_num, // number of tiles in each dimensions
+                                      std::vector<int> xx_heads, 
+                                      size_t block_size,
+                                      size_t grid_size); 
+
+    void _updateEH_dt_1D_valley_seq(const std::vector<float>& Ex_src, const std::vector<float>& Ey_src, const std::vector<float>& Ez_src,
+                                    const std::vector<float>& Hx_src, const std::vector<float>& Hy_src, const std::vector<float>& Hz_src,
+                                    std::vector<float>& Ex_dst, std::vector<float>& Ey_dst, std::vector<float>& Ez_dst,
+                                    std::vector<float>& Hx_dst, std::vector<float>& Hy_dst, std::vector<float>& Hz_dst,
+                                    std::vector<float>& Ex_final, std::vector<float>& Ey_final, std::vector<float>& Ez_final,
+                                    std::vector<float>& Hx_final, std::vector<float>& Hy_final, std::vector<float>& Hz_final,
+                                    const std::vector<float>& Cax, const std::vector<float>& Cbx,
+                                    const std::vector<float>& Cay, const std::vector<float>& Cby,
+                                    const std::vector<float>& Caz, const std::vector<float>& Cbz,
+                                    const std::vector<float>& Dax, const std::vector<float>& Dbx,
+                                    const std::vector<float>& Day, const std::vector<float>& Dby,
+                                    const std::vector<float>& Daz, const std::vector<float>& Dbz,
+                                    const std::vector<float>& Jx, const std::vector<float>& Jy, const std::vector<float>& Jz,
+                                    const std::vector<float>& Mx, const std::vector<float>& My, const std::vector<float>& Mz,
+                                    float dx, 
+                                    int Nx, int Ny, int Nz,
+                                    int Nx_pad, 
+                                    int xx_num, // number of tiles in each dimensions
+                                    std::vector<int> xx_heads, 
+                                    size_t block_size,
+                                    size_t grid_size); 
+
     void padXY_1D_col_major(
       const std::vector<float>& input,
       std::vector<float>& output,
@@ -1747,12 +1793,12 @@ void gDiamond::_setup_diamond_tiling_gpu(size_t BLX, size_t BLY, size_t BLZ, siz
 
 void gDiamond::print_results() {
 
-  std::cout << "Ex_simu = ";
-  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    if(_Ex_simu[i] != 0) { 
-      std::cout << _Ex_simu[i] << " ";
-    }
-  }
+  // std::cout << "Ex_simu = ";
+  // for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+  //   if(_Ex_simu[i] != 0) { 
+  //     std::cout << _Ex_simu[i] << " ";
+  //   }
+  // }
   // for(size_t z=0; z<_Nz; z++) {
   //   for(size_t y=0; y<_Ny; y++) {
   //     for(size_t x=0; x<_Nx; x++) {
