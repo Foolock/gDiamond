@@ -177,10 +177,8 @@ class gDiamond {
                                       size_t block_size,
                                       size_t grid_size); 
 
-    void _updateEH_dt_1D_valley_seq(const std::vector<float>& Ex_src, const std::vector<float>& Ey_src, const std::vector<float>& Ez_src,
-                                    const std::vector<float>& Hx_src, const std::vector<float>& Hy_src, const std::vector<float>& Hz_src,
-                                    std::vector<float>& Ex_dst, std::vector<float>& Ey_dst, std::vector<float>& Ez_dst,
-                                    std::vector<float>& Hx_dst, std::vector<float>& Hy_dst, std::vector<float>& Hz_dst,
+    void _updateEH_dt_1D_valley_seq(const std::vector<float>& Ex_dst, const std::vector<float>& Ey_dst, const std::vector<float>& Ez_dst,
+                                    const std::vector<float>& Hx_dst, const std::vector<float>& Hy_dst, const std::vector<float>& Hz_dst,
                                     std::vector<float>& Ex_final, std::vector<float>& Ey_final, std::vector<float>& Ez_final,
                                     std::vector<float>& Hx_final, std::vector<float>& Hy_final, std::vector<float>& Hz_final,
                                     const std::vector<float>& Cax, const std::vector<float>& Cbx,
