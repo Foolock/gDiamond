@@ -50,6 +50,8 @@
 #define BLY_DTR (NTY + 2 * (BLT_DTR - 1) + 1) 
 #define SHX (BLX_DTR + 1)
 #define SHY (BLY_DTR + 1)
+#define LEFT_PAD BLT_DTR
+#define RIGHT_PAD (BLT_DTR - 1)
 
 //
 // ----------------------------------- dft -----------------------------------
