@@ -677,6 +677,21 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
       }
     }
 
+    std::cout << "t = " << t << ", ";
+    std::cout << "Ex_seq = \n";
+    for(size_t k=1; k<_Nz-1; k++) {
+      for(size_t j=1; j<_Ny-1; j++) {
+        for(size_t i=1; i<_Nx-1; i++) {
+          size_t idx = i + j*_Nx + k*(_Nx*_Ny);
+          if(Ex_temp[idx] != 0) { 
+            std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
+            std::cout << "Ex_seq[idx] = " << Ex_temp[idx] << "\n";
+          }
+        }
+      }
+    }
+
+
     // update H
     for(size_t k=1; k<_Nz-1; k++) {
       for(size_t j=1; j<_Ny-1; j++) {
@@ -1810,13 +1825,18 @@ void gDiamond::print_results() {
   std::cout << "\n";
   std::cout << "\n";
 
-  std::cout << "Ex_seq = ";
-  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-    if(_Ex_seq[i] != 0) { 
-      std::cout << _Ex_seq[i] << " ";
+  std::cout << "Ex_seq = \n";
+  for(size_t k=1; k<_Nz-1; k++) {
+    for(size_t j=1; j<_Ny-1; j++) {
+      for(size_t i=1; i<_Nx-1; i++) {
+        size_t idx = i + j*_Nx + k*(_Nx*_Ny);
+        if(_Ex_seq[idx] != 0) { 
+          std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
+          std::cout << "Ex_seq[idx] = " << _Ex_seq[idx] << "\n";
+        }
+      }
     }
   }
-  std::cout << "\n";
 
   /*
   std::cout << "Ey_seq = ";

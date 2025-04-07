@@ -7985,22 +7985,35 @@ void gDiamond::update_FDTD_cpu_simulation_dt_3_D_sdf(size_t num_timesteps, size_
   size_t grid_size; // grid_size = xx_num * Ny * Nz;
 
   // initialize E to check shared memory load
-  for(int z=0; z<Nz; z++) {
-    for(int y=0; y<Ny; y++) {
-      for(int x=0; x<Nx_pad; x++) {
-        int idx = x + y * Nx_pad + z * Nx_pad * Ny;
-        float data = 1.0 * idx;
-        Ex_src[idx] = data;
-        Ey_src[idx] = data;
-        Ez_src[idx] = data;
-        Hx_src[idx] = data;
-        Hy_src[idx] = data;
-        Hz_src[idx] = data;
-      }
-    }
-  }
+  // for(int z=0; z<Nz; z++) {
+  //   for(int y=0; y<Ny; y++) {
+  //     for(int x=0; x<Nx_pad; x++) {
+  //       int idx = x + y * Nx_pad + z * Nx_pad * Ny;
+  //       float data = 1.0 * idx;
+  //       Ex_src[idx] = data;
+  //       Ey_src[idx] = data;
+  //       Ez_src[idx] = data;
+  //       Hx_src[idx] = data;
+  //       Hy_src[idx] = data;
+  //       Hz_src[idx] = data;
+  //     }
+  //   }
+  // }
+  // 
+  // for(int z=0; z<Nz; z++) {
+  //   for(int y=0; y<Ny; y++) {
+  //     for(int x=0; x<Nx; x++) {
+  //       int idx = x + y * Nx + z * Nx * Ny;
+  //       float data = 1.0 * idx;
+  //       _Cax[idx] = data;
+  //       _Dax[idx] = data;
+  //     }
+  //   }
+  // }
+
 
   for(size_t tt=0; tt<num_timesteps/BLT_DTR; tt++) {
+    std::cout << "running\n";
     grid_size = xx_num_mountains * Ny * Nz; 
     _updateEH_dt_1D_mountain_seq(Ex_src, Ey_src, Ez_src,
                                  Hx_src, Hy_src, Hz_src,
@@ -8046,28 +8059,45 @@ void gDiamond::update_FDTD_cpu_simulation_dt_3_D_sdf(size_t num_timesteps, size_
     //                            grid_size); 
   }
 
-  std::cout << "Ex_src = ";
-  for(int i=0; i<Nx_pad*Ny*Nz; i++) {
-    if(Ex_src[i] != 0) { 
-      std::cout << Ex_src[i] << " ";
+  std::cout << "Ex_dst = \n";
+  for(int k=0; k<Nz; k++) {
+    for(int j=0; j<Ny; j++) {
+      for(int i=0; i<Nx_pad; i++) {
+        int idx = i + j*Nx_pad + k*(Nx_pad*Ny);
+        if(Ex_dst[idx] != 0) { 
+          std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
+          std::cout << "idx = " << idx << ", ";
+          std::cout << "Ex_dst[idx] = " << Ex_dst[idx] << "\n";
+        }
+      }
     }
   }
+
+  // for(int i=0; i<Nx_pad*Ny*Nz; i++) {
+  //   if(Ex_dst[i] != 0) { 
+  //     std::cout << Ex_dst[i] << " ";
+  //   }
+  // }
   std::cout << "\n";
 
-  std::cout << "Ex_dst = ";
-  for(int i=0; i<Nx_pad*Ny*Nz; i++) {
-    if(Ex_dst[i] != 0) { 
-      std::cout << Ex_dst[i] << " ";
+  std::cout << "Ex_final = \n";
+  for(int k=0; k<Nz; k++) {
+    for(int j=0; j<Ny; j++) {
+      for(int i=0; i<Nx_pad; i++) {
+        int idx = i + j*Nx_pad + k*(Nx_pad*Ny);
+        if(Ex_final[idx] != 0) { 
+          std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
+          std::cout << "idx = " << idx << ", ";
+          std::cout << "Ex_final[idx] = " << Ex_final[idx] << "\n";
+        }
+      }
     }
   }
-  std::cout << "\n";
-
-  std::cout << "Ex_final = ";
-  for(int i=0; i<Nx_pad*Ny*Nz; i++) {
-    if(Ex_final[i] != 0) { 
-      std::cout << Ex_final[i] << " ";
-    }
-  }
+  // for(int i=0; i<Nx_pad*Ny*Nz; i++) {
+  //   if(Ex_final[i] != 0) { 
+  //     std::cout << Ex_final[i] << " ";
+  //   }
+  // }
   std::cout << "\n";
 
 
@@ -8095,6 +8125,8 @@ void gDiamond::_updateEH_dt_1D_mountain_seq(const std::vector<float>& Ex_src, co
                                             std::vector<int> xx_heads, 
                                             size_t block_size,
                                             size_t grid_size) {
+
+  std::cout << "SHX = " << SHX << "\n";
 
   // std::cout << "xx_num = " << xx_num << "\n";
 
@@ -8140,6 +8172,16 @@ void gDiamond::_updateEH_dt_1D_mountain_seq(const std::vector<float>& Ex_src, co
         shared_idx_E = shared_x + shared_order_E * SHX; 
         shared_idx_H = shared_x + shared_order_H * SHX;
         global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny;
+
+        // if(xx == 1 && yy == 1 && zz == 1) {
+        //   std::cout << "(xx, yy, zz) = " << xx << ", " << yy << ", " << zz << ", ";
+        //   std::cout << "local_x = " << local_x << ", ";
+        //   std::cout << "shared_x = " << shared_x << ", ";
+        //   std::cout << "global_x = " << global_x << ", ";
+        //   std::cout << "global_idx = " << global_idx << ", ";
+        //   std::cout << "Ex_src[global_idx] = " << Ex_src[global_idx] << "\n";
+        // }
+
         Ex_shmem[shared_idx_E] = Ex_src[global_idx];
         Ey_shmem[shared_idx_E] = Ey_src[global_idx];
         Ez_shmem[shared_idx_E] = Ez_src[global_idx];
@@ -8181,7 +8223,13 @@ void gDiamond::_updateEH_dt_1D_mountain_seq(const std::vector<float>& Ex_src, co
       }
     }
 
-    /*
+    // check shared memory
+    for(auto ele : Hz_shmem) {
+      if(ele != 0) {
+        std::cout << "not zero! ele = " << ele << "\n"; 
+      }
+    }
+
     // calculation
     int cal_offsetX_E, cal_offsetX_H;
     int cal_boundX_E, cal_boundX_H;
@@ -8216,7 +8264,10 @@ void gDiamond::_updateEH_dt_1D_mountain_seq(const std::vector<float>& Ex_src, co
                       ((Hy_shmem[shared_idx_H] - Hy_shmem[shared_idx_H - 1]) - (Hx_shmem[shared_idx_H] - Hx_shmem[shared_idx_H - SHX]) - Jz[global_idx] * dx);
           }
         }
+      }
 
+      for(size_t tid=0; tid<block_size; tid++) {
+        int local_x = tid;
         // update H
         for(int shared_x=local_x+cal_offsetX_H; shared_x<cal_boundX_H; shared_x+=NTX) {
           int shared_order_E = 0; // (y, z) stride 
@@ -8239,7 +8290,6 @@ void gDiamond::_updateEH_dt_1D_mountain_seq(const std::vector<float>& Ex_src, co
 
       }
     }
-    */
 
     // store global memory
     // we store final results to final, and partial results to dst for valley
