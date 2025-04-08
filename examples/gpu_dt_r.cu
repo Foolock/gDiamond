@@ -24,5 +24,7 @@ int main(int argc, char* argv[]) {
   exp.update_FDTD_seq_check_result(num_timesteps);
   exp.update_FDTD_cpu_simulation_dt_3_D_sdf(num_timesteps, Tx);
 
+  exp.print_results();
+
   return 0;
 }

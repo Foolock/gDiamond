@@ -8037,49 +8037,50 @@ void gDiamond::update_FDTD_cpu_simulation_dt_3_D_sdf(size_t num_timesteps, size_
                                  block_size,
                                  grid_size); 
 
-    // grid_size = xx_num_valleys * Ny * Nz; 
-    // _updateEH_dt_1D_valley_seq(Ex_dst, Ey_dst, Ez_dst,
-    //                            Hx_dst, Hy_dst, Hz_dst,
-    //                            Ex_final, Ey_final, Ez_final,
-    //                            Hx_final, Hy_final, Hz_final,
-    //                            _Cax, _Cbx,
-    //                            _Cay, _Cby,
-    //                            _Caz, _Cbz,
-    //                            _Dax, _Dbx,
-    //                            _Day, _Dby,
-    //                            _Daz, _Dbz,
-    //                            _Jx, _Jy, _Jz,
-    //                            _Mx, _My, _Mz,
-    //                            _dx, 
-    //                            Nx, Ny, Nz,
-    //                            Nx_pad, 
-    //                            xx_num_valleys, // number of tiles in each dimensions
-    //                            xx_heads_valley, 
-    //                            block_size,
-    //                            grid_size); 
+    grid_size = xx_num_valleys * Ny * Nz; 
+    _updateEH_dt_1D_valley_seq(Ex_dst, Ey_dst, Ez_dst,
+                               Hx_dst, Hy_dst, Hz_dst,
+                               Ex_final, Ey_final, Ez_final,
+                               Hx_final, Hy_final, Hz_final,
+                               _Cax, _Cbx,
+                               _Cay, _Cby,
+                               _Caz, _Cbz,
+                               _Dax, _Dbx,
+                               _Day, _Dby,
+                               _Daz, _Dbz,
+                               _Jx, _Jy, _Jz,
+                               _Mx, _My, _Mz,
+                               _dx, 
+                               Nx, Ny, Nz,
+                               Nx_pad, 
+                               xx_num_valleys, // number of tiles in each dimensions
+                               xx_heads_valley, 
+                               block_size,
+                               grid_size); 
+
+    std::swap(Ex_final, Ex_src);
+    std::swap(Ey_final, Ey_src);
+    std::swap(Ez_final, Ez_src);
+    std::swap(Hx_final, Hx_src);
+    std::swap(Hy_final, Hy_src);
+    std::swap(Hz_final, Hz_src);
+
+    Ex_dst.clear();
+    Ey_dst.clear();
+    Ez_dst.clear();
+    Hx_dst.clear();
+    Hy_dst.clear();
+    Hz_dst.clear();
+    Ex_final.clear();
+    Ey_final.clear();
+    Ez_final.clear();
+    Hx_final.clear();
+    Hy_final.clear();
+    Hz_final.clear();
+
   }
 
-  std::cout << "Ex_dst = \n";
-  for(int k=0; k<Nz; k++) {
-    for(int j=0; j<Ny; j++) {
-      for(int i=0; i<Nx_pad; i++) {
-        int idx = i + j*Nx_pad + k*(Nx_pad*Ny);
-        if(Ex_dst[idx] != 0) { 
-          std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
-          std::cout << "idx = " << idx << ", ";
-          std::cout << "Ex_dst[idx] = " << Ex_dst[idx] << "\n";
-        }
-      }
-    }
-  }
-
-  // for(int i=0; i<Nx_pad*Ny*Nz; i++) {
-  //   if(Ex_dst[i] != 0) { 
-  //     std::cout << Ex_dst[i] << " ";
-  //   }
-  // }
-  std::cout << "\n";
-
+  Ex_final.clear();
   std::cout << "Ex_final = \n";
   for(int k=0; k<Nz; k++) {
     for(int j=0; j<Ny; j++) {
@@ -8093,12 +8094,14 @@ void gDiamond::update_FDTD_cpu_simulation_dt_3_D_sdf(size_t num_timesteps, size_
       }
     }
   }
-  // for(int i=0; i<Nx_pad*Ny*Nz; i++) {
-  //   if(Ex_final[i] != 0) { 
-  //     std::cout << Ex_final[i] << " ";
-  //   }
-  // }
   std::cout << "\n";
+
+  _extract_original_from_padded_1D(Ex_src, _Ex_simu, Nx, Ny, Nz, Nx_pad, LEFT_PAD);
+  _extract_original_from_padded_1D(Ey_src, _Ey_simu, Nx, Ny, Nz, Nx_pad, LEFT_PAD);
+  _extract_original_from_padded_1D(Ez_src, _Ez_simu, Nx, Ny, Nz, Nx_pad, LEFT_PAD);
+  _extract_original_from_padded_1D(Hx_src, _Hx_simu, Nx, Ny, Nz, Nx_pad, LEFT_PAD);
+  _extract_original_from_padded_1D(Hy_src, _Hy_simu, Nx, Ny, Nz, Nx_pad, LEFT_PAD);
+  _extract_original_from_padded_1D(Hz_src, _Hz_simu, Nx, Ny, Nz, Nx_pad, LEFT_PAD);
 
 
 
@@ -8125,8 +8128,6 @@ void gDiamond::_updateEH_dt_1D_mountain_seq(const std::vector<float>& Ex_src, co
                                             std::vector<int> xx_heads, 
                                             size_t block_size,
                                             size_t grid_size) {
-
-  std::cout << "SHX = " << SHX << "\n";
 
   // std::cout << "xx_num = " << xx_num << "\n";
 
@@ -8220,13 +8221,6 @@ void gDiamond::_updateEH_dt_1D_mountain_seq(const std::vector<float>& Ex_src, co
         Hx_shmem[shared_idx_H] = Hx_src[global_idx];
         Hy_shmem[shared_idx_H] = Hy_src[global_idx];
         Hz_shmem[shared_idx_H] = Hz_src[global_idx];
-      }
-    }
-
-    // check shared memory
-    for(auto ele : Hz_shmem) {
-      if(ele != 0) {
-        std::cout << "not zero! ele = " << ele << "\n"; 
       }
     }
 
@@ -8539,6 +8533,9 @@ void gDiamond::_updateEH_dt_1D_valley_seq(const std::vector<float>& Ex_dst, cons
                       ((Hy_shmem[shared_idx_H] - Hy_shmem[shared_idx_H - 1]) - (Hx_shmem[shared_idx_H] - Hx_shmem[shared_idx_H - SHX]) - Jz[global_idx] * dx);
           }
         }
+      }
+      for(size_t tid=0; tid<block_size; tid++) {
+        int local_x = tid;
 
         // update H
         for(int shared_x=local_x+cal_offsetX_H; shared_x<cal_boundX_H; shared_x+=NTX) {

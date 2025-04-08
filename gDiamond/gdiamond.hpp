@@ -155,6 +155,25 @@ class gDiamond {
   private:
 
     // for diamond tiling reimplementation
+    void _extract_original_from_padded_1D(const std::vector<float>& padded,
+                                       std::vector<float>& origin,
+                                       int Nx, int Ny, int Nz,
+                                       int Nx_pad, 
+                                       int left_pad) {
+
+      for (int z = 0; z < Nz; ++z) {
+        for (int y = 0; y < Ny; ++y) {
+          for (int x = 0; x < Nx; ++x) {
+            int origin_idx = x + Nx * (y + Ny * z);
+            int x_out = x + left_pad;
+            int padded_idx = x_out + Nx_pad * (y + Ny * z);
+            origin[origin_idx] = padded[padded_idx];
+          }
+        }
+      }
+    }
+
+
     void _updateEH_dt_1D_mountain_seq(const std::vector<float>& Ex_src, const std::vector<float>& Ey_src, const std::vector<float>& Ez_src,
                                       const std::vector<float>& Hx_src, const std::vector<float>& Hy_src, const std::vector<float>& Hz_src,
                                       std::vector<float>& Ex_dst, std::vector<float>& Ey_dst, std::vector<float>& Ez_dst,
@@ -676,21 +695,6 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
         }
       }
     }
-
-    std::cout << "t = " << t << ", ";
-    std::cout << "Ex_seq = \n";
-    for(size_t k=1; k<_Nz-1; k++) {
-      for(size_t j=1; j<_Ny-1; j++) {
-        for(size_t i=1; i<_Nx-1; i++) {
-          size_t idx = i + j*_Nx + k*(_Nx*_Ny);
-          if(Ex_temp[idx] != 0) { 
-            std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
-            std::cout << "Ex_seq[idx] = " << Ex_temp[idx] << "\n";
-          }
-        }
-      }
-    }
-
 
     // update H
     for(size_t k=1; k<_Nz-1; k++) {
@@ -1806,24 +1810,18 @@ void gDiamond::_setup_diamond_tiling_gpu(size_t BLX, size_t BLY, size_t BLZ, siz
 
 void gDiamond::print_results() {
 
-  // std::cout << "Ex_simu = ";
-  // for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
-  //   if(_Ex_simu[i] != 0) { 
-  //     std::cout << _Ex_simu[i] << " ";
-  //   }
-  // }
-  // for(size_t z=0; z<_Nz; z++) {
-  //   for(size_t y=0; y<_Ny; y++) {
-  //     for(size_t x=0; x<_Nx; x++) {
-  //       size_t idx = x + y * _Nx + z * _Nx * _Ny;
-  //       if(_Ex_simu[idx] != 0) { 
-  //         std::cout << _Ex_simu[idx] << ", (x, y, z) = " << x << ", " << y << ", " << z << "\n";
-  //       }
-  //     }
-  //   }
-  // }
-  std::cout << "\n";
-  std::cout << "\n";
+  std::cout << "Ex_simu = \n";
+  for(size_t k=1; k<_Nz-1; k++) {
+    for(size_t j=1; j<_Ny-1; j++) {
+      for(size_t i=1; i<_Nx-1; i++) {
+        size_t idx = i + j*_Nx + k*(_Nx*_Ny);
+        if(_Ex_simu[idx] != 0) { 
+          std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
+          std::cout << "Ex_simu[idx] = " << _Ex_simu[idx] << "\n";
+        }
+      }
+    }
+  }
 
   std::cout << "Ex_seq = \n";
   for(size_t k=1; k<_Nz-1; k++) {
