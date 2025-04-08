@@ -140,6 +140,8 @@ class gDiamond {
                                                                                                        // sdf stands for src, dst, final array
     void update_FDTD_cpu_simulation_dt_3_D_sdf(size_t num_timesteps, size_t Tx); // CPU single thread 3-D simulation of diamond tiling, reimplemented
                                                                                                        // sdf stands for src, dst, final array
+    void update_FDTD_cpu_simulation_dt_1_D_extra_copy(size_t num_timesteps, size_t Tx); // CPU single thread 1-D simulation of diamond tiling, reimplemented
+                                                                                        // with extra copy to dst array in phase 1 and phase 2
 
     // check correctness
     bool check_correctness_gpu_2D();

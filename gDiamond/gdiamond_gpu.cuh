@@ -8074,21 +8074,6 @@ void gDiamond::update_FDTD_cpu_simulation_dt_3_D_sdf(size_t num_timesteps, size_
   _extract_original_from_padded_1D(Hy_src, _Hy_simu, Nx, Ny, Nz, Nx_pad, LEFT_PAD);
   _extract_original_from_padded_1D(Hz_src, _Hz_simu, Nx, Ny, Nz, Nx_pad, LEFT_PAD);
 
-  std::cout << "Ex_simu = \n";
-  for(int k=0; k<Nz; k++) {
-    for(int j=0; j<Ny; j++) {
-      for(int i=0; i<Nx; i++) {
-        int idx = i + j*Nx + k*(Nx*Ny);
-        if(_Ex_simu[idx] != 0) { 
-          std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
-          std::cout << "idx = " << idx << ", ";
-          std::cout << "Ex_simu[idx] = " << _Ex_simu[idx] << "\n";
-        }
-      }
-    }
-  }
-  std::cout << "\n";
-
 }
 
 void gDiamond::_updateEH_dt_1D_mountain_seq(std::vector<float>& Ex_src, std::vector<float>& Ey_src, std::vector<float>& Ez_src,
@@ -8125,9 +8110,9 @@ void gDiamond::_updateEH_dt_1D_mountain_seq(std::vector<float>& Ex_src, std::vec
     const int global_z = zz; // global_z is always zz
     const int global_y = yy; // global_y is always yy
 
-    if(global_y < 1 || global_y > Ny-2 || global_z < 1 || global_z > Nz-2) {
-      continue;
-    }
+    // if(global_y < 1 || global_y > Ny-2 || global_z < 1 || global_z > Nz-2) {
+    //   continue;
+    // }
 
     // declare shared memory
     float Ex_shmem[SHX * 3] = {0};
@@ -8412,9 +8397,9 @@ void gDiamond::_updateEH_dt_1D_valley_seq(const std::vector<float>& Ex_src, cons
     const int global_z = zz; // global_z is always zz
     const int global_y = yy; // global_y is always yy
 
-    if(global_y < 1 || global_y > Ny-2 || global_z < 1 || global_z > Nz-2) {
-      continue;
-    }
+    // if(global_y < 1 || global_y > Ny-2 || global_z < 1 || global_z > Nz-2) {
+    //   continue;
+    // }
   
     // declare shared memory
     float Ex_shmem[SHX * 3] = {0};
@@ -8580,6 +8565,311 @@ void gDiamond::_updateEH_dt_1D_valley_seq(const std::vector<float>& Ex_src, cons
 
 } 
 
+void gDiamond::update_FDTD_cpu_simulation_dt_1_D_extra_copy(size_t num_timesteps, size_t Tx) { // CPU single thread 1-D simulation of diamond tiling, reimplemented
+
+  // write 1 dimension just to check
+  std::vector<float> E_simu(_Nx, 0.1);
+  std::vector<float> H_simu(_Nx, 0.1);
+  std::vector<float> E_seq(_Nx, 0.1);
+  std::vector<float> H_seq(_Nx, 0.1);
+
+  int Nx = _Nx;
+
+  // seq version
+  for(size_t t=0; t<num_timesteps; t++) {
+
+    // update E
+    for(int x=1; x<Nx-1; x++) {
+      E_seq[x] = H_seq[x-1] + H_seq[x] * 2; 
+    }
+
+    std::cout << "t = " << t << ", E_seq =";
+    for(int x=0; x<Nx; x++) {
+      std::cout << E_seq[x] << " ";
+    }
+    std::cout << "\n";
+
+    // update H 
+    for(int x=1; x<Nx-1; x++) {
+      H_seq[x] = E_seq[x+1] + E_seq[x] * 2; 
+    }
+  }
+
+  // diamond tiling
+  int Nx_pad = Nx + LEFT_PAD + RIGHT_PAD;
+  
+  // src, dst
+  std::vector<float> E_src(Nx_pad, 0.1);
+  std::vector<float> H_src(Nx_pad, 0.1);
+  std::vector<float> E_dst(Nx_pad, 0.1);
+  std::vector<float> H_dst(Nx_pad, 0.1);
+  std::cout << "copy E, H to padded array\n";
+  for(int i=0; i<Nx; i++) {
+    E_src[i + LEFT_PAD] = E_simu[i];
+    H_src[i + LEFT_PAD] = H_simu[i];
+  }
+
+  std::cout << "E_src = ";
+  for(const auto& data : E_src) {
+    std::cout << data << " ";
+  }
+  std::cout << "\n";
+
+  // xx_heads_mountain[xx] is 1 element left offset to the actual mountain
+  int xx_num_mountains = 1 + Tx;
+  int xx_num_valleys = Tx + 1;
+  std::vector<int> xx_heads_mountain(xx_num_mountains, 0);
+  std::vector<int> xx_heads_valley(xx_num_valleys, 0);
+
+  for(int index=0; index<xx_num_mountains; index++) {
+    xx_heads_mountain[index] = (index == 0)? 0 :
+                               xx_heads_mountain[index-1] + (BLX_DTR + NTX);
+  }
+  for(int index=0; index<xx_num_valleys; index++) {
+    xx_heads_valley[index] = (index == 0)? BLX_DTR - (BLT_DTR - 1) :
+                             xx_heads_valley[index-1] + (BLX_DTR + NTX);
+  }
+  std::cout << "xx_heads_mountain = ";
+  for(const auto& index : xx_heads_mountain) {
+    std::cout << index << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "xx_heads_valley = ";
+  for(const auto& index : xx_heads_valley) {
+    std::cout << index << " ";
+  }
+  std::cout << "\n";
+
+  int block_size = 4; // each block has 4 threads
+  for(size_t tt=0; tt<num_timesteps/BLT_DTR; tt++) {
+
+    // phase 1
+    for(int xx=0; xx<xx_num_mountains; xx++) {
+      // declare shared memory
+      float E_shmem[SHX];
+      float H_shmem[SHX]; 
+
+      // load shared memory
+      for(int tid=0; tid<block_size; tid++) {
+        for(int shared_idx=tid; shared_idx<SHX; shared_idx+=block_size) {
+          int global_idx = xx_heads_mountain[xx] + shared_idx;
+          E_shmem[shared_idx] = E_src[global_idx];
+          H_shmem[shared_idx] = H_src[global_idx];
+        }
+      }
+
+      // calculation
+      for(int t=0; t<BLT_DTR; t++) {
+        int cal_offsetE = t + 1;
+        int cal_offsetH = cal_offsetE;
+        int cal_boundE = SHX - t;
+        int cal_boundH = cal_boundE - 1;
+
+        // update E
+        for(int tid=0; tid<block_size; tid++) {
+          for(int shared_idx=tid+cal_offsetE; shared_idx<cal_boundE; shared_idx+=block_size) {
+            int global_idx = xx_heads_mountain[xx] + shared_idx;
+            if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD) {
+              E_shmem[shared_idx] = H_shmem[shared_idx-1] + H_shmem[shared_idx] * 2;
+            }
+          }
+        }
+        
+        // update H
+        for(int tid=0; tid<block_size; tid++) {
+          for(int shared_idx=tid+cal_offsetH; shared_idx<cal_boundH; shared_idx+=block_size) {
+            int global_idx = xx_heads_mountain[xx] + shared_idx;
+            if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD) {
+              H_shmem[shared_idx] = E_shmem[shared_idx+1] + E_shmem[shared_idx] * 2;
+            }
+          }
+        }
+      }
+
+      // store global memory
+      int store_offsetE = 1;
+      int store_offsetH = store_offsetE;
+      int store_boundE = SHX;
+      int store_boundH = store_boundE - 1;
+      for(int tid=0; tid<block_size; tid++) {
+
+        // store E
+        for(int shared_idx=tid + store_offsetE; shared_idx<store_boundE; shared_idx+=block_size) {
+          int global_idx = xx_heads_mountain[xx] + shared_idx;
+          if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD) {
+            E_dst[global_idx] = E_shmem[shared_idx];
+          }
+        }
+
+        // update H
+        for(int shared_idx=tid + store_offsetH; shared_idx<store_boundH; shared_idx+=block_size) {
+          int global_idx = xx_heads_mountain[xx] + shared_idx;
+          if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD) {
+            H_dst[global_idx] = H_shmem[shared_idx];
+          }
+        }
+
+      }
+
+      // extra copy to dst
+      int extra_offsetE = BLT_DTR;
+      int extra_offsetH = extra_offsetE - 1;
+      int extra_boundE = extra_offsetE + NTX;
+      int extra_boundH = extra_boundE + 1;
+      for(int tid=0; tid<block_size; tid++) {
+        for(int shared_idx=tid+extra_offsetE; shared_idx<extra_boundE; shared_idx+=NTX) {
+          int global_idx = xx_heads_valley[xx] + shared_idx;
+          if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD) {
+            E_dst[global_idx] = E_src[global_idx];
+          }
+        }
+        for(int shared_idx=tid+extra_offsetH; shared_idx<extra_boundH; shared_idx+=NTX) {
+          int global_idx = xx_heads_valley[xx] + shared_idx;
+          if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD) {
+            H_dst[global_idx] = H_src[global_idx];
+          }
+        }
+      }
+
+
+    }
+
+    // swap src and dst
+    std::swap(E_src, E_dst);
+    std::swap(H_src, H_dst);
+
+    // phase 2
+    for(int xx=0; xx<xx_num_valleys; xx++) {
+      // declare shared memory
+      float E_shmem[SHX];
+      float H_shmem[SHX];
+
+      // load shared memory
+      for(int tid=0; tid<block_size; tid++) {
+        for(int shared_idx=tid; shared_idx<SHX; shared_idx+=block_size) {
+          int global_idx = xx_heads_valley[xx] + shared_idx;
+          E_shmem[shared_idx] = E_src[global_idx];
+          H_shmem[shared_idx] = H_src[global_idx];
+        }
+      }
+
+      // calculation
+      int cal_offsetE, cal_offsetH;
+      int cal_boundE, cal_boundH;
+      for(int t=0; t<BLT_DTR; t++) {
+        cal_offsetE = BLT_DTR - t;
+        cal_offsetH = cal_offsetE - 1;
+        cal_boundE = SHX - (BLT_DTR - t);
+        cal_boundH = cal_boundE; 
+
+        // update E
+        for(int tid=0; tid<block_size; tid++) {
+          for(int shared_idx=tid+cal_offsetE; shared_idx<cal_boundE; shared_idx+=block_size) {
+            int global_idx = xx_heads_valley[xx] + shared_idx;
+            if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD) {
+              E_shmem[shared_idx] = H_shmem[shared_idx-1] + H_shmem[shared_idx] * 2;
+            }
+          }
+        }
+
+        // update H
+        for(int tid=0; tid<block_size; tid++) {
+          for(int shared_idx=tid+cal_offsetH; shared_idx<cal_boundH; shared_idx+=block_size) {
+            int global_idx = xx_heads_valley[xx] + shared_idx;
+            // std::cout << "t = " << t << ", ";
+            // std::cout << "xx = " << xx << ", shared_idx = " << shared_idx << ", global_idx = " << global_idx << "\n";
+            if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD) {
+              H_shmem[shared_idx] = E_shmem[shared_idx+1] + E_shmem[shared_idx] * 2;
+            }
+          }
+        }
+      }
+
+      // store global memory 
+      int store_offsetE = 1;
+      int store_offsetH = 0;
+      int store_boundE = SHX - 1;
+      int store_boundH = store_boundE;
+      for(int tid=0; tid<block_size; tid++) {
+
+        // store E
+        for(int shared_idx=tid + store_offsetE; shared_idx<store_boundE; shared_idx+=block_size) {
+          int global_idx = xx_heads_valley[xx] + shared_idx;
+          if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD) {
+            E_dst[global_idx] = E_shmem[shared_idx];
+          }
+        }
+
+        // update H
+        for(int shared_idx=tid + store_offsetH; shared_idx<store_boundH; shared_idx+=block_size) {
+          int global_idx = xx_heads_valley[xx] + shared_idx;
+          if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD) {
+            H_dst[global_idx] = H_shmem[shared_idx];
+          }
+        }
+
+      }
+
+      // extra store to dst
+      int extra_offsetE = BLT_DTR;
+      int extra_offsetH = extra_offsetE;
+      int extra_boundE = extra_offsetE + NTX + 1;
+      int extra_boundH = extra_boundE - 1;
+      for(int tid=0; tid<block_size; tid++) {
+        for(int shared_idx=tid+extra_offsetE; shared_idx<extra_boundE; shared_idx+=NTX) {
+          int global_idx = xx_heads_mountain[xx] + shared_idx;
+          if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD) {
+            E_dst[global_idx] = E_src[global_idx];
+          }
+        }
+        for(int shared_idx=tid+extra_offsetH; shared_idx<extra_boundH; shared_idx+=NTX) {
+          int global_idx = xx_heads_mountain[xx] + shared_idx;
+          if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD) {
+            H_dst[global_idx] = H_src[global_idx];
+          }
+        }
+      }
+    }
+
+    // swap src and dst
+    std::swap(E_src, E_dst);
+    std::swap(H_src, H_dst);
+
+  }
+
+  std::cout << "E_src = ";
+  for(int x=0; x<Nx_pad; x++) {
+    std::cout << E_src[x] << " ";
+  }
+  std::cout << "\n";
+
+  // copy results from src to simu
+  for(int x=0; x<Nx; x++) {
+    E_simu[x] = E_src[x+LEFT_PAD];
+    H_simu[x] = H_src[x+LEFT_PAD];
+  }
+
+  std::cout << "E_seq = ";
+  for(int x=0; x<Nx; x++) {
+    std::cout << E_seq[x] << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "E_simu = ";
+  for(int x=0; x<Nx; x++) {
+    std::cout << E_simu[x] << " ";
+  }
+  std::cout << "\n";
+
+  for(int x=0; x<Nx; x++) {
+    if(E_seq[x] != E_simu[x] || H_seq[x] != H_simu[x]) {
+      std::cerr << "1-D demo results mismatch.\n";
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
+}
 
 
 
