@@ -194,7 +194,8 @@ class gDiamond {
                                       int xx_num, // number of tiles in each dimensions
                                       std::vector<int> xx_heads, 
                                       size_t block_size,
-                                      size_t grid_size); 
+                                      size_t grid_size, 
+                                      size_t tt); 
 
     void _updateEH_dt_1D_valley_seq(const std::vector<float>& Ex_dst, const std::vector<float>& Ey_dst, const std::vector<float>& Ez_dst,
                                     const std::vector<float>& Hx_dst, const std::vector<float>& Hy_dst, const std::vector<float>& Hz_dst,
@@ -214,7 +215,8 @@ class gDiamond {
                                     int xx_num, // number of tiles in each dimensions
                                     std::vector<int> xx_heads, 
                                     size_t block_size,
-                                    size_t grid_size); 
+                                    size_t grid_size,
+                                    size_t tt); 
 
     void padXY_1D_col_major(
       const std::vector<float>& input,

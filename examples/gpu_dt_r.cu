@@ -24,7 +24,10 @@ int main(int argc, char* argv[]) {
   exp.update_FDTD_seq_check_result(num_timesteps);
   exp.update_FDTD_cpu_simulation_dt_3_D_sdf(num_timesteps, Tx);
 
-  exp.print_results();
+  if(!exp.check_correctness_simu()) {
+    std::cerr << "error: results not match\n";
+    // std::exit(EXIT_FAILURE);
+  }
 
   return 0;
 }
