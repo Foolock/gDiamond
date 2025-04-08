@@ -142,6 +142,8 @@ class gDiamond {
                                                                                                        // sdf stands for src, dst, final array
     void update_FDTD_cpu_simulation_dt_1_D_extra_copy(size_t num_timesteps, size_t Tx); // CPU single thread 1-D simulation of diamond tiling, reimplemented
                                                                                         // with extra copy to dst array in phase 1 and phase 2
+    void update_FDTD_cpu_simulation_dt_3_D_extra_copy(size_t num_timesteps, size_t Tx); // CPU single thread 3-D simulation of diamond tiling, reimplemented
+                                                                                        // with extra copy to dst in phase 1 and phase 2, no final needed
 
     // check correctness
     bool check_correctness_gpu_2D();
@@ -157,6 +159,50 @@ class gDiamond {
   private:
 
     // for diamond tiling reimplementation
+    void _updateEH_dt_1D_mountain_seq_extra_copy(const std::vector<float>& Ex_src, const std::vector<float>& Ey_src, const std::vector<float>& Ez_src,
+                                      const std::vector<float>& Hx_src, const std::vector<float>& Hy_src, const std::vector<float>& Hz_src,
+                                      std::vector<float>& Ex_dst, std::vector<float>& Ey_dst, std::vector<float>& Ez_dst,
+                                      std::vector<float>& Hx_dst, std::vector<float>& Hy_dst, std::vector<float>& Hz_dst,
+                                      const std::vector<float>& Cax, const std::vector<float>& Cbx,
+                                      const std::vector<float>& Cay, const std::vector<float>& Cby,
+                                      const std::vector<float>& Caz, const std::vector<float>& Cbz,
+                                      const std::vector<float>& Dax, const std::vector<float>& Dbx,
+                                      const std::vector<float>& Day, const std::vector<float>& Dby,
+                                      const std::vector<float>& Daz, const std::vector<float>& Dbz,
+                                      const std::vector<float>& Jx, const std::vector<float>& Jy, const std::vector<float>& Jz,
+                                      const std::vector<float>& Mx, const std::vector<float>& My, const std::vector<float>& Mz,
+                                      float dx, 
+                                      int Nx, int Ny, int Nz,
+                                      int Nx_pad, 
+                                      int xx_num, // number of tiles in each dimensions
+                                      std::vector<int> xx_heads_mountain, 
+                                      std::vector<int> xx_heads_valley, 
+                                      size_t block_size,
+                                      size_t grid_size, 
+                                      size_t tt); 
+
+  void _updateEH_dt_1D_valley_seq_extra_copy(const std::vector<float>& Ex_src, const std::vector<float>& Ey_src, const std::vector<float>& Ez_src,
+                                      const std::vector<float>& Hx_src, const std::vector<float>& Hy_src, const std::vector<float>& Hz_src,
+                                      std::vector<float>& Ex_dst, std::vector<float>& Ey_dst, std::vector<float>& Ez_dst,
+                                      std::vector<float>& Hx_dst, std::vector<float>& Hy_dst, std::vector<float>& Hz_dst,
+                                      const std::vector<float>& Cax, const std::vector<float>& Cbx,
+                                      const std::vector<float>& Cay, const std::vector<float>& Cby,
+                                      const std::vector<float>& Caz, const std::vector<float>& Cbz,
+                                      const std::vector<float>& Dax, const std::vector<float>& Dbx,
+                                      const std::vector<float>& Day, const std::vector<float>& Dby,
+                                      const std::vector<float>& Daz, const std::vector<float>& Dbz,
+                                      const std::vector<float>& Jx, const std::vector<float>& Jy, const std::vector<float>& Jz,
+                                      const std::vector<float>& Mx, const std::vector<float>& My, const std::vector<float>& Mz,
+                                      float dx, 
+                                      int Nx, int Ny, int Nz,
+                                      int Nx_pad, 
+                                      int xx_num, // number of tiles in each dimensions
+                                      std::vector<int> xx_heads_mountain, 
+                                      std::vector<int> xx_heads_valley, 
+                                      size_t block_size,
+                                      size_t grid_size, 
+                                      size_t tt); 
+
     void _extract_original_from_padded_1D(const std::vector<float>& padded,
                                        std::vector<float>& origin,
                                        int Nx, int Ny, int Nz,

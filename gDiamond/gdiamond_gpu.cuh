@@ -8871,6 +8871,617 @@ void gDiamond::update_FDTD_cpu_simulation_dt_1_D_extra_copy(size_t num_timesteps
 
 }
 
+void gDiamond::update_FDTD_cpu_simulation_dt_3_D_extra_copy(size_t num_timesteps, size_t Tx) { // CPU single thread 3-D simulation of diamond tiling, reimplemented
+
+  // clear source Mz for experiments
+  _Mz.clear();
+
+  // transfer source
+  for(size_t t=0; t<num_timesteps; t++) {
+    float Mz_value = M_source_amp * std::sin(SOURCE_OMEGA * t * dt);
+    _Mz[_source_idx] = Mz_value;
+  }
+
+  // tiling parameter pre-processing
+  int Nx = _Nx;
+  int Ny = _Ny;
+  int Nz = _Nz;
+  int Nx_pad = Nx + LEFT_PAD + RIGHT_PAD;
+
+  int xx_num_mountains = 1 + Tx;
+  int xx_num_valleys = Tx + 1;
+
+  // xx_heads_mountain[xx] is 1 element left offset to the actual mountain
+  std::vector<int> xx_heads_mountain(xx_num_mountains, 0);
+  std::vector<int> xx_heads_valley(xx_num_valleys, 0);
+
+  for(int index=0; index<xx_num_mountains; index++) {
+    xx_heads_mountain[index] = (index == 0)? 0 :
+                               xx_heads_mountain[index-1] + (BLX_DTR + NTX);
+  }
+  for(int index=0; index<xx_num_valleys; index++) {
+    xx_heads_valley[index] = (index == 0)? BLX_DTR - (BLT_DTR - 1) :
+                             xx_heads_valley[index-1] + (BLX_DTR + NTX);
+  }
+
+  std::cout << "xx_heads_mountain = ";
+  for(const auto& index : xx_heads_mountain) {
+    std::cout << index << " ";
+  }
+  std::cout << "\n";
+
+  std::cout << "xx_heads_valley = ";
+  for(const auto& index : xx_heads_valley) {
+    std::cout << index << " ";
+  }
+  std::cout << "\n";
+
+  // padded E, H
+  std::vector<float> Ex_src(Nx_pad * Ny * Nz, 0);
+  std::vector<float> Ey_src(Nx_pad * Ny * Nz, 0);
+  std::vector<float> Ez_src(Nx_pad * Ny * Nz, 0);
+  std::vector<float> Hx_src(Nx_pad * Ny * Nz, 0);
+  std::vector<float> Hy_src(Nx_pad * Ny * Nz, 0);
+  std::vector<float> Hz_src(Nx_pad * Ny * Nz, 0);
+
+  std::vector<float> Ex_dst(Nx_pad * Ny * Nz, 0);
+  std::vector<float> Ey_dst(Nx_pad * Ny * Nz, 0);
+  std::vector<float> Ez_dst(Nx_pad * Ny * Nz, 0);
+  std::vector<float> Hx_dst(Nx_pad * Ny * Nz, 0);
+  std::vector<float> Hy_dst(Nx_pad * Ny * Nz, 0);
+  std::vector<float> Hz_dst(Nx_pad * Ny * Nz, 0);
+
+  // define block size and grid size
+  size_t block_size = NTX;
+  size_t grid_size; // grid_size = xx_num * Ny * Nz;
+
+  for(size_t tt=0; tt<num_timesteps/BLT_DTR; tt++) {
+    std::cout << "running\n";
+    grid_size = xx_num_mountains * Ny * Nz; 
+    _updateEH_dt_1D_mountain_seq_extra_copy(Ex_src, Ey_src, Ez_src,
+                                 Hx_src, Hy_src, Hz_src,
+                                 Ex_dst, Ey_dst, Ez_dst,
+                                 Hx_dst, Hy_dst, Hz_dst,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 Nx, Ny, Nz,
+                                 Nx_pad, 
+                                 xx_num_mountains, // number of tiles in each dimensions
+                                 xx_heads_mountain, 
+                                 xx_heads_valley, 
+                                 block_size,
+                                 grid_size, 
+                                 tt); 
+
+    std::swap(Ex_dst, Ex_src);
+    std::swap(Ey_dst, Ey_src);
+    std::swap(Ez_dst, Ez_src);
+    std::swap(Hx_dst, Hx_src);
+    std::swap(Hy_dst, Hy_src);
+    std::swap(Hz_dst, Hz_src);
+
+    grid_size = xx_num_valleys * Ny * Nz;
+    _updateEH_dt_1D_valley_seq_extra_copy(Ex_src, Ey_src, Ez_src,
+                                 Hx_src, Hy_src, Hz_src,
+                                 Ex_dst, Ey_dst, Ez_dst,
+                                 Hx_dst, Hy_dst, Hz_dst,
+                                 _Cax, _Cbx,
+                                 _Cay, _Cby,
+                                 _Caz, _Cbz,
+                                 _Dax, _Dbx,
+                                 _Day, _Dby,
+                                 _Daz, _Dbz,
+                                 _Jx, _Jy, _Jz,
+                                 _Mx, _My, _Mz,
+                                 _dx, 
+                                 Nx, Ny, Nz,
+                                 Nx_pad, 
+                                 xx_num_valleys, // number of tiles in each dimensions
+                                 xx_heads_mountain, 
+                                 xx_heads_valley, 
+                                 block_size,
+                                 grid_size, 
+                                 tt); 
+
+    std::swap(Ex_dst, Ex_src);
+    std::swap(Ey_dst, Ey_src);
+    std::swap(Ez_dst, Ez_src);
+    std::swap(Hx_dst, Hx_src);
+    std::swap(Hy_dst, Hy_src);
+    std::swap(Hz_dst, Hz_src);
+  }
+
+  _extract_original_from_padded_1D(Ex_src, _Ex_simu, Nx, Ny, Nz, Nx_pad, LEFT_PAD);
+  _extract_original_from_padded_1D(Ey_src, _Ey_simu, Nx, Ny, Nz, Nx_pad, LEFT_PAD);
+  _extract_original_from_padded_1D(Ez_src, _Ez_simu, Nx, Ny, Nz, Nx_pad, LEFT_PAD);
+  _extract_original_from_padded_1D(Hx_src, _Hx_simu, Nx, Ny, Nz, Nx_pad, LEFT_PAD);
+  _extract_original_from_padded_1D(Hy_src, _Hy_simu, Nx, Ny, Nz, Nx_pad, LEFT_PAD);
+  _extract_original_from_padded_1D(Hz_src, _Hz_simu, Nx, Ny, Nz, Nx_pad, LEFT_PAD);
+
+}
+
+void gDiamond::_updateEH_dt_1D_mountain_seq_extra_copy(const std::vector<float>& Ex_src, const std::vector<float>& Ey_src, const std::vector<float>& Ez_src,
+                                      const std::vector<float>& Hx_src, const std::vector<float>& Hy_src, const std::vector<float>& Hz_src,
+                                      std::vector<float>& Ex_dst, std::vector<float>& Ey_dst, std::vector<float>& Ez_dst,
+                                      std::vector<float>& Hx_dst, std::vector<float>& Hy_dst, std::vector<float>& Hz_dst,
+                                      const std::vector<float>& Cax, const std::vector<float>& Cbx,
+                                      const std::vector<float>& Cay, const std::vector<float>& Cby,
+                                      const std::vector<float>& Caz, const std::vector<float>& Cbz,
+                                      const std::vector<float>& Dax, const std::vector<float>& Dbx,
+                                      const std::vector<float>& Day, const std::vector<float>& Dby,
+                                      const std::vector<float>& Daz, const std::vector<float>& Dbz,
+                                      const std::vector<float>& Jx, const std::vector<float>& Jy, const std::vector<float>& Jz,
+                                      const std::vector<float>& Mx, const std::vector<float>& My, const std::vector<float>& Mz,
+                                      float dx, 
+                                      int Nx, int Ny, int Nz,
+                                      int Nx_pad, 
+                                      int xx_num, // number of tiles in each dimensions
+                                      std::vector<int> xx_heads_mountain, 
+                                      std::vector<int> xx_heads_valley, 
+                                      size_t block_size,
+                                      size_t grid_size, 
+                                      size_t tt) {
+
+  for(size_t block_id=0; block_id<grid_size; block_id++) {
+    
+    int xx = block_id % xx_num;
+    int temp = block_id / xx_num;
+    int yy = temp % Ny;
+    int zz = temp / Ny;
+
+    // std::cout << "(xx, yy, zz) = " << xx << ", " << yy << ", " << zz << "\n"; 
+
+    const int global_z = zz; // global_z is always zz
+    const int global_y = yy; // global_y is always yy
+
+    // declare shared memory
+    float Ex_shmem[SHX * 3] = {0};
+    float Ey_shmem[SHX * 3] = {0};
+    float Ez_shmem[SHX * 3] = {0};
+    float Hx_shmem[SHX * 3] = {0};
+    float Hy_shmem[SHX * 3] = {0};
+    float Hz_shmem[SHX * 3] = {0};
+
+    // load shared memory
+    // In E_shmem, we store, in order, (y, z), (y+1, z), (y, z+1) stride
+    // In H_shmem, we store, in order, (y, z-1), (y-1, z), (y, z) stride
+    for(size_t tid=0; tid<block_size; tid++) {
+      int local_x = tid;
+      for(int shared_x=local_x; shared_x<SHX; shared_x+=NTX) {
+        int shared_order_E, shared_order_H;
+        int shared_idx_E, shared_idx_H;
+        int global_x = xx_heads_mountain[xx] + shared_x;
+        int global_idx;
+
+        // load (y, z) stride for E_shmem, H_shmem
+        // (y, z) is 1st stride for E_shmem
+        // (y, z) is 3rd stride for H_shmem
+        shared_order_E = 0;
+        shared_order_H = 2;
+        shared_idx_E = shared_x + shared_order_E * SHX;
+        shared_idx_H = shared_x + shared_order_H * SHX;
+        global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny;
+
+        // if(xx == 1 && yy == 1 && zz == 1) {
+        //   std::cout << "(xx, yy, zz) = " << xx << ", " << yy << ", " << zz << ", ";
+        //   std::cout << "local_x = " << local_x << ", ";
+        //   std::cout << "shared_x = " << shared_x << ", ";
+        //   std::cout << "global_x = " << global_x << ", ";
+        //   std::cout << "global_idx = " << global_idx << ", ";
+        //   std::cout << "Ex_src[global_idx] = " << Ex_src[global_idx] << "\n";
+        // }
+
+        Ex_shmem[shared_idx_E] = Ex_src[global_idx];
+        Ey_shmem[shared_idx_E] = Ey_src[global_idx];
+        Ez_shmem[shared_idx_E] = Ez_src[global_idx];
+        Hx_shmem[shared_idx_H] = Hx_src[global_idx];
+        Hy_shmem[shared_idx_H] = Hy_src[global_idx];
+        Hz_shmem[shared_idx_H] = Hz_src[global_idx];
+
+        // load (y+1, z) stride for E_shmem
+        shared_order_E = 1;
+        shared_idx_E = shared_x + shared_order_E * SHX;
+        global_idx = global_x + (global_y + 1) * Nx_pad + global_z * Nx_pad * Ny;
+        Ex_shmem[shared_idx_E] = Ex_src[global_idx];
+        Ey_shmem[shared_idx_E] = Ey_src[global_idx];
+        Ez_shmem[shared_idx_E] = Ez_src[global_idx];
+
+        // load (y, z+1) stride for E_shmem
+        shared_order_E = 2;
+        shared_idx_E = shared_x + shared_order_E * SHX;
+        global_idx = global_x + global_y * Nx_pad + (global_z + 1) * Nx_pad * Ny;
+        Ex_shmem[shared_idx_E] = Ex_src[global_idx];
+        Ey_shmem[shared_idx_E] = Ey_src[global_idx];
+        Ez_shmem[shared_idx_E] = Ez_src[global_idx];
+
+        // load (y, z-1) stride for H_shmem
+        shared_order_H = 0;
+        shared_idx_H = shared_x + shared_order_H * SHX;
+        global_idx = global_x + global_y * Nx_pad + (global_z - 1) * Nx_pad * Ny;
+        Hx_shmem[shared_idx_H] = Hx_src[global_idx];
+        Hy_shmem[shared_idx_H] = Hy_src[global_idx];
+        Hz_shmem[shared_idx_H] = Hz_src[global_idx];
+
+        // load (y-1, z) stride for H_shmem
+        shared_order_H = 1;
+        shared_idx_H = shared_x + shared_order_H * SHX;
+        global_idx = global_x + (global_y - 1) * Nx_pad + global_z * Nx_pad * Ny;
+        Hx_shmem[shared_idx_H] = Hx_src[global_idx];
+        Hy_shmem[shared_idx_H] = Hy_src[global_idx];
+        Hz_shmem[shared_idx_H] = Hz_src[global_idx];
+      }
+    }
+
+    // calculation
+    int cal_offsetX_E, cal_offsetX_H;
+    int cal_boundX_E, cal_boundX_H;
+    for(int t=0; t<BLT_DTR; t++) {
+      cal_offsetX_E = t + 1;
+      cal_offsetX_H = cal_offsetX_E;
+      cal_boundX_E = SHX - t;
+      cal_boundX_H = cal_boundX_E - 1;
+
+      for(size_t tid=0; tid<block_size; tid++) {
+        int local_x = tid;
+
+        // In E_shmem, we store, in order, (y, z), (y+1, z), (y, z+1) stride
+        // In H_shmem, we store, in order, (y, z-1), (y-1, z), (y, z) stride
+
+        // update E
+        for(int shared_x=local_x+cal_offsetX_E; shared_x<cal_boundX_E; shared_x+=NTX) {
+          int shared_order_E = 0; // (y, z) stride
+          int shared_order_H = 2; // (y, z) stride
+          int shared_idx_E = shared_x + shared_order_E * SHX;
+          int shared_idx_H = shared_x + shared_order_H * SHX;
+          int global_x = xx_heads_mountain[xx] + shared_x - LEFT_PAD; // - LEFT_PAD since constant arrays has not been padded
+          int global_idx = global_x + global_y * Nx + global_z * Nx * Ny; // notice that here we are accessing the unpadded constant array
+
+          if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
+            // (y, z-1) for Hx and Hy, (y-1, z) for Hx, Hz
+            Ex_shmem[shared_idx_E] = Cax[global_idx] * Ex_shmem[shared_idx_E] + Cbx[global_idx] *
+                        ((Hz_shmem[shared_idx_H] - Hz_shmem[shared_idx_H - SHX]) - (Hy_shmem[shared_idx_H] - Hy_shmem[shared_idx_H - 2 * SHX]) - Jx[global_idx] * dx);
+            Ey_shmem[shared_idx_E] = Cay[global_idx] * Ey_shmem[shared_idx_E] + Cby[global_idx] *
+                      ((Hx_shmem[shared_idx_H] - Hx_shmem[shared_idx_H - 2 * SHX]) - (Hz_shmem[shared_idx_H] - Hz_shmem[shared_idx_H - 1]) - Jy[global_idx] * dx);
+            Ez_shmem[shared_idx_E] = Caz[global_idx] * Ez_shmem[shared_idx_E] + Cbz[global_idx] *
+                      ((Hy_shmem[shared_idx_H] - Hy_shmem[shared_idx_H - 1]) - (Hx_shmem[shared_idx_H] - Hx_shmem[shared_idx_H - SHX]) - Jz[global_idx] * dx);
+          }
+        }
+      }
+
+      for(size_t tid=0; tid<block_size; tid++) {
+        int local_x = tid;
+        // update H
+        for(int shared_x=local_x+cal_offsetX_H; shared_x<cal_boundX_H; shared_x+=NTX) {
+          int shared_order_E = 0; // (y, z) stride
+          int shared_order_H = 2; // (y, z) stride
+          int shared_idx_E = shared_x + shared_order_E * SHX;
+          int shared_idx_H = shared_x + shared_order_H * SHX;
+          int global_x = xx_heads_mountain[xx] + shared_x - LEFT_PAD; // - LEFT_PAD since constant arrays has not been padded
+          int global_idx = global_x + global_y * Nx + global_z * Nx * Ny; // notice that here we are accessing the unpadded constant array
+
+          if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
+            // (y+1, z) for Ex, Ez, (y, z+1) for Ex, Ey
+            Hx_shmem[shared_idx_H] = Dax[global_idx] * Hx_shmem[shared_idx_H] + Dbx[global_idx] *
+                        ((Ey_shmem[shared_idx_E + 2 * SHX] - Ey_shmem[shared_idx_E]) - (Ez_shmem[shared_idx_E + SHX] - Ez_shmem[shared_idx_E]) - Mx[global_idx] * dx);
+            Hy_shmem[shared_idx_H] = Day[global_idx] * Hy_shmem[shared_idx_H] + Dby[global_idx] *
+                      ((Ez_shmem[shared_idx_E + 1] - Ez_shmem[shared_idx_E]) - (Ex_shmem[shared_idx_E + 2 * SHX] - Ex_shmem[shared_idx_E]) - My[global_idx] * dx);
+            Hz_shmem[shared_idx_H] = Daz[global_idx] * Hz_shmem[shared_idx_H] + Dbz[global_idx] *
+                      ((Ex_shmem[shared_idx_E + SHX] - Ex_shmem[shared_idx_E]) - (Ey_shmem[shared_idx_E + 1] - Ey_shmem[shared_idx_E]) - Mz[global_idx] * dx);
+          }
+        }
+
+      }
+    }
+
+    // store global memory
+    int store_offsetE = 1;
+    int store_offsetH = store_offsetE;
+    int store_boundE = SHX;
+    int store_boundH = store_boundE - 1;
+    for(size_t tid=0; tid<block_size; tid++) {
+      int local_x = tid;
+
+      // store E
+      for(int shared_x=local_x+store_offsetE; shared_x<store_boundE; shared_x+=NTX) {
+        int shared_order_E = 0; // (y, z) stride
+        int shared_idx_E = shared_x + shared_order_E * SHX;
+        int global_x = xx_heads_mountain[xx] + shared_x;
+        int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny;
+        if(global_x >= 1 + LEFT_PAD && global_x <= Nx-2 + LEFT_PAD && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
+          Ex_dst[global_idx] = Ex_shmem[shared_idx_E];
+          Ey_dst[global_idx] = Ey_shmem[shared_idx_E];
+          Ez_dst[global_idx] = Ez_shmem[shared_idx_E];
+        }
+      }
+
+      // store H
+      for(int shared_x=local_x+store_offsetH; shared_x<store_boundH; shared_x+=NTX) {
+        int shared_order_H = 2; // (y, z) stride
+        int shared_idx_H = shared_x + shared_order_H * SHX;
+        int global_x = xx_heads_mountain[xx] + shared_x;
+        int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny;
+        if(global_x >= 1 + LEFT_PAD && global_x <= Nx-2 + LEFT_PAD && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
+          Hx_dst[global_idx] = Hx_shmem[shared_idx_H];
+          Hy_dst[global_idx] = Hy_shmem[shared_idx_H];
+          Hz_dst[global_idx] = Hz_shmem[shared_idx_H];
+        }
+      }
+    }
+
+    // extra store to dst
+    int extra_offsetE = BLT_DTR;
+    int extra_offsetH = extra_offsetE - 1;
+    int extra_boundE = extra_offsetE + NTX;
+    int extra_boundH = extra_boundE + 1;
+    for(size_t tid=0; tid<block_size; tid++) {
+      int local_x = tid;
+
+      // store E
+      for(int shared_x=local_x+extra_offsetE; shared_x<extra_boundE; shared_x+=NTX) {
+        int global_x = xx_heads_valley[xx] + shared_x;
+        int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny;
+        if(global_x >= 1 + LEFT_PAD && global_x <= Nx-2 + LEFT_PAD && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
+          Ex_dst[global_idx] = Ex_src[global_idx];
+          Ey_dst[global_idx] = Ey_src[global_idx];
+          Ez_dst[global_idx] = Ez_src[global_idx];
+        }
+      }
+
+      // store H
+      for(int shared_x=local_x+extra_offsetH; shared_x<extra_boundH; shared_x+=NTX) {
+        int global_x = xx_heads_valley[xx] + shared_x;
+        int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny;
+        if(global_x >= 1 + LEFT_PAD && global_x <= Nx-2 + LEFT_PAD && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
+          Hx_dst[global_idx] = Hx_src[global_idx];
+          Hy_dst[global_idx] = Hy_src[global_idx];
+          Hz_dst[global_idx] = Hz_src[global_idx];
+        }
+      }
+    }
+
+
+  }
+
+} 
+
+void gDiamond::_updateEH_dt_1D_valley_seq_extra_copy(const std::vector<float>& Ex_src, const std::vector<float>& Ey_src, const std::vector<float>& Ez_src,
+                                      const std::vector<float>& Hx_src, const std::vector<float>& Hy_src, const std::vector<float>& Hz_src,
+                                      std::vector<float>& Ex_dst, std::vector<float>& Ey_dst, std::vector<float>& Ez_dst,
+                                      std::vector<float>& Hx_dst, std::vector<float>& Hy_dst, std::vector<float>& Hz_dst,
+                                      const std::vector<float>& Cax, const std::vector<float>& Cbx,
+                                      const std::vector<float>& Cay, const std::vector<float>& Cby,
+                                      const std::vector<float>& Caz, const std::vector<float>& Cbz,
+                                      const std::vector<float>& Dax, const std::vector<float>& Dbx,
+                                      const std::vector<float>& Day, const std::vector<float>& Dby,
+                                      const std::vector<float>& Daz, const std::vector<float>& Dbz,
+                                      const std::vector<float>& Jx, const std::vector<float>& Jy, const std::vector<float>& Jz,
+                                      const std::vector<float>& Mx, const std::vector<float>& My, const std::vector<float>& Mz,
+                                      float dx, 
+                                      int Nx, int Ny, int Nz,
+                                      int Nx_pad, 
+                                      int xx_num, // number of tiles in each dimensions
+                                      std::vector<int> xx_heads_mountain, 
+                                      std::vector<int> xx_heads_valley, 
+                                      size_t block_size,
+                                      size_t grid_size, 
+                                      size_t tt) {
+
+  for(size_t block_id=0; block_id<grid_size; block_id++) {
+    int xx = block_id % xx_num;
+    int temp = block_id / xx_num;
+    int yy = temp % Ny;
+    int zz = temp / Ny;
+
+    const int global_z = zz; // global_z is always zz
+    const int global_y = yy; // global_y is always yy
+
+    // if(global_y < 1 || global_y > Ny-2 || global_z < 1 || global_z > Nz-2) {
+    //   continue;
+    // }
+  
+    // declare shared memory
+    float Ex_shmem[SHX * 3] = {0};
+    float Ey_shmem[SHX * 3] = {0};
+    float Ez_shmem[SHX * 3] = {0};
+    float Hx_shmem[SHX * 3] = {0};
+    float Hy_shmem[SHX * 3] = {0};
+    float Hz_shmem[SHX * 3] = {0};
+
+    // load shared memory
+    // In E_shmem, we store, in order, (y, z), (y+1, z), (y, z+1) stride
+    // In H_shmem, we store, in order, (y, z-1), (y-1, z), (y, z) stride
+    for(size_t tid=0; tid<block_size; tid++) {
+      int local_x = tid;
+      for(int shared_x=local_x; shared_x<SHX; shared_x+=NTX) {
+        int shared_order_E, shared_order_H;
+        int shared_idx_E, shared_idx_H;
+        int global_x = xx_heads_valley[xx] + shared_x;
+        int global_idx;
+
+        // load (y, z) stride for E_shmem, H_shmem
+        // (y, z) is 1st stride for E_shmem
+        // (y, z) is 3rd stride for H_shmem
+        shared_order_E = 0;
+        shared_order_H = 2;
+        shared_idx_E = shared_x + shared_order_E * SHX;
+        shared_idx_H = shared_x + shared_order_H * SHX;
+        global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny;
+        Ex_shmem[shared_idx_E] = Ex_src[global_idx];
+        Ey_shmem[shared_idx_E] = Ey_src[global_idx];
+        Ez_shmem[shared_idx_E] = Ez_src[global_idx];
+        Hx_shmem[shared_idx_H] = Hx_src[global_idx];
+        Hy_shmem[shared_idx_H] = Hy_src[global_idx];
+        Hz_shmem[shared_idx_H] = Hz_src[global_idx];
+
+        // load (y+1, z) stride for E_shmem
+        shared_order_E = 1;
+        shared_idx_E = shared_x + shared_order_E * SHX;
+        global_idx = global_x + (global_y + 1) * Nx_pad + global_z * Nx_pad * Ny;
+        Ex_shmem[shared_idx_E] = Ex_src[global_idx];
+        Ey_shmem[shared_idx_E] = Ey_src[global_idx];
+        Ez_shmem[shared_idx_E] = Ez_src[global_idx];
+
+        // load (y, z+1) stride for E_shmem
+        shared_order_E = 2;
+        shared_idx_E = shared_x + shared_order_E * SHX;
+        global_idx = global_x + global_y * Nx_pad + (global_z + 1) * Nx_pad * Ny;
+        Ex_shmem[shared_idx_E] = Ex_src[global_idx];
+        Ey_shmem[shared_idx_E] = Ey_src[global_idx];
+        Ez_shmem[shared_idx_E] = Ez_src[global_idx];
+
+        // load (y, z-1) stride for H_shmem
+        shared_order_H = 0;
+        shared_idx_H = shared_x + shared_order_H * SHX;
+        global_idx = global_x + global_y * Nx_pad + (global_z - 1) * Nx_pad * Ny;
+        Hx_shmem[shared_idx_H] = Hx_src[global_idx];
+        Hy_shmem[shared_idx_H] = Hy_src[global_idx];
+        Hz_shmem[shared_idx_H] = Hz_src[global_idx];
+
+        // load (y-1, z) stride for H_shmem
+        shared_order_H = 1;
+        shared_idx_H = shared_x + shared_order_H * SHX;
+        global_idx = global_x + (global_y - 1) * Nx_pad + global_z * Nx_pad * Ny;
+        Hx_shmem[shared_idx_H] = Hx_src[global_idx];
+        Hy_shmem[shared_idx_H] = Hy_src[global_idx];
+        Hz_shmem[shared_idx_H] = Hz_src[global_idx];
+      }
+    }
+
+    // calculation
+    int cal_offsetX_E, cal_offsetX_H;
+    int cal_boundX_E, cal_boundX_H;
+    for(int t=0; t<BLT_DTR; t++) {
+      cal_offsetX_E = BLT_DTR - t;
+      cal_offsetX_H = cal_offsetX_E - 1;
+      cal_boundX_E = SHX - (BLT_DTR - t);
+      cal_boundX_H = cal_boundX_E; 
+      for(size_t tid=0; tid<block_size; tid++) {
+        int local_x = tid;
+
+        // In E_shmem, we store, in order, (y, z), (y+1, z), (y, z+1) stride
+        // In H_shmem, we store, in order, (y, z-1), (y-1, z), (y, z) stride
+
+        // update E
+        for(int shared_x=local_x+cal_offsetX_E; shared_x<cal_boundX_E; shared_x+=NTX) {
+          int shared_order_E = 0; // (y, z) stride
+          int shared_order_H = 2; // (y, z) stride
+          int shared_idx_E = shared_x + shared_order_E * SHX;
+          int shared_idx_H = shared_x + shared_order_H * SHX;
+          int global_x = xx_heads_valley[xx] + shared_x - LEFT_PAD; // - LEFT_PAD since constant arrays has not been padded
+          int global_idx = global_x + global_y * Nx + global_z * Nx * Ny; // notice that here we are accessing the unpadded constant array
+
+          if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
+            // (y, z-1) for Hx and Hy, (y-1, z) for Hx, Hz
+            Ex_shmem[shared_idx_E] = Cax[global_idx] * Ex_shmem[shared_idx_E] + Cbx[global_idx] *
+                        ((Hz_shmem[shared_idx_H] - Hz_shmem[shared_idx_H - SHX]) - (Hy_shmem[shared_idx_H] - Hy_shmem[shared_idx_H - 2 * SHX]) - Jx[global_idx] * dx);
+            Ey_shmem[shared_idx_E] = Cay[global_idx] * Ey_shmem[shared_idx_E] + Cby[global_idx] *
+                      ((Hx_shmem[shared_idx_H] - Hx_shmem[shared_idx_H - 2 * SHX]) - (Hz_shmem[shared_idx_H] - Hz_shmem[shared_idx_H - 1]) - Jy[global_idx] * dx);
+            Ez_shmem[shared_idx_E] = Caz[global_idx] * Ez_shmem[shared_idx_E] + Cbz[global_idx] *
+                      ((Hy_shmem[shared_idx_H] - Hy_shmem[shared_idx_H - 1]) - (Hx_shmem[shared_idx_H] - Hx_shmem[shared_idx_H - SHX]) - Jz[global_idx] * dx);
+          }
+        }
+      }
+      for(size_t tid=0; tid<block_size; tid++) {
+        int local_x = tid;
+
+        // update H
+        for(int shared_x=local_x+cal_offsetX_H; shared_x<cal_boundX_H; shared_x+=NTX) {
+          int shared_order_E = 0; // (y, z) stride
+          int shared_order_H = 2; // (y, z) stride
+          int shared_idx_E = shared_x + shared_order_E * SHX;
+          int shared_idx_H = shared_x + shared_order_H * SHX;
+          int global_x = xx_heads_valley[xx] + shared_x - LEFT_PAD; // - LEFT_PAD since constant arrays has not been padded
+          int global_idx = global_x + global_y * Nx + global_z * Nx * Ny; // notice that here we are accessing the unpadded constant array
+
+          if(global_x >= 1 && global_x <= Nx-2 && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
+            // (y+1, z) for Ex, Ez, (y, z+1) for Ex, Ey
+            Hx_shmem[shared_idx_H] = Dax[global_idx] * Hx_shmem[shared_idx_H] + Dbx[global_idx] *
+                        ((Ey_shmem[shared_idx_E + 2 * SHX] - Ey_shmem[shared_idx_E]) - (Ez_shmem[shared_idx_E + SHX] - Ez_shmem[shared_idx_E]) - Mx[global_idx] * dx);
+            Hy_shmem[shared_idx_H] = Day[global_idx] * Hy_shmem[shared_idx_H] + Dby[global_idx] *
+                      ((Ez_shmem[shared_idx_E + 1] - Ez_shmem[shared_idx_E]) - (Ex_shmem[shared_idx_E + 2 * SHX] - Ex_shmem[shared_idx_E]) - My[global_idx] * dx);
+            Hz_shmem[shared_idx_H] = Daz[global_idx] * Hz_shmem[shared_idx_H] + Dbz[global_idx] *
+                      ((Ex_shmem[shared_idx_E + SHX] - Ex_shmem[shared_idx_E]) - (Ey_shmem[shared_idx_E + 1] - Ey_shmem[shared_idx_E]) - Mz[global_idx] * dx);
+          }
+        }
+      }
+    }
+
+    // store global memory
+    int store_offsetE = 1;
+    int store_offsetH = 0;
+    int store_boundE = SHX - 1;
+    int store_boundH = store_boundE;
+    for(size_t tid=0; tid<block_size; tid++) {
+      int local_x = tid;
+      // store E
+      for(int shared_x=local_x+store_offsetE; shared_x<store_boundE; shared_x+=NTX) {
+        int shared_order_E = 0; // (y, z) stride
+        int shared_idx_E = shared_x + shared_order_E * SHX;
+        int global_x = xx_heads_valley[xx] + shared_x;
+        int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny;
+        if(global_x >= 1 + LEFT_PAD && global_x <= Nx-2 + LEFT_PAD && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
+          Ex_dst[global_idx] = Ex_shmem[shared_idx_E];
+          Ey_dst[global_idx] = Ey_shmem[shared_idx_E];
+          Ez_dst[global_idx] = Ez_shmem[shared_idx_E];
+        }
+      }
+      // store H
+      for(int shared_x=local_x+store_offsetH; shared_x<store_boundH; shared_x+=NTX) {
+        int shared_order_H = 2; // (y, z) stride
+        int shared_idx_H = shared_x + shared_order_H * SHX;
+        int global_x = xx_heads_valley[xx] + shared_x;
+        int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny;
+        if(global_x >= 1 + LEFT_PAD && global_x <= Nx-2 + LEFT_PAD && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
+          Hx_dst[global_idx] = Hx_shmem[shared_idx_H];
+          Hy_dst[global_idx] = Hy_shmem[shared_idx_H];
+          Hz_dst[global_idx] = Hz_shmem[shared_idx_H];
+        }
+      }
+    }
+
+    // extra store to dst
+    int extra_offsetE = BLT_DTR;
+    int extra_offsetH = extra_offsetE;
+    int extra_boundE = extra_offsetE + NTX + 1;
+    int extra_boundH = extra_boundE - 1;
+    for(size_t tid=0; tid<block_size; tid++) {
+      int local_x = tid;
+
+      // store E
+      for(int shared_x=local_x+extra_offsetE; shared_x<extra_boundE; shared_x+=NTX) {
+        int global_x = xx_heads_mountain[xx] + shared_x;
+        int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny;
+        if(global_x >= 1 + LEFT_PAD && global_x <= Nx-2 + LEFT_PAD && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
+          Ex_dst[global_idx] = Ex_src[global_idx];
+          Ey_dst[global_idx] = Ey_src[global_idx];
+          Ez_dst[global_idx] = Ez_src[global_idx];
+        }
+      }
+
+      // store H
+      for(int shared_x=local_x+extra_offsetH; shared_x<extra_boundH; shared_x+=NTX) {
+        int global_x = xx_heads_mountain[xx] + shared_x;
+        int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny;
+        if(global_x >= 1 + LEFT_PAD && global_x <= Nx-2 + LEFT_PAD && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
+          Hx_dst[global_idx] = Hx_src[global_idx];
+          Hy_dst[global_idx] = Hy_src[global_idx];
+          Hz_dst[global_idx] = Hz_src[global_idx];
+        }
+      }
+    }
+
+
+  } 
+
+} 
+
 
 
 } // end of namespace gdiamond
