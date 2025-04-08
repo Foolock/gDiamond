@@ -8017,8 +8017,6 @@ void gDiamond::update_FDTD_cpu_simulation_dt_3_D_sdf(size_t num_timesteps, size_
     grid_size = xx_num_mountains * Ny * Nz; 
     _updateEH_dt_1D_mountain_seq(Ex_src, Ey_src, Ez_src,
                                  Hx_src, Hy_src, Hz_src,
-                                 Ex_dst, Ey_dst, Ez_dst,
-                                 Hx_dst, Hy_dst, Hz_dst,
                                  Ex_final, Ey_final, Ez_final,
                                  Hx_final, Hy_final, Hz_final,
                                  _Cax, _Cbx,
@@ -8039,8 +8037,8 @@ void gDiamond::update_FDTD_cpu_simulation_dt_3_D_sdf(size_t num_timesteps, size_
                                  tt); 
 
     grid_size = xx_num_valleys * Ny * Nz; 
-    _updateEH_dt_1D_valley_seq(Ex_dst, Ey_dst, Ez_dst,
-                               Hx_dst, Hy_dst, Hz_dst,
+    _updateEH_dt_1D_valley_seq(Ex_src, Ey_src, Ez_src,
+                               Hx_src, Hy_src, Hz_src,
                                Ex_final, Ey_final, Ez_final,
                                Hx_final, Hy_final, Hz_final,
                                _Cax, _Cbx,
@@ -8093,10 +8091,8 @@ void gDiamond::update_FDTD_cpu_simulation_dt_3_D_sdf(size_t num_timesteps, size_
 
 }
 
-void gDiamond::_updateEH_dt_1D_mountain_seq(const std::vector<float>& Ex_src, const std::vector<float>& Ey_src, const std::vector<float>& Ez_src,
-                                            const std::vector<float>& Hx_src, const std::vector<float>& Hy_src, const std::vector<float>& Hz_src,
-                                            std::vector<float>& Ex_dst, std::vector<float>& Ey_dst, std::vector<float>& Ez_dst,
-                                            std::vector<float>& Hx_dst, std::vector<float>& Hy_dst, std::vector<float>& Hz_dst,
+void gDiamond::_updateEH_dt_1D_mountain_seq(std::vector<float>& Ex_src, std::vector<float>& Ey_src, std::vector<float>& Ez_src,
+                                            std::vector<float>& Hx_src, std::vector<float>& Hy_src, std::vector<float>& Hz_src,
                                             std::vector<float>& Ex_final, std::vector<float>& Ey_final, std::vector<float>& Ez_final,
                                             std::vector<float>& Hx_final, std::vector<float>& Hy_final, std::vector<float>& Hz_final,
                                             const std::vector<float>& Cax, const std::vector<float>& Cbx,
@@ -8330,9 +8326,9 @@ void gDiamond::_updateEH_dt_1D_mountain_seq(const std::vector<float>& Ex_src, co
         int global_x = xx_heads[xx] + shared_x;   
         int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny;
         if(global_x >= 1 + LEFT_PAD && global_x <= Nx-2 + LEFT_PAD && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
-          Ex_dst[global_idx] = Ex_shmem[shared_idx_E];
-          Ey_dst[global_idx] = Ey_shmem[shared_idx_E];
-          Ez_dst[global_idx] = Ez_shmem[shared_idx_E];
+          Ex_src[global_idx] = Ex_shmem[shared_idx_E];
+          Ey_src[global_idx] = Ey_shmem[shared_idx_E];
+          Ez_src[global_idx] = Ez_shmem[shared_idx_E];
         }
       }
 
@@ -8343,9 +8339,9 @@ void gDiamond::_updateEH_dt_1D_mountain_seq(const std::vector<float>& Ex_src, co
         int global_x = xx_heads[xx] + shared_x;   
         int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny;
         if(global_x >= 1 + LEFT_PAD && global_x <= Nx-2 + LEFT_PAD && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
-          Hx_dst[global_idx] = Hx_shmem[shared_idx_H];
-          Hy_dst[global_idx] = Hy_shmem[shared_idx_H];
-          Hz_dst[global_idx] = Hz_shmem[shared_idx_H];
+          Hx_src[global_idx] = Hx_shmem[shared_idx_H];
+          Hy_src[global_idx] = Hy_shmem[shared_idx_H];
+          Hz_src[global_idx] = Hz_shmem[shared_idx_H];
         }
       }
     }
@@ -8364,9 +8360,9 @@ void gDiamond::_updateEH_dt_1D_mountain_seq(const std::vector<float>& Ex_src, co
         int global_x = xx_heads[xx] + shared_x;   
         int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny;
         if(global_x >= 1 + LEFT_PAD && global_x <= Nx-2 + LEFT_PAD && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
-          Ex_dst[global_idx] = Ex_shmem[shared_idx_E];
-          Ey_dst[global_idx] = Ey_shmem[shared_idx_E];
-          Ez_dst[global_idx] = Ez_shmem[shared_idx_E];
+          Ex_src[global_idx] = Ex_shmem[shared_idx_E];
+          Ey_src[global_idx] = Ey_shmem[shared_idx_E];
+          Ez_src[global_idx] = Ez_shmem[shared_idx_E];
         }
       }
 
@@ -8377,17 +8373,17 @@ void gDiamond::_updateEH_dt_1D_mountain_seq(const std::vector<float>& Ex_src, co
         int global_x = xx_heads[xx] + shared_x;   
         int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny;
         if(global_x >= 1 + LEFT_PAD && global_x <= Nx-2 + LEFT_PAD && global_y >= 1 && global_y <= Ny-2 && global_z >= 1 && global_z <= Nz-2) {
-          Hx_dst[global_idx] = Hx_shmem[shared_idx_H];
-          Hy_dst[global_idx] = Hy_shmem[shared_idx_H];
-          Hz_dst[global_idx] = Hz_shmem[shared_idx_H];
+          Hx_src[global_idx] = Hx_shmem[shared_idx_H];
+          Hy_src[global_idx] = Hy_shmem[shared_idx_H];
+          Hz_src[global_idx] = Hz_shmem[shared_idx_H];
         }
       }
     }
   }
 } 
 
-void gDiamond::_updateEH_dt_1D_valley_seq(const std::vector<float>& Ex_dst, const std::vector<float>& Ey_dst, const std::vector<float>& Ez_dst,
-                                          const std::vector<float>& Hx_dst, const std::vector<float>& Hy_dst, const std::vector<float>& Hz_dst,
+void gDiamond::_updateEH_dt_1D_valley_seq(const std::vector<float>& Ex_src, const std::vector<float>& Ey_src, const std::vector<float>& Ez_src,
+                                          const std::vector<float>& Hx_src, const std::vector<float>& Hy_src, const std::vector<float>& Hz_src,
                                           std::vector<float>& Ex_final, std::vector<float>& Ey_final, std::vector<float>& Ez_final,
                                           std::vector<float>& Hx_final, std::vector<float>& Hy_final, std::vector<float>& Hz_final,
                                           const std::vector<float>& Cax, const std::vector<float>& Cbx,
@@ -8447,44 +8443,44 @@ void gDiamond::_updateEH_dt_1D_valley_seq(const std::vector<float>& Ex_dst, cons
         shared_idx_E = shared_x + shared_order_E * SHX;
         shared_idx_H = shared_x + shared_order_H * SHX;
         global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny;
-        Ex_shmem[shared_idx_E] = Ex_dst[global_idx];
-        Ey_shmem[shared_idx_E] = Ey_dst[global_idx];
-        Ez_shmem[shared_idx_E] = Ez_dst[global_idx];
-        Hx_shmem[shared_idx_H] = Hx_dst[global_idx];
-        Hy_shmem[shared_idx_H] = Hy_dst[global_idx];
-        Hz_shmem[shared_idx_H] = Hz_dst[global_idx];
+        Ex_shmem[shared_idx_E] = Ex_src[global_idx];
+        Ey_shmem[shared_idx_E] = Ey_src[global_idx];
+        Ez_shmem[shared_idx_E] = Ez_src[global_idx];
+        Hx_shmem[shared_idx_H] = Hx_src[global_idx];
+        Hy_shmem[shared_idx_H] = Hy_src[global_idx];
+        Hz_shmem[shared_idx_H] = Hz_src[global_idx];
 
         // load (y+1, z) stride for E_shmem
         shared_order_E = 1;
         shared_idx_E = shared_x + shared_order_E * SHX;
         global_idx = global_x + (global_y + 1) * Nx_pad + global_z * Nx_pad * Ny;
-        Ex_shmem[shared_idx_E] = Ex_dst[global_idx];
-        Ey_shmem[shared_idx_E] = Ey_dst[global_idx];
-        Ez_shmem[shared_idx_E] = Ez_dst[global_idx];
+        Ex_shmem[shared_idx_E] = Ex_src[global_idx];
+        Ey_shmem[shared_idx_E] = Ey_src[global_idx];
+        Ez_shmem[shared_idx_E] = Ez_src[global_idx];
 
         // load (y, z+1) stride for E_shmem
         shared_order_E = 2;
         shared_idx_E = shared_x + shared_order_E * SHX;
         global_idx = global_x + global_y * Nx_pad + (global_z + 1) * Nx_pad * Ny;
-        Ex_shmem[shared_idx_E] = Ex_dst[global_idx];
-        Ey_shmem[shared_idx_E] = Ey_dst[global_idx];
-        Ez_shmem[shared_idx_E] = Ez_dst[global_idx];
+        Ex_shmem[shared_idx_E] = Ex_src[global_idx];
+        Ey_shmem[shared_idx_E] = Ey_src[global_idx];
+        Ez_shmem[shared_idx_E] = Ez_src[global_idx];
 
         // load (y, z-1) stride for H_shmem
         shared_order_H = 0;
         shared_idx_H = shared_x + shared_order_H * SHX;
         global_idx = global_x + global_y * Nx_pad + (global_z - 1) * Nx_pad * Ny;
-        Hx_shmem[shared_idx_H] = Hx_dst[global_idx];
-        Hy_shmem[shared_idx_H] = Hy_dst[global_idx];
-        Hz_shmem[shared_idx_H] = Hz_dst[global_idx];
+        Hx_shmem[shared_idx_H] = Hx_src[global_idx];
+        Hy_shmem[shared_idx_H] = Hy_src[global_idx];
+        Hz_shmem[shared_idx_H] = Hz_src[global_idx];
 
         // load (y-1, z) stride for H_shmem
         shared_order_H = 1;
         shared_idx_H = shared_x + shared_order_H * SHX;
         global_idx = global_x + (global_y - 1) * Nx_pad + global_z * Nx_pad * Ny;
-        Hx_shmem[shared_idx_H] = Hx_dst[global_idx];
-        Hy_shmem[shared_idx_H] = Hy_dst[global_idx];
-        Hz_shmem[shared_idx_H] = Hz_dst[global_idx];
+        Hx_shmem[shared_idx_H] = Hx_src[global_idx];
+        Hy_shmem[shared_idx_H] = Hy_src[global_idx];
+        Hz_shmem[shared_idx_H] = Hz_src[global_idx];
       }
     }
 
