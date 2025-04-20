@@ -190,20 +190,6 @@ void gpu_half_dram_access(std::vector<float>& Ex, std::vector<float>& Ey, std::v
   cudaFree(Cby_d);
   cudaFree(Cbz_d);
   cudaFree(Jx_d);
-
-  cudaFree(Ex_d);
-  cudaFree(Ey_d);
-  cudaFree(Ez_d);
-  cudaFree(Hx_d);
-  cudaFree(Hy_d);
-  cudaFree(Hz_d);
-  cudaFree(Cax_d);
-  cudaFree(Cay_d);
-  cudaFree(Caz_d);
-  cudaFree(Cbx_d);
-  cudaFree(Cby_d);
-  cudaFree(Cbz_d);
-  cudaFree(Jx_d);
   cudaFree(Jy_d);
   cudaFree(Jz_d);
 }
@@ -279,20 +265,6 @@ void gpu(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
   auto end = std::chrono::steady_clock::now();
   size_t gpu_runtime = std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
   std::cout << "gpu runtime: " << gpu_runtime << "us\n";
-
-  cudaFree(Ex_d);
-  cudaFree(Ey_d);
-  cudaFree(Ez_d);
-  cudaFree(Hx_d);
-  cudaFree(Hy_d);
-  cudaFree(Hz_d);
-  cudaFree(Cax_d);
-  cudaFree(Cay_d);
-  cudaFree(Caz_d);
-  cudaFree(Cbx_d);
-  cudaFree(Cby_d);
-  cudaFree(Cbz_d);
-  cudaFree(Jx_d);
 
   cudaFree(Ex_d);
   cudaFree(Ey_d);

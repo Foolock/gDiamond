@@ -1,10 +1,11 @@
 #include <iostream>
 #include <vector>
 #include <tuple>
+#include <iomanip>
 
-#define BLX_UB 1 
-#define BLY_UB 32 
-#define BLZ_UB 16
+#define BLX_UB 32 
+#define BLY_UB 4
+#define BLZ_UB 4
 
 const int Nx = 32;  // Number of elements along X-axis
 const int Ny = 32;  // Number of elements along Y-axis
@@ -36,9 +37,9 @@ std::tuple<int, int, int> tile_mapping1(int xx_num, int yy_num, int zz_num,
   int global_y = yy_heads[yy] + local_y;
   int global_z = zz_heads[zz] + local_z;
 
-  std::cout << "local_x = " << local_x << ", local_y = " << local_y << ", local_z = " << local_z << ", ";
-  std::cout << "global_x = " << global_x << ", global_y = " << global_y << ", global_z = " << global_z << ", ";
-  std::cout << "xx = " << xx << ", yy = " << yy << ", zz = " << zz << "\n";
+  // std::cout << "x = " << local_x << ", y = " << local_y << ", z = " << local_z << ", ";
+  // std::cout << "global_x = " << global_x << ", global_y = " << global_y << ", global_z = " << global_z << ", ";
+  // std::cout << "xx = " << xx << ", yy = " << yy << ", zz = " << zz << "\n";
 
   return {global_x, global_y, global_z};
 }
@@ -96,17 +97,17 @@ int main() {
     int block_size = 512;
     int grid_size;
 
-    std::cout << "naive mapping\n";
-    grid_size = (Nx * Ny * Nz + block_size - 1) / block_size;
-    for (int block_id = 0; block_id < grid_size; ++block_id) {
-      std::cout << "block_id = " << block_id << "\n";
-      for (int thread_id = 0; thread_id < 512; ++thread_id) {
-          auto [x, y, z] = naive_mapping(block_id * block_size + thread_id, Nx, Ny, Nz);
-          int global_id = x + y * Nx + z * (Nx * Ny); 
-          std::cout << "1D Index: " << thread_id << " -> global_id: " << global_id << ", global_x = " << x << ", global_y = " << y << ", global_z = " << z << "\n";
-      }
-      std::cout << "--------------------------------------------------------\n\n";
-    }
+    // std::cout << "naive mapping\n";
+    // grid_size = (Nx * Ny * Nz + block_size - 1) / block_size;
+    // for (int block_id = 0; block_id < grid_size; ++block_id) {
+    //   std::cout << "block_id = " << block_id << "\n";
+    //   for (int thread_id = 0; thread_id < 512; ++thread_id) {
+    //       auto [x, y, z] = naive_mapping(block_id * block_size + thread_id, Nx, Ny, Nz);
+    //       int global_id = x + y * Nx + z * (Nx * Ny); 
+    //       std::cout << "tid: " << thread_id << " -> global_id: " << global_id << ", global_x = " << x << ", global_y = " << y << ", global_z = " << z << "\n";
+    //   }
+    //   std::cout << "--------------------------------------------------------\n\n";
+    // }
 
     std::cout << "tile mapping1\n";
     grid_size = xx_num * yy_num * zz_num;
@@ -117,7 +118,9 @@ int main() {
                                         xx_heads, yy_heads, zz_heads,
                                         block_id, thread_id, Nx, Ny, Nz);
           int global_id = x + y * Nx + z * (Nx * Ny); 
-          std::cout << "1D Index: " << thread_id << " -> global_id: " << global_id << "\n";
+          // std::cout << "tid: " << thread_id << " -> global_id: " << global_id << ", global_x = " << x << ", global_y = " << y << ", global_z = " << z << "\n";
+          std::cout << std::setw(3) << "tid: " << std::setw(5) << thread_id 
+                    << std::setw(10) << " -> global_id: " << std::setw(5) << global_id << "\n";
       }
       std::cout << "--------------------------------------------------------\n\n";
     }

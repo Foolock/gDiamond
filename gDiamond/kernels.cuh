@@ -37,8 +37,8 @@
 
 // upper bound check
 #define BLX_UB 32 
-#define BLY_UB 16 
-#define BLZ_UB 1 
+#define BLY_UB 4 
+#define BLZ_UB 4 
 #define BLT_UB 4
 
 // reimplemented diamond tiling

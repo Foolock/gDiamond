@@ -8960,6 +8960,10 @@ void gDiamond::update_FDTD_cpu_simulation_dt_3_D_extra_copy(size_t num_timesteps
                                  grid_size, 
                                  tt); 
 
+    if(1) {
+      std::cout << "check data\n";
+    }
+
     std::swap(Ex_dst, Ex_src);
     std::swap(Ey_dst, Ey_src);
     std::swap(Ez_dst, Ez_src);
@@ -8996,6 +9000,19 @@ void gDiamond::update_FDTD_cpu_simulation_dt_3_D_extra_copy(size_t num_timesteps
     std::swap(Hx_dst, Hx_src);
     std::swap(Hy_dst, Hy_src);
     std::swap(Hz_dst, Hz_src);
+  }
+
+  std::cout << "Ex_src = \n";
+  for(int k=0; k<Nz; k++) {
+    for(int j=0; j<Ny; j++) {
+      for(int i=0; i<Nx_pad; i++) {
+        int idx = i + j*Nx_pad + k*(Nx_pad*Ny);
+        if(Ex_src[idx] != 0) { 
+          std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
+          std::cout << "Ex_src[idx] = " << Ex_src[idx] << "\n";
+        }
+      }
+    }
   }
 
   _extract_original_from_padded_1D(Ex_src, _Ex_simu, Nx, Ny, Nz, Nx_pad, LEFT_PAD);
@@ -9151,6 +9168,18 @@ void gDiamond::_updateEH_dt_1D_mountain_seq_extra_copy(const std::vector<float>&
                       ((Hx_shmem[shared_idx_H] - Hx_shmem[shared_idx_H - 2 * SHX]) - (Hz_shmem[shared_idx_H] - Hz_shmem[shared_idx_H - 1]) - Jy[global_idx] * dx);
             Ez_shmem[shared_idx_E] = Caz[global_idx] * Ez_shmem[shared_idx_E] + Cbz[global_idx] *
                       ((Hy_shmem[shared_idx_H] - Hy_shmem[shared_idx_H - 1]) - (Hx_shmem[shared_idx_H] - Hx_shmem[shared_idx_H - SHX]) - Jz[global_idx] * dx);
+            
+            if(t == 1 && global_x == 13 && global_y == 2 && global_z == 2) {
+              std::cout << "but here, Ex_shmem[shared_idx_E] = " << Ex_shmem[shared_idx_E]
+                        << ", Hz_shmem[shared_idx_H] = " << Hz_shmem[shared_idx_H]
+                        << ", Hz_shmem[shared_idx_H - SHX] = " << Hz_shmem[shared_idx_H - SHX]
+                        << ", Hy_shmem[shared_idx_H] = " << Hy_shmem[shared_idx_H]
+                        << ", Hy_shmem[shared_idx_H - 2 * SHX] = " << Hy_shmem[shared_idx_H - 2 * SHX]
+                        << ", Jx[global_idx] = " << Jx[global_idx]
+                        << ", shared_idx_E = " << shared_idx_E
+                        << "\n";
+            }
+          
           }
         }
       }
@@ -9174,6 +9203,18 @@ void gDiamond::_updateEH_dt_1D_mountain_seq_extra_copy(const std::vector<float>&
                       ((Ez_shmem[shared_idx_E + 1] - Ez_shmem[shared_idx_E]) - (Ex_shmem[shared_idx_E + 2 * SHX] - Ex_shmem[shared_idx_E]) - My[global_idx] * dx);
             Hz_shmem[shared_idx_H] = Daz[global_idx] * Hz_shmem[shared_idx_H] + Dbz[global_idx] *
                       ((Ex_shmem[shared_idx_E + SHX] - Ex_shmem[shared_idx_E]) - (Ey_shmem[shared_idx_E + 1] - Ey_shmem[shared_idx_E]) - Mz[global_idx] * dx);
+
+            if(t == 1 && global_x == 13 && global_y == 1 && global_z == 2) {
+              std::cout << "but here, Hz_shmem[shared_idx_H] = " << Hz_shmem[shared_idx_H] 
+                        << ", Ex_shmem[shared_idx_E + SHX] = " << Ex_shmem[shared_idx_E + SHX]
+                        << ", Ex_shmem[shared_idx_E] = " << Ex_shmem[shared_idx_E]
+                        << ", Ey_shmem[shared_idx_E + 1] = " << Ey_shmem[shared_idx_E + 1]
+                        << ", Ey_shmem[shared_idx_E] = " << Ey_shmem[shared_idx_E]
+                        << ", Mz[global_idx] = " << Mz[global_idx]
+                        << ", shared_idx_E + SHX = " << shared_idx_E + SHX
+                        << "\n";
+            }
+
           }
         }
 
@@ -9214,7 +9255,7 @@ void gDiamond::_updateEH_dt_1D_mountain_seq_extra_copy(const std::vector<float>&
         }
       }
     }
-
+    
     // extra store to dst
     int extra_offsetE = BLT_DTR;
     int extra_offsetH = extra_offsetE - 1;
@@ -9246,6 +9287,9 @@ void gDiamond::_updateEH_dt_1D_mountain_seq_extra_copy(const std::vector<float>&
       }
     }
 
+    if(xx == 1 && yy == 2 && zz == 2) {
+      std::cout << "2nd check, Ex_dst[357] = " << Ex_dst[357] << "\n";
+    }
 
   }
 
@@ -9385,6 +9429,8 @@ void gDiamond::_updateEH_dt_1D_valley_seq_extra_copy(const std::vector<float>& E
                       ((Hx_shmem[shared_idx_H] - Hx_shmem[shared_idx_H - 2 * SHX]) - (Hz_shmem[shared_idx_H] - Hz_shmem[shared_idx_H - 1]) - Jy[global_idx] * dx);
             Ez_shmem[shared_idx_E] = Caz[global_idx] * Ez_shmem[shared_idx_E] + Cbz[global_idx] *
                       ((Hy_shmem[shared_idx_H] - Hy_shmem[shared_idx_H - 1]) - (Hx_shmem[shared_idx_H] - Hx_shmem[shared_idx_H - SHX]) - Jz[global_idx] * dx);
+        
+            
           }
         }
       }

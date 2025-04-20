@@ -740,9 +740,34 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
             ((Hx_temp[idx] - Hx_temp[idx - _Nx * _Ny]) - (Hz_temp[idx] - Hz_temp[idx - 1]) - _Jy[idx] * _dx);
           Ez_temp[idx] = _Caz[idx] * Ez_temp[idx] + _Cbz[idx] *
             ((Hy_temp[idx] - Hy_temp[idx - 1]) - (Hx_temp[idx] - Hx_temp[idx - _Nx]) - _Jz[idx] * _dx);
+
+          if(t == 1 && i == 13 && j == 2 && k == 2) {
+            std::cout << "here, Ex_temp[idx] = " << Ex_temp[idx]
+                      << ", Hz_temp[idx] = " << Hz_temp[idx]
+                      << ", Hz_temp[idx - _Nx] = " << Hz_temp[idx - _Nx]
+                      << ", Hy_temp[idx] = " << Hy_temp[idx]
+                      << ", Hy_temp[idx - _Nx * _Ny] = " << Hy_temp[idx - _Nx * _Ny]
+                      << ", _Jx[idx] = " << _Jx[idx]
+                      << "\n";
+          }
+
         }
       }
     }
+
+    // std::cout << "Ex_temp = \n";
+    // for(size_t k=1; k<_Nz-1; k++) {
+    //   for(size_t j=1; j<_Ny-1; j++) {
+    //     for(size_t i=1; i<_Nx-1; i++) {
+    //       size_t idx = i + j*_Nx + k*(_Nx*_Ny);
+    //       if(Ex_temp[idx] != 0) { 
+    //         std::cout << "t = " << t << ", ";
+    //         std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
+    //         std::cout << "Ex_temp[idx] = " << Ex_temp[idx] << "\n";
+    //       }
+    //     }
+    //   }
+    // }
 
     // update H
     for(size_t k=1; k<_Nz-1; k++) {
@@ -758,6 +783,17 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
             ((Ez_temp[idx + 1] - Ez_temp[idx]) - (Ex_temp[idx + _Nx * _Ny] - Ex_temp[idx]) - _My[idx] * _dx);
           Hz_temp[idx] = _Daz[idx] * Hz_temp[idx] + _Dbz[idx] *
             ((Ex_temp[idx + _Nx] - Ex_temp[idx]) - (Ey_temp[idx + 1] - Ey_temp[idx]) - _Mz[idx] * _dx);
+
+          // if(t == 1 && i == 13 && j == 1 && k == 2) {
+          //   std::cout << "here, Hz_temp[idx] = " << Hz_temp[idx]
+          //             << ", Ex_temp[idx + _Nx] = " << Ex_temp[idx + _Nx]
+          //             << ", Ex_temp[idx] = " << Ex_temp[idx]
+          //             << ", Ey_temp[idx + 1] = " << Ey_temp[idx + 1]
+          //             << ", Ey_temp[idx] = " << Ey_temp[idx]
+          //             << ", _Mz[idx] = " << _Mz[idx] 
+          //             << "\n";
+          // }
+
         }
       }
     }

@@ -21,10 +21,7 @@ int main(int argc, char* argv[]) {
   std::cout << "simulation space: Nx = " << Nx << ", Ny = " << Ny << ", Nz = " << Nz << "\n";
   gdiamond::gDiamond exp(Nx, Ny, Nz); 
 
-  exp.update_FDTD_seq_check_result(num_timesteps);
-  exp.update_FDTD_cpu_simulation_dt_3_D_extra_copy(num_timesteps, Tx);
-
-  exp.print_results();
+  exp.update_FDTD_gpu_3D_warp_underutilization_fix(num_timesteps);
 
   return 0;
 }
