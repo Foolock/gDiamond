@@ -95,12 +95,22 @@ void diamond_tiling_thread_idling_seq(std::vector<float>& Ex, std::vector<float>
 
   int Nx_pad = Nx + LEFT_PAD + RIGHT_PAD;
  
-  std::vector<float> Hx_pad(Nx_pad, 1);
-  std::vector<float> Hy_pad(Nx_pad, 1);
-  std::vector<float> Hz_pad(Nx_pad, 1);
-  std::vector<float> Ex_pad(Nx_pad, 1);
-  std::vector<float> Ey_pad(Nx_pad, 1);
-  std::vector<float> Ez_pad(Nx_pad, 1);
+  std::vector<float> Hx_pad(Nx_pad, 0);
+  std::vector<float> Hy_pad(Nx_pad, 0);
+  std::vector<float> Hz_pad(Nx_pad, 0);
+  std::vector<float> Ex_pad(Nx_pad, 0);
+  std::vector<float> Ey_pad(Nx_pad, 0);
+  std::vector<float> Ez_pad(Nx_pad, 0);
+
+  // transfer data to padded array
+  for(int index=0; index<Nx; index++) {
+    Ex_pad[index + LEFT_PAD] = Ex[index];
+    Ey_pad[index + LEFT_PAD] = Ey[index];
+    Ez_pad[index + LEFT_PAD] = Ez[index];
+    Hx_pad[index + LEFT_PAD] = Hx[index];
+    Hy_pad[index + LEFT_PAD] = Hy[index];
+    Hz_pad[index + LEFT_PAD] = Hz[index];
+  }
 
   // tiling paramemters
   int xx_num_m = Tx + 1;
@@ -117,18 +127,6 @@ void diamond_tiling_thread_idling_seq(std::vector<float>& Ex, std::vector<float>
     xx_heads_v[index] = (index == 0)? LEFT_PAD + VALLEY : 
                              xx_heads_v[index-1] + (MOUNTAIN + VALLEY);
   }
-
-  std::cout << "xx_heads_m = ";
-  for(const auto& data : xx_heads_m) {
-    std::cout << data << " ";
-  } 
-  std::cout << "\n";
-
-  std::cout << "xx_heads_v = ";
-  for(const auto& data : xx_heads_v) {
-    std::cout << data << " ";
-  } 
-  std::cout << "\n";
 
   int block_size = BLX;
   int grid_size;
@@ -592,13 +590,23 @@ void diamond_tiling_thread_idling_gpu(std::vector<float>& Ex, std::vector<float>
                                       int Tx) {
 
   int Nx_pad = Nx + LEFT_PAD + RIGHT_PAD;
- 
-  std::vector<float> Hx_pad(Nx_pad, 1);
-  std::vector<float> Hy_pad(Nx_pad, 1);
-  std::vector<float> Hz_pad(Nx_pad, 1);
-  std::vector<float> Ex_pad(Nx_pad, 1);
-  std::vector<float> Ey_pad(Nx_pad, 1);
-  std::vector<float> Ez_pad(Nx_pad, 1);
+
+  std::vector<float> Hx_pad(Nx_pad, 0);
+  std::vector<float> Hy_pad(Nx_pad, 0);
+  std::vector<float> Hz_pad(Nx_pad, 0);
+  std::vector<float> Ex_pad(Nx_pad, 0);
+  std::vector<float> Ey_pad(Nx_pad, 0);
+  std::vector<float> Ez_pad(Nx_pad, 0);
+
+  // transfer data to padded array
+  for(int index=0; index<Nx; index++) {
+    Ex_pad[index + LEFT_PAD] = Ex[index];
+    Ey_pad[index + LEFT_PAD] = Ey[index];
+    Ez_pad[index + LEFT_PAD] = Ez[index];
+    Hx_pad[index + LEFT_PAD] = Hx[index];
+    Hy_pad[index + LEFT_PAD] = Hy[index];
+    Hz_pad[index + LEFT_PAD] = Hz[index];
+  }
 
   // tiling paramemters
   int xx_num_m = Tx + 1;
@@ -708,10 +716,10 @@ void diamond_tiling_thread_idling_gpu(std::vector<float>& Ex, std::vector<float>
                                                Nx,
                                                Tx);
 
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) {
-      std::cerr << "update_mountain launch failed: " << cudaGetErrorString(err) << std::endl;
-    }
+    // cudaError_t err = cudaGetLastError();
+    // if (err != cudaSuccess) {
+    //   std::cerr << "update_mountain launch failed: " << cudaGetErrorString(err) << std::endl;
+    // }
 
     // phase 2. valley
     grid_size = xx_num_v;
@@ -728,10 +736,10 @@ void diamond_tiling_thread_idling_gpu(std::vector<float>& Ex, std::vector<float>
                                              Nx,
                                              Tx);
 
-    err = cudaGetLastError();
-    if (err != cudaSuccess) {
-      std::cerr << "update_valley launch failed: " << cudaGetErrorString(err) << std::endl;
-    }
+    // err = cudaGetLastError();
+    // if (err != cudaSuccess) {
+    //   std::cerr << "update_valley launch failed: " << cudaGetErrorString(err) << std::endl;
+    // }
   }
   cudaDeviceSynchronize();
   auto end = std::chrono::steady_clock::now();
@@ -788,6 +796,193 @@ void diamond_tiling_thread_idling_gpu(std::vector<float>& Ex, std::vector<float>
 
 }
 
+__global__ void update_naive_E(float* Ex, float* Ey, float* Ez,
+                               float* Hx, float* Hy, float* Hz,
+                               float* Cax, float* Cay, float* Caz,
+                               float* Cbx, float* Cby, float* Cbz,
+                               float* Dax, float* Day, float* Daz,
+                               float* Dbx, float* Dby, float* Dbz,
+                               float* Jx, float* Jy, float* Jz,
+                               float dx,
+                               int Nx) {
+
+  const unsigned int global_idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+  // update E
+  if(global_idx >= 1 && global_idx <= Nx - 2) { 
+    Ex[global_idx] = Cax[global_idx]*Ex[global_idx] + Cbx[global_idx] * (Hz[global_idx] + Hy[global_idx - 1] + Jx[global_idx]) * dx;
+    Ey[global_idx] = Cay[global_idx]*Ey[global_idx] + Cby[global_idx] * (Hx[global_idx] + Hz[global_idx - 1] + Jy[global_idx]) * dx;
+    Ez[global_idx] = Caz[global_idx]*Ez[global_idx] + Cbz[global_idx] * (Hx[global_idx - 1] + Hz[global_idx] + Jz[global_idx]) * dx;
+  }
+
+}
+
+__global__ void update_naive_H(float* Ex, float* Ey, float* Ez,
+                               float* Hx, float* Hy, float* Hz,
+                               float* Cax, float* Cay, float* Caz,
+                               float* Cbx, float* Cby, float* Cbz,
+                               float* Dax, float* Day, float* Daz,
+                               float* Dbx, float* Dby, float* Dbz,
+                               float* Mx, float* My, float* Mz,
+                               float dx,
+                               int Nx) {
+
+  const unsigned int global_idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+  // updateH 
+  if(global_idx >= 1 && global_idx <= Nx - 2) {
+    Hx[global_idx] = Dax[global_idx]*Hx[global_idx] + Dbx[global_idx] * (Ez[global_idx] + Ey[global_idx + 1] + Mx[global_idx]) * dx;
+    Hy[global_idx] = Day[global_idx]*Hy[global_idx] + Dby[global_idx] * (Ex[global_idx] + Ez[global_idx + 1] + My[global_idx]) * dx;
+    Hz[global_idx] = Daz[global_idx]*Hz[global_idx] + Dbz[global_idx] * (Ex[global_idx + 1] + Ey[global_idx] + Mz[global_idx]) * dx;
+  }
+
+}
+
+void naive_gpu(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
+               std::vector<float>& Hx, std::vector<float>& Hy, std::vector<float>& Hz,
+               const std::vector<float>& Cax, const std::vector<float>& Cay, const std::vector<float>& Caz,
+               const std::vector<float>& Cbx, const std::vector<float>& Cby, const std::vector<float>& Cbz,
+               const std::vector<float>& Dax, const std::vector<float>& Day, const std::vector<float>& Daz,
+               const std::vector<float>& Dbx, const std::vector<float>& Dby, const std::vector<float>& Dbz,
+               const std::vector<float>& Jx, const std::vector<float>& Jy, const std::vector<float>& Jz,
+               const std::vector<float>& Mx, const std::vector<float>& My, const std::vector<float>& Mz,
+               float dx,
+               int timesteps,
+               int Nx) {
+
+  float *Ex_d, *Ey_d, *Ez_d;
+  float *Hx_d, *Hy_d, *Hz_d;
+  float *Cax_d, *Cay_d, *Caz_d;
+  float *Cbx_d, *Cby_d, *Cbz_d;
+  float *Dax_d, *Day_d, *Daz_d;
+  float *Dbx_d, *Dby_d, *Dbz_d;
+  float *Jx_d, *Jy_d, *Jz_d;
+  float *Mx_d, *My_d, *Mz_d;
+
+  CUDACHECK(cudaMalloc(&Ex_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Ey_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Ez_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Hx_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Hy_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Hz_d, sizeof(float) * Nx));
+
+  CUDACHECK(cudaMalloc(&Cax_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Cay_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Caz_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Cbx_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Cby_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Cbz_d, sizeof(float) * Nx));
+
+  CUDACHECK(cudaMalloc(&Dax_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Day_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Daz_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Dbx_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Dby_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Dbz_d, sizeof(float) * Nx));
+
+  CUDACHECK(cudaMalloc(&Jx_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Jy_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Jz_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Mx_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&My_d, sizeof(float) * Nx));
+  CUDACHECK(cudaMalloc(&Mz_d, sizeof(float) * Nx));
+
+  cudaMemcpy(Ex_d, Ex.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Ey_d, Ey.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Ez_d, Ez.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Hx_d, Hx.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Hy_d, Hy.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Hz_d, Hz.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+
+  cudaMemcpy(Jx_d, Jx.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Jy_d, Jy.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Jz_d, Jz.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Mx_d, Mx.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(My_d, My.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Mz_d, Mz.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+
+  cudaMemcpy(Cax_d, Cax.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Cay_d, Cay.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Caz_d, Caz.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Cbx_d, Cbx.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Cby_d, Cby.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Cbz_d, Cbz.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Dax_d, Dax.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Day_d, Day.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Daz_d, Daz.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Dbx_d, Dbx.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Dby_d, Dby.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+  cudaMemcpy(Dbz_d, Dbz.data(), sizeof(float) * Nx, cudaMemcpyHostToDevice);
+
+  size_t block_size = BLX;
+  size_t grid_size = (Nx + block_size - 1) / block_size;
+
+  auto start = std::chrono::steady_clock::now();
+
+  for(int t=0; t<timesteps; t++) {
+
+    update_naive_E<<<grid_size, block_size>>>(Ex_d, Ey_d, Ez_d,
+                                              Hx_d, Hy_d, Hz_d,
+                                              Cax_d, Cay_d, Caz_d,
+                                              Cbx_d, Cby_d, Cbz_d,
+                                              Dax_d, Day_d, Daz_d,
+                                              Dbx_d, Dby_d, Dbz_d,
+                                              Jx_d, Jy_d, Jz_d,
+                                              dx,
+                                              Nx);
+
+    update_naive_H<<<grid_size, block_size>>>(Ex_d, Ey_d, Ez_d,
+                                              Hx_d, Hy_d, Hz_d,
+                                              Cax_d, Cay_d, Caz_d,
+                                              Cbx_d, Cby_d, Cbz_d,
+                                              Dax_d, Day_d, Daz_d,
+                                              Dbx_d, Dby_d, Dbz_d,
+                                              Mx_d, My_d, Mz_d,
+                                              dx,
+                                              Nx);
+  }
+  cudaDeviceSynchronize();
+  auto end = std::chrono::steady_clock::now();
+  size_t gpu_runtime = std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+  std::cout << "gpu naive runtime(excluding memcpy): " << gpu_runtime << "us\n";
+
+  cudaMemcpy(Ex.data(), Ex_d, sizeof(float) * Nx, cudaMemcpyDeviceToHost);
+  cudaMemcpy(Ey.data(), Ey_d, sizeof(float) * Nx, cudaMemcpyDeviceToHost);
+  cudaMemcpy(Ez.data(), Ez_d, sizeof(float) * Nx, cudaMemcpyDeviceToHost);
+  cudaMemcpy(Hx.data(), Hx_d, sizeof(float) * Nx, cudaMemcpyDeviceToHost);
+  cudaMemcpy(Hy.data(), Hy_d, sizeof(float) * Nx, cudaMemcpyDeviceToHost);
+  cudaMemcpy(Hz.data(), Hz_d, sizeof(float) * Nx, cudaMemcpyDeviceToHost);
+
+  CUDACHECK(cudaFree(Ex_d));
+  CUDACHECK(cudaFree(Ey_d));
+  CUDACHECK(cudaFree(Ez_d));
+  CUDACHECK(cudaFree(Hx_d));
+  CUDACHECK(cudaFree(Hy_d));
+  CUDACHECK(cudaFree(Hz_d));
+
+  CUDACHECK(cudaFree(Cax_d));
+  CUDACHECK(cudaFree(Cay_d));
+  CUDACHECK(cudaFree(Caz_d));
+  CUDACHECK(cudaFree(Cbx_d));
+  CUDACHECK(cudaFree(Cby_d));
+  CUDACHECK(cudaFree(Cbz_d));
+
+  CUDACHECK(cudaFree(Dax_d));
+  CUDACHECK(cudaFree(Day_d));
+  CUDACHECK(cudaFree(Daz_d));
+  CUDACHECK(cudaFree(Dbx_d));
+  CUDACHECK(cudaFree(Dby_d));
+  CUDACHECK(cudaFree(Dbz_d));
+
+  CUDACHECK(cudaFree(Jx_d));
+  CUDACHECK(cudaFree(Jy_d));
+  CUDACHECK(cudaFree(Jz_d));
+  CUDACHECK(cudaFree(Mx_d));
+  CUDACHECK(cudaFree(My_d));
+  CUDACHECK(cudaFree(Mz_d));
+
+}
+
 int main(int argc, char* argv[]) {
 
   if(argc != 3) {
@@ -804,6 +999,8 @@ int main(int argc, char* argv[]) {
   int Nx = Tx * (MOUNTAIN + VALLEY) + MOUNTAIN - (BLT - 1) + VALLEY; 
 
   std::cout << "Nx = " << Nx << "\n";
+  std::cerr << "MOUNTAIN = " << MOUNTAIN << ", VALLEY = " << VALLEY << "\n";
+  std::cout << "BLX = " << BLX << "\n";
 
   std::vector<float> Cax(Nx, 0.1);
   std::vector<float> Cay(Nx, 0.2);
@@ -846,6 +1043,13 @@ int main(int argc, char* argv[]) {
   std::vector<float> Ey_dt_gpu(Nx, 1);
   std::vector<float> Ez_dt_gpu(Nx, 1);
 
+  std::vector<float> Hx_naive_gpu(Nx, 1);
+  std::vector<float> Hy_naive_gpu(Nx, 1);
+  std::vector<float> Hz_naive_gpu(Nx, 1);
+  std::vector<float> Ex_naive_gpu(Nx, 1);
+  std::vector<float> Ey_naive_gpu(Nx, 1);
+  std::vector<float> Ez_naive_gpu(Nx, 1);
+
   sequential(Ex_seq, Ey_seq, Ez_seq, 
              Hx_seq, Hy_seq, Hz_seq,
              Cax, Cay, Caz,
@@ -884,6 +1088,18 @@ int main(int argc, char* argv[]) {
                                    Nx,
                                    Tx);
 
+  naive_gpu(Ex_naive_gpu, Ey_naive_gpu, Ez_naive_gpu,
+            Hx_naive_gpu, Hy_naive_gpu, Hz_naive_gpu,
+            Cax, Cay, Caz,
+            Cbx, Cby, Cbz,
+            Dax, Day, Daz,
+            Dbx, Dby, Dbz,
+            Jx, Jy, Jz,
+            Mx, My, Mz,
+            dx,
+            timesteps,
+            Nx);
+
   bool correct = true;
   for(size_t i=0; i<Nx; i++) {
     if(fabs(Ex_seq[i] - Ex_dt_seq[i]) > 1e-5 ||
@@ -898,12 +1114,30 @@ int main(int argc, char* argv[]) {
   }
 
   for(size_t i=0; i<Nx; i++) {
+    if(fabs(Ex_seq[i] - Ex_naive_gpu[i]) > 1e-5 ||
+       fabs(Ey_seq[i] - Ey_naive_gpu[i]) > 1e-5 ||
+       fabs(Ez_seq[i] - Ez_naive_gpu[i]) > 1e-5 ||
+       fabs(Hx_seq[i] - Hx_naive_gpu[i]) > 1e-5 ||
+       fabs(Hy_seq[i] - Hy_naive_gpu[i]) > 1e-5 ||
+       fabs(Hz_seq[i] - Hz_naive_gpu[i]) > 1e-5) {
+      correct = false;
+      break;
+    }
+  }
+
+  for(size_t i=0; i<Nx; i++) {
     if(fabs(Ex_seq[i] - Ex_dt_gpu[i]) > 1e-5 ||
        fabs(Ey_seq[i] - Ey_dt_gpu[i]) > 1e-5 ||
        fabs(Ez_seq[i] - Ez_dt_gpu[i]) > 1e-5 ||
        fabs(Hx_seq[i] - Hx_dt_gpu[i]) > 1e-5 ||
        fabs(Hy_seq[i] - Hy_dt_gpu[i]) > 1e-5 ||
        fabs(Hz_seq[i] - Hz_dt_gpu[i]) > 1e-5) {
+      std::cout << "Ex_seq[i] = " << Ex_seq[i] << ", Ex_dt_gpu[i] = " << Ex_dt_gpu[i] << "\n";
+      std::cout << "Ey_seq[i] = " << Ey_seq[i] << ", Ey_dt_gpu[i] = " << Ey_dt_gpu[i] << "\n";
+      std::cout << "Ez_seq[i] = " << Ez_seq[i] << ", Ez_dt_gpu[i] = " << Ez_dt_gpu[i] << "\n";
+      std::cout << "Hx_seq[i] = " << Hx_seq[i] << ", Hx_dt_gpu[i] = " << Hx_dt_gpu[i] << "\n";
+      std::cout << "Hy_seq[i] = " << Hy_seq[i] << ", Hy_dt_gpu[i] = " << Hy_dt_gpu[i] << "\n";
+      std::cout << "Hz_seq[i] = " << Hz_seq[i] << ", Hz_dt_gpu[i] = " << Hz_dt_gpu[i] << "\n";
       correct = false;
       break;
     }
