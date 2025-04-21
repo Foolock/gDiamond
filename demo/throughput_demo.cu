@@ -8,7 +8,7 @@
   mimic calculation
   Ex[tid] = Cax[tid]*Ex[tid] + Cbx[tid] * (Hz[tid] + Hy[tid] + Jx[tid]) * dx; 
   Ey[tid] = Cay[tid]*Ey[tid] + Cby[tid] * (Hx[tid] + Hz[tid] + Jy[tid]) * dx; 
-  Ez[tid] = Caz[tid]*Ez[tid] + Cbz[tid] * (Hx[tid] + Hz[tid] + Jz[tid]) * dx; 
+  Ez[tid] = Caz[tid]*Ez[tid] + Cbz[tid] * (Hx[tid] + Hy[tid] + Jz[tid]) * dx; 
 
 */
 
@@ -154,7 +154,7 @@ void sequential(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<floa
 
   auto start = std::chrono::steady_clock::now();
   
-  for(int t=0; t<100; t++) {
+  for(int t=0; t<timesteps; t++) {
     for(int i=0; i<length; i++) {
       Ex[i] = Cax[i]*Ex[i] + Cbx[i] * (Hz[i] + Hy[i] + Jx[i]) * dx; 
       Ey[i] = Cay[i]*Ey[i] + Cby[i] * (Hx[i] + Hz[i] + Jy[i]) * dx; 
