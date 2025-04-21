@@ -362,8 +362,8 @@ void diamond_tiling_thread_idling_seq(std::vector<float>& Ex, std::vector<float>
 
 }
 
-__global__ void update_mountain(float* Ex, float* Ey, float* Ez, 
-                                float* Hx, float* Hy, float* Hz,
+__global__ void update_mountain(float* Ex_pad, float* Ey_pad, float* Ez_pad, 
+                                float* Hx_pad, float* Hy_pad, float* Hz_pad,
                                 float* Cax, float* Cay, float* Caz,
                                 float* Cbx, float* Cby, float* Cbz,
                                 float* Dax, float* Day, float* Daz,
@@ -371,10 +371,211 @@ __global__ void update_mountain(float* Ex, float* Ey, float* Ez,
                                 float* Jx, float* Jy, float* Jz,
                                 float* Mx, float* My, float* Mz,
                                 float dx,
-                                int timesteps,
+                                int* xx_heads_m, 
                                 int Nx,
                                 int Tx) {
 
+  const unsigned int tid = threadIdx.x; 
+  const unsigned int xx = blockIdx.x; // map a tile to a block
+  const unsigned int shared_idx = tid + 1; // in mountain, SHX left shift one than BLX 
+  const unsigned int global_idx = xx_heads_m[xx] + tid;
+
+  // declare shared memory
+  __shared__ float Hx_pad_shmem[SHX];
+  __shared__ float Hy_pad_shmem[SHX];
+  __shared__ float Hz_pad_shmem[SHX];
+  __shared__ float Ex_pad_shmem[SHX];
+  __shared__ float Ey_pad_shmem[SHX];
+  __shared__ float Ez_pad_shmem[SHX];
+
+  // load shared memory
+  Hx_pad_shmem[shared_idx] = Hx_pad[global_idx];
+  Hy_pad_shmem[shared_idx] = Hy_pad[global_idx];
+  Hz_pad_shmem[shared_idx] = Hz_pad[global_idx];
+  Ex_pad_shmem[shared_idx] = Ex_pad[global_idx];
+  Ey_pad_shmem[shared_idx] = Ey_pad[global_idx];
+  Ez_pad_shmem[shared_idx] = Ez_pad[global_idx];
+  if(tid == 0) {
+    Hx_pad_shmem[shared_idx - 1] = Hx_pad[global_idx - 1];
+    Hy_pad_shmem[shared_idx - 1] = Hy_pad[global_idx - 1];
+    Hz_pad_shmem[shared_idx - 1] = Hz_pad[global_idx - 1];
+    Ex_pad_shmem[shared_idx - 1] = Ex_pad[global_idx - 1];
+    Ey_pad_shmem[shared_idx - 1] = Ey_pad[global_idx - 1];
+    Ez_pad_shmem[shared_idx - 1] = Ez_pad[global_idx - 1];
+  }
+
+  // calculation
+  for(int t=0; t<BLT; t++) {
+
+    const int calE_head = xx_heads_m[xx] + t;
+    const int calE_tail = xx_heads_m[xx] + BLX - 1 - t;
+    const int calH_head = calE_head;
+    const int calH_tail = calE_tail - 1;
+
+    // update E
+    if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD &&
+       global_idx >= calE_head && global_idx <= calE_tail) {
+
+      Ex_pad_shmem[shared_idx] = Cax[shared_idx]*Ex_pad_shmem[shared_idx] + 
+                                 Cbx[shared_idx] * (Hz_pad_shmem[shared_idx] + Hy_pad_shmem[shared_idx - 1] + Jx[shared_idx]) * dx; 
+      Ey_pad_shmem[shared_idx] = Cay[shared_idx]*Ey_pad_shmem[shared_idx] + 
+                                 Cby[shared_idx] * (Hx_pad_shmem[shared_idx] + Hz_pad_shmem[shared_idx - 1] + Jy[shared_idx]) * dx; 
+      Ez_pad_shmem[shared_idx] = Caz[shared_idx]*Ez_pad_shmem[shared_idx] + 
+                                 Cbz[shared_idx] * (Hx_pad_shmem[shared_idx - 1] + Hz_pad_shmem[shared_idx] + Jz[shared_idx]) * dx; 
+
+    }
+
+    __syncthreads();
+
+    // update H
+    if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD &&
+       global_idx >= calH_head && global_idx <= calH_tail) {
+
+      Hx_pad_shmem[shared_idx] = Dax[shared_idx]*Hx_pad_shmem[shared_idx] +
+                                 Dbx[shared_idx] * (Ez_pad_shmem[shared_idx] + Ey_pad_shmem[shared_idx + 1] + Mx[shared_idx]) * dx;
+      Hy_pad_shmem[shared_idx] = Day[shared_idx]*Hy_pad_shmem[shared_idx] +
+                                 Dby[shared_idx] * (Ex_pad_shmem[shared_idx] + Ez_pad_shmem[shared_idx + 1] + My[shared_idx]) * dx;
+      Hz_pad_shmem[shared_idx] = Daz[shared_idx]*Hz_pad_shmem[shared_idx] +
+                                 Dbz[shared_idx] * (Ex_pad_shmem[shared_idx + 1] + Ey_pad_shmem[shared_idx] + Mz[shared_idx]) * dx;
+
+    }
+
+    __syncthreads();
+  }
+
+  // store back to global memory
+  const int storeE_head = xx_heads_m[xx];
+  const int storeE_tail = storeE_head + BLX - 1;
+  const int storeH_head = storeE_head;
+  const int storeH_tail = storeE_tail - 1;
+
+  // store E
+  if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD &&
+     global_idx >= storeE_head && global_idx <= storeE_tail) {
+
+    Ex_pad[global_idx] = Ex_pad_shmem[shared_idx];
+    Ey_pad[global_idx] = Ey_pad_shmem[shared_idx];
+    Ez_pad[global_idx] = Ez_pad_shmem[shared_idx];
+
+  }
+
+  // store H
+  if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD &&
+     global_idx >= storeH_head && global_idx <= storeH_tail) {
+
+    Hx_pad[global_idx] = Hx_pad_shmem[shared_idx];
+    Hy_pad[global_idx] = Hy_pad_shmem[shared_idx];
+    Hz_pad[global_idx] = Hz_pad_shmem[shared_idx];
+
+  }
+}
+
+__global__ void update_valley(float* Ex_pad, float* Ey_pad, float* Ez_pad, 
+                              float* Hx_pad, float* Hy_pad, float* Hz_pad,
+                              float* Cax, float* Cay, float* Caz,
+                              float* Cbx, float* Cby, float* Cbz,
+                              float* Dax, float* Day, float* Daz,
+                              float* Dbx, float* Dby, float* Dbz,
+                              float* Jx, float* Jy, float* Jz,
+                              float* Mx, float* My, float* Mz,
+                              float dx,
+                              int *xx_heads_v,
+                              int Nx,
+                              int Tx) {
+
+  const unsigned int tid = threadIdx.x; 
+  const unsigned int xx = blockIdx.x; // map a tile to a block
+  const unsigned int shared_idx = tid; // in valley, SHX starts in same line as BLX
+  const unsigned int global_idx = xx_heads_v[xx] + tid;
+
+  // declare shared memory
+  __shared__ float Hx_pad_shmem[SHX];
+  __shared__ float Hy_pad_shmem[SHX];
+  __shared__ float Hz_pad_shmem[SHX];
+  __shared__ float Ex_pad_shmem[SHX];
+  __shared__ float Ey_pad_shmem[SHX];
+  __shared__ float Ez_pad_shmem[SHX];
+
+  // load shared memory
+  Hx_pad_shmem[shared_idx] = Hx_pad[global_idx];
+  Hy_pad_shmem[shared_idx] = Hy_pad[global_idx];
+  Hz_pad_shmem[shared_idx] = Hz_pad[global_idx];
+  Ex_pad_shmem[shared_idx] = Ex_pad[global_idx];
+  Ey_pad_shmem[shared_idx] = Ey_pad[global_idx];
+  Ez_pad_shmem[shared_idx] = Ez_pad[global_idx];
+  if(tid == BLX - 1) {
+    Hx_pad_shmem[shared_idx + 1] = Hx_pad[global_idx + 1];
+    Hy_pad_shmem[shared_idx + 1] = Hy_pad[global_idx + 1];
+    Hz_pad_shmem[shared_idx + 1] = Hz_pad[global_idx + 1];
+    Ex_pad_shmem[shared_idx + 1] = Ex_pad[global_idx + 1];
+    Ey_pad_shmem[shared_idx + 1] = Ey_pad[global_idx + 1];
+    Ez_pad_shmem[shared_idx + 1] = Ez_pad[global_idx + 1];
+  }
+
+  // calculation
+  for(int t=0; t<BLT; t++) {
+
+    const int calE_head = xx_heads_v[xx] + BLT - t;
+    const int calE_tail = xx_heads_v[xx] + BLX - 1 - (BLT - t -1);
+    const int calH_head = calE_head - 1;
+    const int calH_tail = calE_tail;
+
+    // update E
+    if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD &&
+       global_idx >= calE_head && global_idx <= calE_tail) {
+
+      Ex_pad_shmem[shared_idx] = Cax[shared_idx]*Ex_pad_shmem[shared_idx] + 
+                                 Cbx[shared_idx] * (Hz_pad_shmem[shared_idx] + Hy_pad_shmem[shared_idx - 1] + Jx[shared_idx]) * dx; 
+      Ey_pad_shmem[shared_idx] = Cay[shared_idx]*Ey_pad_shmem[shared_idx] + 
+                                 Cby[shared_idx] * (Hx_pad_shmem[shared_idx] + Hz_pad_shmem[shared_idx - 1] + Jy[shared_idx]) * dx; 
+      Ez_pad_shmem[shared_idx] = Caz[shared_idx]*Ez_pad_shmem[shared_idx] + 
+                                 Cbz[shared_idx] * (Hx_pad_shmem[shared_idx - 1] + Hz_pad_shmem[shared_idx] + Jz[shared_idx]) * dx; 
+
+    }
+
+    __syncthreads();
+
+    // update H
+    if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD &&
+       global_idx >= calH_head && global_idx <= calH_tail) {
+
+      Hx_pad_shmem[shared_idx] = Dax[shared_idx]*Hx_pad_shmem[shared_idx] + 
+                                 Dbx[shared_idx] * (Ez_pad_shmem[shared_idx] + Ey_pad_shmem[shared_idx + 1] + Mx[shared_idx]) * dx;
+      Hy_pad_shmem[shared_idx] = Day[shared_idx]*Hy_pad_shmem[shared_idx] + 
+                                 Dby[shared_idx] * (Ex_pad_shmem[shared_idx] + Ez_pad_shmem[shared_idx + 1] + My[shared_idx]) * dx;
+      Hz_pad_shmem[shared_idx] = Daz[shared_idx]*Hz_pad_shmem[shared_idx] + 
+                                 Dbz[shared_idx] * (Ex_pad_shmem[shared_idx + 1] + Ey_pad_shmem[shared_idx] + Mz[shared_idx]) * dx;
+
+    }
+
+    __syncthreads();
+  }
+
+  // store back to global memory
+  const int storeH_head = xx_heads_v[xx];
+  const int storeH_tail = storeH_head + BLX - 1;
+  const int storeE_head = storeH_head + 1;
+  const int storeE_tail = storeH_tail;
+
+  // store E
+  if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD &&
+     global_idx >= storeE_head && global_idx <= storeE_tail) {
+
+    Ex_pad[global_idx] = Ex_pad_shmem[shared_idx];
+    Ey_pad[global_idx] = Ey_pad_shmem[shared_idx];
+    Ez_pad[global_idx] = Ez_pad_shmem[shared_idx];
+
+  }
+
+  // store H
+  if(global_idx >= 1 + LEFT_PAD && global_idx <= Nx - 2 + LEFT_PAD &&
+     global_idx >= storeH_head && global_idx <= storeH_tail) {
+
+    Hx_pad[global_idx] = Hx_pad_shmem[shared_idx];
+    Hy_pad[global_idx] = Hy_pad_shmem[shared_idx];
+    Hz_pad[global_idx] = Hz_pad_shmem[shared_idx];
+
+  }
 }
 
 void diamond_tiling_thread_idling_gpu(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez, 
@@ -488,12 +689,61 @@ void diamond_tiling_thread_idling_gpu(std::vector<float>& Ex, std::vector<float>
 
   size_t block_size = BLX;
   size_t grid_size;
+
+  auto start = std::chrono::steady_clock::now();
+  
   for(int tt=0; tt<timesteps/BLT; tt++) {
     // phase 1. mountain
     grid_size = xx_num_m;
+    update_mountain<<<grid_size, block_size>>>(Ex_pad_d, Ey_pad_d, Ez_pad_d, 
+                                               Hx_pad_d, Hy_pad_d, Hz_pad_d,
+                                               Cax_d, Cay_d, Caz_d,
+                                               Cbx_d, Cby_d, Cbz_d,
+                                               Dax_d, Day_d, Daz_d,
+                                               Dbx_d, Dby_d, Dbz_d,
+                                               Jx_d, Jy_d, Jz_d,
+                                               Mx_d, My_d, Mz_d,
+                                               dx,
+                                               xx_heads_m_d, 
+                                               Nx,
+                                               Tx);
+
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+      std::cerr << "update_mountain launch failed: " << cudaGetErrorString(err) << std::endl;
+    }
+
+    // phase 2. valley
+    grid_size = xx_num_v;
+    update_valley<<<grid_size, block_size>>>(Ex_pad_d, Ey_pad_d, Ez_pad_d, 
+                                             Hx_pad_d, Hy_pad_d, Hz_pad_d,
+                                             Cax_d, Cay_d, Caz_d,
+                                             Cbx_d, Cby_d, Cbz_d,
+                                             Dax_d, Day_d, Daz_d,
+                                             Dbx_d, Dby_d, Dbz_d,
+                                             Jx_d, Jy_d, Jz_d,
+                                             Mx_d, My_d, Mz_d,
+                                             dx,
+                                             xx_heads_v_d, 
+                                             Nx,
+                                             Tx);
+
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+      std::cerr << "update_valley launch failed: " << cudaGetErrorString(err) << std::endl;
+    }
   }
+  cudaDeviceSynchronize();
+  auto end = std::chrono::steady_clock::now();
+  size_t gpu_runtime = std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+  std::cout << "gpu diamond tiling runtime(excluding memcpy): " << gpu_runtime << "us\n";
 
-
+  cudaMemcpy(Ex_pad.data(), Ex_pad_d, sizeof(float) * Nx_pad, cudaMemcpyDeviceToHost);
+  cudaMemcpy(Ey_pad.data(), Ey_pad_d, sizeof(float) * Nx_pad, cudaMemcpyDeviceToHost);
+  cudaMemcpy(Ez_pad.data(), Ez_pad_d, sizeof(float) * Nx_pad, cudaMemcpyDeviceToHost);
+  cudaMemcpy(Hx_pad.data(), Hx_pad_d, sizeof(float) * Nx_pad, cudaMemcpyDeviceToHost);
+  cudaMemcpy(Hy_pad.data(), Hy_pad_d, sizeof(float) * Nx_pad, cudaMemcpyDeviceToHost);
+  cudaMemcpy(Hz_pad.data(), Hz_pad_d, sizeof(float) * Nx_pad, cudaMemcpyDeviceToHost);
 
   CUDACHECK(cudaFree(Ex_pad_d));
   CUDACHECK(cudaFree(Ey_pad_d));
@@ -525,6 +775,16 @@ void diamond_tiling_thread_idling_gpu(std::vector<float>& Ex, std::vector<float>
 
   CUDACHECK(cudaFree(xx_heads_m_d));
   CUDACHECK(cudaFree(xx_heads_v_d));
+
+  // extract data from padded array
+  for(int index=0; index<Nx; index++) {
+    Ex[index] = Ex_pad[index + LEFT_PAD];
+    Ey[index] = Ey_pad[index + LEFT_PAD];
+    Ez[index] = Ez_pad[index + LEFT_PAD];
+    Hx[index] = Hx_pad[index + LEFT_PAD];
+    Hy[index] = Hy_pad[index + LEFT_PAD];
+    Hz[index] = Hz_pad[index + LEFT_PAD];
+  }
 
 }
 
@@ -579,6 +839,13 @@ int main(int argc, char* argv[]) {
   std::vector<float> Ey_dt_seq(Nx, 1);
   std::vector<float> Ez_dt_seq(Nx, 1);
 
+  std::vector<float> Hx_dt_gpu(Nx, 1);
+  std::vector<float> Hy_dt_gpu(Nx, 1);
+  std::vector<float> Hz_dt_gpu(Nx, 1);
+  std::vector<float> Ex_dt_gpu(Nx, 1);
+  std::vector<float> Ey_dt_gpu(Nx, 1);
+  std::vector<float> Ez_dt_gpu(Nx, 1);
+
   sequential(Ex_seq, Ey_seq, Ez_seq, 
              Hx_seq, Hy_seq, Hz_seq,
              Cax, Cay, Caz,
@@ -604,6 +871,19 @@ int main(int argc, char* argv[]) {
                                    Nx,
                                    Tx);
 
+  diamond_tiling_thread_idling_gpu(Ex_dt_gpu, Ey_dt_gpu, Ez_dt_gpu, 
+                                   Hx_dt_gpu, Hy_dt_gpu, Hz_dt_gpu,
+                                   Cax, Cay, Caz,
+                                   Cbx, Cby, Cbz,
+                                   Dax, Day, Daz,
+                                   Dbx, Dby, Dbz,
+                                   Jx, Jy, Jz,
+                                   Mx, My, Mz,
+                                   dx,
+                                   timesteps,
+                                   Nx,
+                                   Tx);
+
   bool correct = true;
   for(size_t i=0; i<Nx; i++) {
     if(fabs(Ex_seq[i] - Ex_dt_seq[i]) > 1e-5 ||
@@ -612,6 +892,18 @@ int main(int argc, char* argv[]) {
        fabs(Hx_seq[i] - Hx_dt_seq[i]) > 1e-5 ||
        fabs(Hy_seq[i] - Hy_dt_seq[i]) > 1e-5 ||
        fabs(Hz_seq[i] - Hz_dt_seq[i]) > 1e-5) {
+      correct = false;
+      break;
+    }
+  }
+
+  for(size_t i=0; i<Nx; i++) {
+    if(fabs(Ex_seq[i] - Ex_dt_gpu[i]) > 1e-5 ||
+       fabs(Ey_seq[i] - Ey_dt_gpu[i]) > 1e-5 ||
+       fabs(Ez_seq[i] - Ez_dt_gpu[i]) > 1e-5 ||
+       fabs(Hx_seq[i] - Hx_dt_gpu[i]) > 1e-5 ||
+       fabs(Hy_seq[i] - Hy_dt_gpu[i]) > 1e-5 ||
+       fabs(Hz_seq[i] - Hz_dt_gpu[i]) > 1e-5) {
       correct = false;
       break;
     }
