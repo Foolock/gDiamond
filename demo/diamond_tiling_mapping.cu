@@ -402,6 +402,8 @@ __global__ void update_mountain(float* Ex_pad, float* Ey_pad, float* Ez_pad,
     Ez_pad_shmem[shared_idx - 1] = Ez_pad[global_idx - 1];
   }
 
+  __syncthreads();
+
   // calculation
   for(int t=0; t<BLT; t++) {
 
@@ -509,6 +511,8 @@ __global__ void update_valley(float* Ex_pad, float* Ey_pad, float* Ez_pad,
     Ey_pad_shmem[shared_idx + 1] = Ey_pad[global_idx + 1];
     Ez_pad_shmem[shared_idx + 1] = Ez_pad[global_idx + 1];
   }
+
+  __syncthreads();
 
   // calculation
   for(int t=0; t<BLT; t++) {
