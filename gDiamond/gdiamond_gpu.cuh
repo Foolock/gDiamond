@@ -9528,8 +9528,6 @@ void gDiamond::_updateEH_dt_1D_valley_seq_extra_copy(const std::vector<float>& E
 
 } 
 
-
-
 } // end of namespace gdiamond
 
 #endif

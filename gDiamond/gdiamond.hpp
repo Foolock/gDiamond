@@ -145,6 +145,9 @@ class gDiamond {
     void update_FDTD_cpu_simulation_dt_3_D_extra_copy(size_t num_timesteps, size_t Tx); // CPU single thread 3-D simulation of diamond tiling, reimplemented
                                                                                         // with extra copy to dst in phase 1 and phase 2, no final needed
 
+    // mix mapping for 3D diamond tiling
+    void update_FDTD_mix_mapping_sequential(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // simulate GPU workflow  
+
     // check correctness
     bool check_correctness_gpu_2D();
     bool check_correctness_gpu();
@@ -157,6 +160,28 @@ class gDiamond {
     void print_results();
 
   private:
+
+    // mix mapping for 3D diamond tiling
+    template <bool X_is_mountain, bool Y_is_mountain, bool Z_is_mountain>
+    void _updateEH_mix_mapping(std::vector<float>& Ex_pad, std::vector<float>& Ey_pad, std::vector<float>& Ez_pad,
+                               std::vector<float>& Hx_pad, std::vector<float>& Hy_pad, std::vector<float>& Hz_pad,
+                               const std::vector<float>& Cax, const std::vector<float>& Cbx,
+                               const std::vector<float>& Cay, const std::vector<float>& Cby,
+                               const std::vector<float>& Caz, const std::vector<float>& Cbz,
+                               const std::vector<float>& Dax, const std::vector<float>& Dbx,
+                               const std::vector<float>& Day, const std::vector<float>& Dby,
+                               const std::vector<float>& Daz, const std::vector<float>& Dbz,
+                               const std::vector<float>& Jx, const std::vector<float>& Jy, const std::vector<float>& Jz,
+                               const std::vector<float>& Mx, const std::vector<float>& My, const std::vector<float>& Mz,
+                               float dx, 
+                               int Nx, int Ny, int Nz,
+                               int Nx_pad, int Ny_pad, int Nz_pad, 
+                               int xx_num, int yy_num, int zz_num, 
+                               const std::vector<int>& xx_heads, 
+                               const std::vector<int>& yy_heads,
+                               const std::vector<int>& zz_heads,
+                               size_t block_size,
+                               size_t grid_size);
 
     // for diamond tiling reimplementation
     void _updateEH_dt_1D_mountain_seq_extra_copy(const std::vector<float>& Ex_src, const std::vector<float>& Ey_src, const std::vector<float>& Ez_src,

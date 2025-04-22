@@ -53,9 +53,6 @@
 #define LEFT_PAD BLT_DTR
 #define RIGHT_PAD (BLT_DTR - 1)
 
-// mix mapping
-
-
 //
 // ----------------------------------- dft -----------------------------------
 // 
