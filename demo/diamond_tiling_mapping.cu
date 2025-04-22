@@ -33,9 +33,9 @@
 } (void)0  // Ensures a semicolon is required after the macro call.
 
 // number of time steps involved in one tile
-#define BLT 4
+#define BLT 4 
 
-#define BLX 512 
+#define BLX 256 
 #define MOUNTAIN BLX // number of elements (E) at mountain bottom
 #define VALLEY (BLX - 2 * (BLT - 1) - 1) // number of elements (E) at valley bottom
 #define LEFT_PAD BLT
@@ -382,9 +382,9 @@ __global__ void update_mountain(float* Ex_pad, float* Ey_pad, float* Ez_pad,
   __shared__ float Hx_pad_shmem[SHX];
   __shared__ float Hy_pad_shmem[SHX];
   __shared__ float Hz_pad_shmem[SHX];
-  __shared__ float Ex_pad_shmem[SHX];
-  __shared__ float Ey_pad_shmem[SHX];
-  __shared__ float Ez_pad_shmem[SHX];
+  __shared__ float Ex_pad_shmem[SHX - 1];
+  __shared__ float Ey_pad_shmem[SHX - 1];
+  __shared__ float Ez_pad_shmem[SHX - 1];
 
   // load shared memory
   Hx_pad_shmem[shared_idx] = Hx_pad[global_idx];
@@ -397,9 +397,6 @@ __global__ void update_mountain(float* Ex_pad, float* Ey_pad, float* Ez_pad,
     Hx_pad_shmem[shared_idx - 1] = Hx_pad[global_idx - 1];
     Hy_pad_shmem[shared_idx - 1] = Hy_pad[global_idx - 1];
     Hz_pad_shmem[shared_idx - 1] = Hz_pad[global_idx - 1];
-    Ex_pad_shmem[shared_idx - 1] = Ex_pad[global_idx - 1];
-    Ey_pad_shmem[shared_idx - 1] = Ey_pad[global_idx - 1];
-    Ez_pad_shmem[shared_idx - 1] = Ez_pad[global_idx - 1];
   }
 
   __syncthreads();
@@ -489,9 +486,9 @@ __global__ void update_valley(float* Ex_pad, float* Ey_pad, float* Ez_pad,
   const unsigned int global_idx = xx_heads_v[xx] + tid;
 
   // declare shared memory
-  __shared__ float Hx_pad_shmem[SHX];
-  __shared__ float Hy_pad_shmem[SHX];
-  __shared__ float Hz_pad_shmem[SHX];
+  __shared__ float Hx_pad_shmem[SHX - 1];
+  __shared__ float Hy_pad_shmem[SHX - 1];
+  __shared__ float Hz_pad_shmem[SHX - 1];
   __shared__ float Ex_pad_shmem[SHX];
   __shared__ float Ey_pad_shmem[SHX];
   __shared__ float Ez_pad_shmem[SHX];
@@ -504,9 +501,6 @@ __global__ void update_valley(float* Ex_pad, float* Ey_pad, float* Ez_pad,
   Ey_pad_shmem[shared_idx] = Ey_pad[global_idx];
   Ez_pad_shmem[shared_idx] = Ez_pad[global_idx];
   if(tid == BLX - 1) {
-    Hx_pad_shmem[shared_idx + 1] = Hx_pad[global_idx + 1];
-    Hy_pad_shmem[shared_idx + 1] = Hy_pad[global_idx + 1];
-    Hz_pad_shmem[shared_idx + 1] = Hz_pad[global_idx + 1];
     Ex_pad_shmem[shared_idx + 1] = Ex_pad[global_idx + 1];
     Ey_pad_shmem[shared_idx + 1] = Ey_pad[global_idx + 1];
     Ez_pad_shmem[shared_idx + 1] = Ez_pad[global_idx + 1];
@@ -1005,6 +999,7 @@ int main(int argc, char* argv[]) {
   std::cout << "Nx = " << Nx << "\n";
   std::cerr << "MOUNTAIN = " << MOUNTAIN << ", VALLEY = " << VALLEY << "\n";
   std::cout << "BLX = " << BLX << "\n";
+  std::cout << "BLT = " << BLT << "\n";
 
   std::vector<float> Cax(Nx, 0.1);
   std::vector<float> Cay(Nx, 0.2);
