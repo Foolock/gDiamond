@@ -25,4 +25,9 @@
 #define LEFT_PAD_MM BLT_MM
 #define RIGHT_PAD_MM BLT_MM
 
+// tile size
+#define BLX_MM MOUNTAIN_X 
+#define BLY_MM MOUNTAIN_Y 
+#define BLZ_MM MOUNTAIN_Z 
+
 #endif

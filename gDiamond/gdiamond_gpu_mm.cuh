@@ -45,22 +45,93 @@ void gDiamond::_updateEH_mix_mapping(std::vector<float>& Ex_pad, std::vector<flo
     const int xx = block_id % xx_num;
     const int yy = (block_id / xx_num) % yy_num;
     const int zz = block_id / (xx_num * yy_num);
+    int local_x, local_y, local_z;
+    int global_x, global_y, global_z;
+    int H_shared_x, H_shared_y, H_shared_z;
+    int E_shared_x, E_shared_y, E_shared_z;
     
     // declare shared memory
-    constexpr int SHX_H = (X_is_mountain)? 17 : 16;
-    constexpr int SHY_H = (Y_is_mountain)? 11 : 10;
-    constexpr int SHZ_H = (Z_is_mountain)? 11 : 10;
-    constexpr int SHX_E = (X_is_mountain)? 16 : 17;
-    constexpr int SHY_E = (Y_is_mountain)? 10 : 11;
-    constexpr int SHZ_E = (Z_is_mountain)? 10 : 11;
-    float Hx_shmem[SHX_H * SHY_H * SHZ_H];
-    float Hy_shmem[SHX_H * SHY_H * SHZ_H];
-    float Hz_shmem[SHX_H * SHY_H * SHZ_H];
-    float Ex_shmem[SHX_E * SHY_E * SHZ_E];
-    float Ey_shmem[SHX_E * SHY_E * SHZ_E];
-    float Ez_shmem[SHX_E * SHY_E * SHZ_E];
+    constexpr int H_SHX = (X_is_mountain)? 17 : 16;
+    constexpr int H_SHY = (Y_is_mountain)? 11 : 10;
+    constexpr int H_SHZ = (Z_is_mountain)? 11 : 10;
+    constexpr int E_SHX = (X_is_mountain)? 16 : 17;
+    constexpr int E_SHY = (Y_is_mountain)? 10 : 11;
+    constexpr int E_SHZ = (Z_is_mountain)? 10 : 11;
+    float Hx_shmem[H_SHX * H_SHY * H_SHZ];
+    float Hy_shmem[H_SHX * H_SHY * H_SHZ];
+    float Hz_shmem[H_SHX * H_SHY * H_SHZ];
+    float Ex_shmem[E_SHX * E_SHY * E_SHZ];
+    float Ey_shmem[E_SHX * E_SHY * E_SHZ];
+    float Ez_shmem[E_SHX * E_SHY * E_SHZ];
+
+    if(xx == 0 && yy == 0 && zz == 0) {
+      std::cout << "H_SHX = " << H_SHX << ", H_SHY = " << H_SHY << ", H_SHZ = " << H_SHZ << "\n";
+      std::cout << "E_SHX = " << E_SHX << ", E_SHY = " << E_SHY << ", E_SHZ = " << E_SHZ << "\n";
+    }
 
     // load shared memory
+    for(size_t thread_id = 0; thread_id < block_size; thread_id++) {
+
+      local_x = thread_id % BLX_MM;
+      local_y = (thread_id / BLX_MM) % BLY_MM;
+      local_z = thread_id / (BLX_MM * BLY_MM);
+
+      // load H
+      // X dimension has 1 extra HALO load, one thread load one element, 
+      // if mountain, tid = 0 load one extra H at xx_heads[xx] - 1
+      // if valley, tid = NTX_MM - 1 load one extra E at xx_heads[xx] + NTX_MM 
+      // Y, Z dimension will do iterative load in the range [loadH_head, loadH_tail]
+      int loadH_head_y;
+      int loadH_head_z;
+      int loadH_tail_y;
+      int loadH_tail_z;
+
+      if constexpr (X_is_mountain) { 
+        H_shared_x = local_x + 1; 
+        global_x = xx_heads[xx] + H_shared_x - 1;
+      }
+      else { 
+        H_shared_x = local_x; 
+        global_x = xx_heads[xx] + H_shared_x;
+      }
+
+      if constexpr (Y_is_mountain) { loadH_head_y = yy_heads[yy] - 1; }
+      else { loadH_head_y = yy_heads[yy]; }
+
+      if constexpr (Z_is_mountain) { loadH_head_z = zz_heads[zz] - 1; } 
+      else { loadH_head_z = zz_heads[zz]; }
+
+      loadH_tail_y = loadH_head_y + H_SHY - 1;
+      loadH_tail_z = loadH_head_z + H_SHZ - 1;
+
+      if(xx == 0 && yy == 0 && zz == 0) {
+        std::cout << "-------------------------------------------------\n";
+        std::cout << "thread_id = " << thread_id << "\n";
+        std::cout << "local_x = " << local_x << ", local_y = " << local_y << ", local_z = " << local_z << "\n";
+        std::cout << "loadH_head_y = " << loadH_head_y << ", loadH_tail_y = " << loadH_tail_y << "\n";
+        std::cout << "loadH_head_z = " << loadH_head_z << ", loadH_tail_z = " << loadH_tail_z << "\n";
+      }
+      for(H_shared_y = local_y; H_shared_y <= loadH_tail_y; H_shared_y += NTY_MM) {
+
+        if constexpr (Y_is_mountain) { global_y = yy_heads[yy] + H_shared_y - 1; }
+        else { global_y = yy_heads[yy] + H_shared_y; }
+
+        for(H_shared_z = local_z; H_shared_z <= loadH_tail_z; H_shared_z += NTZ_MM) {
+          
+          if constexpr (Z_is_mountain) { global_z = zz_heads[zz] + H_shared_z - 1; }
+          else { global_z = zz_heads[zz] + H_shared_z; }
+
+          if(xx == 0 && yy == 0 && zz == 0) {
+            std::cout << "H_shared_x = " << H_shared_x << ", H_shared_y = " << H_shared_y << ", H_shared_z = " << H_shared_z << "\n";
+            std::cout << "global_x = " << global_x << ", global_y = " << global_y << ", global_z = " << global_z << "\n";
+          }
+
+        }
+      }
+
+      // load HALO for H_shared_x = 0
+
+    }
 
   }  
 }
@@ -173,8 +244,53 @@ void gDiamond::update_FDTD_mix_mapping_sequential(size_t num_timesteps, size_t T
   std::cout << "block_size = " << block_size << "\n";
   size_t grid_size;
 
-  for(size_t tt = 0; tt < num_timesteps; tt++) {
-   
+  for(size_t tt = 0; tt < num_timesteps / BLT_MM; tt++) {
+
+    // phase 1. m, m, m
+    grid_size = xx_num_m * yy_num_m * zz_num_m;
+    _updateEH_mix_mapping<true, true, true>(Ex_pad, Ey_pad, Ez_pad,
+                                            Hx_pad, Hy_pad, Hz_pad,
+                                            _Cax, _Cbx,
+                                            _Cay, _Cby,
+                                            _Caz, _Cbz,
+                                            _Dax, _Dbx,
+                                            _Day, _Dby,
+                                            _Daz, _Dbz,
+                                            _Jx, _Jy, _Jz,
+                                            _Mx, _My, _Mz,
+                                            _dx, 
+                                            _Nx, _Ny, _Nz,
+                                            Nx_pad, Ny_pad, Nz_pad, 
+                                            xx_num_m, yy_num_m, zz_num_m, 
+                                            xx_heads_m, 
+                                            yy_heads_m,
+                                            zz_heads_m,
+                                            block_size,
+                                            grid_size);
+
+    // phase 8. v, v, v 
+    // grid_size = xx_num_v * yy_num_v * zz_num_v;
+    // _updateEH_mix_mapping<false, false, false>(Ex_pad, Ey_pad, Ez_pad,
+    //                                         Hx_pad, Hy_pad, Hz_pad,
+    //                                         _Cax, _Cbx,
+    //                                         _Cay, _Cby,
+    //                                         _Caz, _Cbz,
+    //                                         _Dax, _Dbx,
+    //                                         _Day, _Dby,
+    //                                         _Daz, _Dbz,
+    //                                         _Jx, _Jy, _Jz,
+    //                                         _Mx, _My, _Mz,
+    //                                         _dx, 
+    //                                         _Nx, _Ny, _Nz,
+    //                                         Nx_pad, Ny_pad, Nz_pad, 
+    //                                         xx_num_v, yy_num_v, zz_num_v, 
+    //                                         xx_heads_v, 
+    //                                         yy_heads_v,
+    //                                         zz_heads_v,
+    //                                         block_size,
+    //                                         grid_size);
+
+
   }
 
 }
