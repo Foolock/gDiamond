@@ -147,6 +147,7 @@ class gDiamond {
 
     // mix mapping for 3D diamond tiling
     void update_FDTD_mix_mapping_sequential(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // simulate GPU workflow  
+    void update_FDTD_mix_mapping_gpu(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // simulate GPU workflow  
 
     // check correctness
     bool check_correctness_gpu_2D();
