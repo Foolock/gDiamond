@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
     std::exit(EXIT_FAILURE);
   }
 
-  std::cout << "results are matched.\n";
+  std::cerr << "results are matched.\n";
 
   return 0;
 }
