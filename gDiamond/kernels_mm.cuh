@@ -421,6 +421,14 @@ __global__ void updateEH_mix_mapping_kernel(float* Ex_pad, float* Ey_pad, float*
 
 }
 
+template <int Iter, int MaxIter, typename Func>
+__device__ inline void static_unroll(Func&& f) {
+  if constexpr (Iter < MaxIter) {
+    f(Iter);
+    static_unroll<Iter + 1, MaxIter>(f);
+  }
+}
+
 template <bool X_is_mountain, bool Y_is_mountain, bool Z_is_mountain>
 __global__ void updateEH_mix_mapping_kernel_unroll(float* Ex_pad, float* Ey_pad, float* Ez_pad,
                                                    float* Hx_pad, float* Hy_pad, float* Hz_pad,
@@ -479,25 +487,35 @@ __global__ void updateEH_mix_mapping_kernel_unroll(float* Ex_pad, float* Ey_pad,
   }
   global_x = xx_heads[xx] + local_x;
 
-  for(H_shared_y = local_y; H_shared_y <= H_SHY - 1; H_shared_y += NTY_MM) {
+  // one-to-many mapping in Y and Z
+  constexpr int H_num_y_iters_load = (H_SHY + NTY_MM - 1) / NTY_MM;
+  constexpr int H_num_z_iters_load = (H_SHZ + NTZ_MM - 1) / NTZ_MM;
 
-    if constexpr (Y_is_mountain) { global_y = yy_heads[yy] + H_shared_y - 1; }
-    else { global_y = yy_heads[yy] + H_shared_y; }
+  #pragma unroll
+  for(int H_y_iter = 0; H_y_iter < H_num_y_iters_load; H_y_iter++) {
+    H_shared_y = local_y + H_y_iter * NTY_MM;
+    if(H_shared_y <= H_SHY - 1) {
 
-    for(H_shared_z = local_z; H_shared_z <= H_SHZ - 1; H_shared_z += NTZ_MM) {
+      #pragma unroll
+      for(int H_z_iter = 0; H_z_iter < H_num_z_iters_load; H_z_iter++) {
+        H_shared_z = local_z + H_z_iter * NTZ_MM; 
+        if(H_shared_z <= H_SHZ - 1) {
 
-      if constexpr (Z_is_mountain) { global_z = zz_heads[zz] + H_shared_z - 1; }
-      else { global_z = zz_heads[zz] + H_shared_z; }
-
-      int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-      int H_shared_idx = H_shared_x + H_shared_y * H_SHX + H_shared_z * H_SHX * H_SHY;
-      Hx_shmem[H_shared_idx] = Hx_pad[global_idx];
-      Hy_shmem[H_shared_idx] = Hy_pad[global_idx];
-      Hz_shmem[H_shared_idx] = Hz_pad[global_idx];
-
+          if constexpr (Y_is_mountain) { global_y = yy_heads[yy] + H_shared_y - 1; }
+          else { global_y = yy_heads[yy] + H_shared_y; }
+          if constexpr (Z_is_mountain) { global_z = zz_heads[zz] + H_shared_z - 1; }
+          else { global_z = zz_heads[zz] + H_shared_z; }
+     
+          int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
+          int H_shared_idx = H_shared_x + H_shared_y * H_SHX + H_shared_z * H_SHX * H_SHY;
+          Hx_shmem[H_shared_idx] = Hx_pad[global_idx];
+          Hy_shmem[H_shared_idx] = Hy_pad[global_idx];
+          Hz_shmem[H_shared_idx] = Hz_pad[global_idx];
+        }
+      }
     }
   }
-
+  
   bool loadH_HALO_needed;
   if constexpr (X_is_mountain) { loadH_HALO_needed = true; }
   else { loadH_HALO_needed = false; }
@@ -505,22 +523,29 @@ __global__ void updateEH_mix_mapping_kernel_unroll(float* Ex_pad, float* Ey_pad,
   if(loadH_HALO_needed && local_x == 0) {
     H_shared_x = 0;
     global_x = xx_heads[xx] + H_shared_x - 1;
-    for(H_shared_y = local_y; H_shared_y <= H_SHY - 1; H_shared_y += NTY_MM) {
 
-      if constexpr (Y_is_mountain) { global_y = yy_heads[yy] + H_shared_y - 1; }
-      else { global_y = yy_heads[yy] + H_shared_y; }
+    #pragma unroll
+    for(int H_y_iter = 0; H_y_iter < H_num_y_iters_load; H_y_iter++) {
+      H_shared_y = local_y + H_y_iter * NTY_MM;
+      if(H_shared_y <= H_SHY - 1) {
 
-      for(H_shared_z = local_z; H_shared_z <= H_SHZ - 1; H_shared_z += NTZ_MM) {
+        #pragma unroll
+        for(int H_z_iter = 0; H_z_iter < H_num_z_iters_load; H_z_iter++) {
+          H_shared_z = local_z + H_z_iter * NTZ_MM; 
+          if(H_shared_z <= H_SHZ - 1) {
 
-        if constexpr (Z_is_mountain) { global_z = zz_heads[zz] + H_shared_z - 1; }
-        else { global_z = zz_heads[zz] + H_shared_z; }
-
-        int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-        int H_shared_idx = H_shared_x + H_shared_y * H_SHX + H_shared_z * H_SHX * H_SHY;
-        Hx_shmem[H_shared_idx] = Hx_pad[global_idx];
-        Hy_shmem[H_shared_idx] = Hy_pad[global_idx];
-        Hz_shmem[H_shared_idx] = Hz_pad[global_idx];
-
+            if constexpr (Y_is_mountain) { global_y = yy_heads[yy] + H_shared_y - 1; }
+            else { global_y = yy_heads[yy] + H_shared_y; }
+            if constexpr (Z_is_mountain) { global_z = zz_heads[zz] + H_shared_z - 1; }
+            else { global_z = zz_heads[zz] + H_shared_z; }
+       
+            int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
+            int H_shared_idx = H_shared_x + H_shared_y * H_SHX + H_shared_z * H_SHX * H_SHY;
+            Hx_shmem[H_shared_idx] = Hx_pad[global_idx];
+            Hy_shmem[H_shared_idx] = Hy_pad[global_idx];
+            Hz_shmem[H_shared_idx] = Hz_pad[global_idx];
+          }
+        }
       }
     }
   }
@@ -528,15 +553,29 @@ __global__ void updateEH_mix_mapping_kernel_unroll(float* Ex_pad, float* Ey_pad,
   // load E ---------------------------------------------
   E_shared_x = local_x;
   global_x = xx_heads[xx] + E_shared_x;
-  for(E_shared_y = local_y; E_shared_y <= E_SHY - 1; E_shared_y += NTY_MM) {
-    global_y = yy_heads[yy] + E_shared_y;
-    for(E_shared_z = local_z; E_shared_z <= E_SHZ - 1; E_shared_z += NTY_MM) {
-      global_z = zz_heads[zz] + E_shared_z;
-      int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-      int E_shared_idx = E_shared_x + E_shared_y * E_SHX + E_shared_z * E_SHX * E_SHY;
-      Ex_shmem[E_shared_idx] = Ex_pad[global_idx];
-      Ey_shmem[E_shared_idx] = Ey_pad[global_idx];
-      Ez_shmem[E_shared_idx] = Ez_pad[global_idx];
+
+  constexpr int E_num_y_iters_load = (E_SHY + NTY_MM - 1) / NTY_MM;
+  constexpr int E_num_z_iters_load = (E_SHZ + NTZ_MM - 1) / NTZ_MM;
+
+  #pragma unroll
+  for(int E_y_iter = 0; E_y_iter < E_num_y_iters_load; E_y_iter++) {
+    E_shared_y = local_y + E_y_iter * NTY_MM;
+    if(E_shared_y <= E_SHY - 1) {
+
+      #pragma unroll
+      for(int E_z_iter = 0; E_z_iter < E_num_z_iters_load; E_z_iter++) {
+        E_shared_z = local_z + E_z_iter * NTZ_MM;
+        if(E_shared_z <= E_SHZ - 1) {
+
+          global_y = yy_heads[yy] + E_shared_y;
+          global_z = zz_heads[zz] + E_shared_z;
+          int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
+          int E_shared_idx = E_shared_x + E_shared_y * E_SHX + E_shared_z * E_SHX * E_SHY;
+          Ex_shmem[E_shared_idx] = Ex_pad[global_idx];
+          Ey_shmem[E_shared_idx] = Ey_pad[global_idx];
+          Ez_shmem[E_shared_idx] = Ez_pad[global_idx];
+        }
+      }
     }
   }
 
@@ -547,15 +586,26 @@ __global__ void updateEH_mix_mapping_kernel_unroll(float* Ex_pad, float* Ey_pad,
   if(loadE_HALO_needed && local_x == NTX_MM - 1) {
     E_shared_x = local_x + 1;
     global_x = xx_heads[xx] + E_shared_x;
-    for(E_shared_y = local_y; E_shared_y <= E_SHY - 1; E_shared_y += NTY_MM) {
-      global_y = yy_heads[yy] + E_shared_y;
-      for(E_shared_z = local_z; E_shared_z <= E_SHZ - 1; E_shared_z += NTY_MM) {
-        global_z = zz_heads[zz] + E_shared_z;
-        int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad; 
-        int E_shared_idx = E_shared_x + E_shared_y * E_SHX + E_shared_z * E_SHX * E_SHY;
-        Ex_shmem[E_shared_idx] = Ex_pad[global_idx];
-        Ey_shmem[E_shared_idx] = Ey_pad[global_idx];
-        Ez_shmem[E_shared_idx] = Ez_pad[global_idx];
+
+    #pragma unroll
+    for(int E_y_iter = 0; E_y_iter < E_num_y_iters_load; E_y_iter++) {
+      E_shared_y = local_y + E_y_iter * NTY_MM;
+      if(E_shared_y <= E_SHY - 1) {
+
+        #pragma unroll
+        for(int E_z_iter = 0; E_z_iter < E_num_z_iters_load; E_z_iter++) {
+          E_shared_z = local_z + E_z_iter * NTZ_MM;
+          if(E_shared_z <= E_SHZ - 1) {
+
+            global_y = yy_heads[yy] + E_shared_y;
+            global_z = zz_heads[zz] + E_shared_z;
+            int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
+            int E_shared_idx = E_shared_x + E_shared_y * E_SHX + E_shared_z * E_SHX * E_SHY;
+            Ex_shmem[E_shared_idx] = Ex_pad[global_idx];
+            Ey_shmem[E_shared_idx] = Ey_pad[global_idx];
+            Ez_shmem[E_shared_idx] = Ez_pad[global_idx];
+          }
+        }
       }
     }
   }
@@ -760,56 +810,78 @@ __global__ void updateEH_mix_mapping_kernel_unroll(float* Ex_pad, float* Ey_pad,
   }
   global_x = xx_heads[xx] + local_x;
 
-  for(H_shared_y = storeH_head_Y + local_y; H_shared_y <= storeH_tail_Y; H_shared_y += NTY_MM) {
+  // got H_SHY(Z) - 1 elements to store in Y(Z) dimension
+  constexpr int H_num_y_iters_store = (H_SHY - 1 + NTY_MM - 1) / NTY_MM; 
+  constexpr int H_num_z_iters_store = (H_SHZ - 1 + NTZ_MM - 1) / NTZ_MM; 
 
-    if constexpr (Y_is_mountain) { global_y = yy_heads[yy] + H_shared_y - 1; }
-    else { global_y = yy_heads[yy] + H_shared_y; }
+  #pragma unroll
+  for(int H_y_iter = 0; H_y_iter < H_num_y_iters_store; H_y_iter++) {
+    H_shared_y = storeH_head_Y + local_y + H_y_iter * NTY_MM;
+    if(H_shared_y <= storeH_tail_Y) {
 
-    for(H_shared_z = storeH_head_Z + local_z; H_shared_z <= storeH_tail_Z; H_shared_z += NTZ_MM) {
+      #pragma unroll
+      for(int H_z_iter = 0; H_z_iter < H_num_z_iters_store; H_z_iter++) {
+        H_shared_z = storeH_head_Z + local_z + H_z_iter * NTZ_MM;
+        if(H_shared_z <= storeH_tail_Z) {
+          
+          if constexpr (Y_is_mountain) { global_y = yy_heads[yy] + H_shared_y - 1; }
+          else { global_y = yy_heads[yy] + H_shared_y; }
+          if constexpr (Z_is_mountain) { global_z = zz_heads[zz] + H_shared_z - 1; }
+          else { global_z = zz_heads[zz] + H_shared_z; }
 
-      if constexpr (Z_is_mountain) { global_z = zz_heads[zz] + H_shared_z - 1; }
-      else { global_z = zz_heads[zz] + H_shared_z; }
+          if(global_x >= 1 + LEFT_PAD_MM && global_x <= Nx - 2 + LEFT_PAD_MM &&
+             global_y >= 1 + LEFT_PAD_MM && global_y <= Ny - 2 + LEFT_PAD_MM &&
+             global_z >= 1 + LEFT_PAD_MM && global_z <= Nz - 2 + LEFT_PAD_MM &&
+             global_x >= storeH_head_X && global_x <= storeH_tail_X) {
 
-      if(global_x >= 1 + LEFT_PAD_MM && global_x <= Nx - 2 + LEFT_PAD_MM &&
-         global_y >= 1 + LEFT_PAD_MM && global_y <= Ny - 2 + LEFT_PAD_MM &&
-         global_z >= 1 + LEFT_PAD_MM && global_z <= Nz - 2 + LEFT_PAD_MM &&
-         global_x >= storeH_head_X && global_x <= storeH_tail_X) {
-
-        int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-        int H_shared_idx = H_shared_x + H_shared_y * H_SHX + H_shared_z * H_SHX * H_SHY;
-        Hx_pad[global_idx] = Hx_shmem[H_shared_idx];
-        Hy_pad[global_idx] = Hy_shmem[H_shared_idx];
-        Hz_pad[global_idx] = Hz_shmem[H_shared_idx];
-
+            int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
+            int H_shared_idx = H_shared_x + H_shared_y * H_SHX + H_shared_z * H_SHX * H_SHY;
+            Hx_pad[global_idx] = Hx_shmem[H_shared_idx];
+            Hy_pad[global_idx] = Hy_shmem[H_shared_idx];
+            Hz_pad[global_idx] = Hz_shmem[H_shared_idx];
+          }
+        }
       }
-    }
+    } 
   }
 
   // store E ---------------------------------------------
   E_shared_x = local_x;
   global_x = xx_heads[xx] + E_shared_x;
 
-  for(E_shared_y = storeE_head_Y + local_y; E_shared_y <= storeE_tail_Y; E_shared_y += NTY_MM) {
-    global_y = yy_heads[yy] + E_shared_y;
-    for(E_shared_z = storeE_head_Z + local_z; E_shared_z <= storeE_tail_Z; E_shared_z += NTZ_MM) {
-      global_z = zz_heads[zz] + E_shared_z;
-      
-      if(global_x >= 1 + LEFT_PAD_MM && global_x <= Nx - 2 + LEFT_PAD_MM && 
-         global_y >= 1 + LEFT_PAD_MM && global_y <= Ny - 2 + LEFT_PAD_MM && 
-         global_z >= 1 + LEFT_PAD_MM && global_z <= Nz - 2 + LEFT_PAD_MM &&
-         global_x >= storeE_head_X && global_x <= storeE_tail_X) {
+  constexpr int E_num_y_iters_store = (E_SHY - 1 + NTY_MM - 1) / NTY_MM; 
+  constexpr int E_num_z_iters_store = (E_SHZ - 1 + NTZ_MM - 1) / NTZ_MM; 
 
-        int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad; 
-        int E_shared_idx = E_shared_x + E_shared_y * E_SHX + E_shared_z * E_SHX * E_SHY;  
-        Ex_pad[global_idx] = Ex_shmem[E_shared_idx];
-        Ey_pad[global_idx] = Ey_shmem[E_shared_idx];
-        Ez_pad[global_idx] = Ez_shmem[E_shared_idx];
+  #pragma unroll
+  for(int E_y_iter = 0; E_y_iter < E_num_y_iters_store; E_y_iter++) {
+    E_shared_y = storeE_head_Y + local_y + E_y_iter * NTY_MM;
+    if(E_shared_y <= storeE_tail_Y) {
 
+      #pragma unroll
+      for(int E_z_iter = 0; E_z_iter < E_num_z_iters_store; E_z_iter++) {
+        E_shared_z = storeE_head_Z + local_z + E_z_iter * NTZ_MM;
+        if(E_shared_z <= storeE_tail_Z) {
+
+          global_y = yy_heads[yy] + E_shared_y;
+          global_z = zz_heads[zz] + E_shared_z;
+
+          if(global_x >= 1 + LEFT_PAD_MM && global_x <= Nx - 2 + LEFT_PAD_MM && 
+             global_y >= 1 + LEFT_PAD_MM && global_y <= Ny - 2 + LEFT_PAD_MM && 
+             global_z >= 1 + LEFT_PAD_MM && global_z <= Nz - 2 + LEFT_PAD_MM &&
+             global_x >= storeE_head_X && global_x <= storeE_tail_X) {
+
+            int global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad; 
+            int E_shared_idx = E_shared_x + E_shared_y * E_SHX + E_shared_z * E_SHX * E_SHY;  
+            Ex_pad[global_idx] = Ex_shmem[E_shared_idx];
+            Ey_pad[global_idx] = Ey_shmem[E_shared_idx];
+            Ez_pad[global_idx] = Ez_shmem[E_shared_idx];
+
+          }
+        }
       }
     }
   }
-
-
+  
 }
 
 

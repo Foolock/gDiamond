@@ -31,12 +31,12 @@ int main(int argc, char* argv[]) {
   exp.update_FDTD_gpu_3D_warp_underutilization_fix(num_timesteps);  
   exp.update_FDTD_mix_mapping_gpu(num_timesteps, Tx, Ty, Tz);  
 
-  // if(!exp.check_correctness_gpu()) {
-  //   std::cerr << "results are wrong!\n";
-  //   std::exit(EXIT_FAILURE);
-  // }
+  if(!exp.check_correctness_gpu()) {
+    std::cerr << "results are wrong!\n";
+    std::exit(EXIT_FAILURE);
+  }
 
-  // std::cout << "results are matched.\n";
+  std::cout << "results are matched.\n";
 
   return 0;
 }

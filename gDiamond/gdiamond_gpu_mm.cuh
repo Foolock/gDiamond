@@ -1021,7 +1021,7 @@ void gDiamond::update_FDTD_mix_mapping_gpu(size_t num_timesteps, size_t Tx, size
   for(size_t tt = 0; tt < num_timesteps / BLT_MM; tt++) {
     // phase 1. m, m, m
     grid_size = xx_num_m * yy_num_m * zz_num_m;
-    updateEH_mix_mapping_kernel<true, true, true><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
+    updateEH_mix_mapping_kernel_unroll<true, true, true><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
                                                                              d_Hx_pad, d_Hy_pad, d_Hz_pad,
                                                                              Cax, Cbx,
                                                                              Cay, Cby,
@@ -1041,7 +1041,7 @@ void gDiamond::update_FDTD_mix_mapping_gpu(size_t num_timesteps, size_t Tx, size
 
     // phase 2. v, m, m
     grid_size = xx_num_v * yy_num_m * zz_num_m;
-    updateEH_mix_mapping_kernel<false, true, true><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
+    updateEH_mix_mapping_kernel_unroll<false, true, true><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
                                                                              d_Hx_pad, d_Hy_pad, d_Hz_pad,
                                                                              Cax, Cbx,
                                                                              Cay, Cby,
@@ -1061,7 +1061,7 @@ void gDiamond::update_FDTD_mix_mapping_gpu(size_t num_timesteps, size_t Tx, size
 
     // phase 3. m, v, m
     grid_size = xx_num_m * yy_num_v * zz_num_m;
-    updateEH_mix_mapping_kernel<true, false, true><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
+    updateEH_mix_mapping_kernel_unroll<true, false, true><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
                                                                              d_Hx_pad, d_Hy_pad, d_Hz_pad,
                                                                              Cax, Cbx,
                                                                              Cay, Cby,
@@ -1081,7 +1081,7 @@ void gDiamond::update_FDTD_mix_mapping_gpu(size_t num_timesteps, size_t Tx, size
 
     // phase 4. m, m, v
     grid_size = xx_num_m * yy_num_m * zz_num_v;
-    updateEH_mix_mapping_kernel<true, true, false><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
+    updateEH_mix_mapping_kernel_unroll<true, true, false><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
                                                                              d_Hx_pad, d_Hy_pad, d_Hz_pad,
                                                                              Cax, Cbx,
                                                                              Cay, Cby,
@@ -1101,7 +1101,7 @@ void gDiamond::update_FDTD_mix_mapping_gpu(size_t num_timesteps, size_t Tx, size
 
     // phase 5. v, v, m
     grid_size = xx_num_v * yy_num_v * zz_num_m;
-    updateEH_mix_mapping_kernel<false, false, true><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
+    updateEH_mix_mapping_kernel_unroll<false, false, true><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
                                                                              d_Hx_pad, d_Hy_pad, d_Hz_pad,
                                                                              Cax, Cbx,
                                                                              Cay, Cby,
@@ -1121,7 +1121,7 @@ void gDiamond::update_FDTD_mix_mapping_gpu(size_t num_timesteps, size_t Tx, size
 
     // phase 6. v, m, v
     grid_size = xx_num_v * yy_num_m * zz_num_v;
-    updateEH_mix_mapping_kernel<false, true, false><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
+    updateEH_mix_mapping_kernel_unroll<false, true, false><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
                                                                              d_Hx_pad, d_Hy_pad, d_Hz_pad,
                                                                              Cax, Cbx,
                                                                              Cay, Cby,
@@ -1141,7 +1141,7 @@ void gDiamond::update_FDTD_mix_mapping_gpu(size_t num_timesteps, size_t Tx, size
 
     // phase 7. m, v, v
     grid_size = xx_num_m * yy_num_v * zz_num_v;
-    updateEH_mix_mapping_kernel<true, false, false><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
+    updateEH_mix_mapping_kernel_unroll<true, false, false><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
                                                                              d_Hx_pad, d_Hy_pad, d_Hz_pad,
                                                                              Cax, Cbx,
                                                                              Cay, Cby,
@@ -1161,7 +1161,7 @@ void gDiamond::update_FDTD_mix_mapping_gpu(size_t num_timesteps, size_t Tx, size
 
     // phase 8. v, v, v 
     grid_size = xx_num_v * yy_num_v * zz_num_v;
-    updateEH_mix_mapping_kernel<false, false, false><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
+    updateEH_mix_mapping_kernel_unroll<false, false, false><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
                                                                              d_Hx_pad, d_Hy_pad, d_Hz_pad,
                                                                              Cax, Cbx,
                                                                              Cay, Cby,
