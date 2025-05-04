@@ -4,7 +4,7 @@
 #include "gdiamond.hpp"
 
 // mix mapping
-#define BLT_MM 4
+#define BLT_MM 4 
 
 // one-to-one mapping in X dimension
 #define NTX_MM 16
@@ -448,11 +448,11 @@ __device__ void timestep_body(
     float* Hx_shmem, float* Hy_shmem, float* Hz_shmem
 ) {
 
-    constexpr int H_SHX = (X_is_mountain)? 17 : 16;
-    constexpr int H_SHY = (Y_is_mountain)? 11 : 10;
-    constexpr int E_SHX = (X_is_mountain)? 16 : 17;
-    constexpr int E_SHY = (Y_is_mountain)? 10 : 11;
-    constexpr int E_SHZ = (Z_is_mountain)? 10 : 11;
+    constexpr int H_SHX = (X_is_mountain)? BLX_MM + 1 : BLX_MM; 
+    constexpr int H_SHY = (Y_is_mountain)? BLY_MM + 1 : BLY_MM;
+    constexpr int E_SHX = (X_is_mountain)? BLX_MM : BLX_MM + 1; 
+    constexpr int E_SHY = (Y_is_mountain)? BLY_MM : BLY_MM + 1;
+    constexpr int E_SHZ = (Z_is_mountain)? BLZ_MM : BLZ_MM + 1;
     constexpr int BLT = BLT_MM;
     constexpr int BLX = BLX_MM;
 
@@ -528,10 +528,6 @@ __device__ void timestep_body(
     __syncthreads();
 
     // === Update H ===
-    E_shared_x = local_x;
-    H_shared_x = X_is_mountain ? E_shared_x + 1 : E_shared_x;
-    global_x = xx_heads[xx] + local_x;
-
     constexpr int H_num_y_iters_cal = (calH_tail_Y - calH_head_Y + 1 + NTY_MM - 1) / NTY_MM;  
     constexpr int H_num_z_iters_cal = (calH_tail_Z - calH_head_Z + 1 + NTZ_MM - 1) / NTZ_MM;  
 
@@ -673,12 +669,12 @@ __global__ void updateEH_mix_mapping_kernel_unroll(float* Ex_pad, float* Ey_pad,
   int E_shared_x, E_shared_y, E_shared_z;
 
   // declare shared memory
-  constexpr int H_SHX = (X_is_mountain)? 17 : 16;
-  constexpr int H_SHY = (Y_is_mountain)? 11 : 10;
-  constexpr int H_SHZ = (Z_is_mountain)? 11 : 10;
-  constexpr int E_SHX = (X_is_mountain)? 16 : 17;
-  constexpr int E_SHY = (Y_is_mountain)? 10 : 11;
-  constexpr int E_SHZ = (Z_is_mountain)? 10 : 11;
+  constexpr int H_SHX = (X_is_mountain)? BLX_MM + 1 : BLX_MM; 
+  constexpr int H_SHY = (Y_is_mountain)? BLY_MM + 1 : BLY_MM;
+  constexpr int H_SHZ = (Z_is_mountain)? BLZ_MM + 1 : BLZ_MM;
+  constexpr int E_SHX = (X_is_mountain)? BLX_MM : BLX_MM + 1; 
+  constexpr int E_SHY = (Y_is_mountain)? BLY_MM : BLY_MM + 1;
+  constexpr int E_SHZ = (Z_is_mountain)? BLZ_MM : BLZ_MM + 1;
   __shared__ float Hx_shmem[H_SHX * H_SHY * H_SHZ];
   __shared__ float Hy_shmem[H_SHX * H_SHY * H_SHZ];
   __shared__ float Hz_shmem[H_SHX * H_SHY * H_SHZ];

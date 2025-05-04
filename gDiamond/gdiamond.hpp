@@ -147,6 +147,7 @@ class gDiamond {
 
     // mix mapping for 3D diamond tiling
     void update_FDTD_mix_mapping_sequential(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // simulate GPU workflow  
+    void update_FDTD_mix_mapping_sequential_ver2(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
     void update_FDTD_mix_mapping_gpu(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // simulate GPU workflow  
 
     // check correctness
@@ -183,6 +184,27 @@ class gDiamond {
                                const std::vector<int>& zz_heads,
                                size_t block_size,
                                size_t grid_size);
+
+    template <bool X_is_mountain, bool Y_is_mountain, bool Z_is_mountain>
+    void _updateEH_mix_mapping_ver2(std::vector<float>& Ex_pad, std::vector<float>& Ey_pad, std::vector<float>& Ez_pad,
+                                    std::vector<float>& Hx_pad, std::vector<float>& Hy_pad, std::vector<float>& Hz_pad,
+                                    const std::vector<float>& Cax, const std::vector<float>& Cbx,
+                                    const std::vector<float>& Cay, const std::vector<float>& Cby,
+                                    const std::vector<float>& Caz, const std::vector<float>& Cbz,
+                                    const std::vector<float>& Dax, const std::vector<float>& Dbx,
+                                    const std::vector<float>& Day, const std::vector<float>& Dby,
+                                    const std::vector<float>& Daz, const std::vector<float>& Dbz,
+                                    const std::vector<float>& Jx, const std::vector<float>& Jy, const std::vector<float>& Jz,
+                                    const std::vector<float>& Mx, const std::vector<float>& My, const std::vector<float>& Mz,
+                                    float dx, 
+                                    int Nx, int Ny, int Nz,
+                                    int Nx_pad, int Ny_pad, int Nz_pad, 
+                                    int xx_num, int yy_num, int zz_num, 
+                                    const std::vector<int>& xx_heads, 
+                                    const std::vector<int>& yy_heads,
+                                    const std::vector<int>& zz_heads,
+                                    size_t block_size,
+                                    size_t grid_size);
 
     // for diamond tiling reimplementation
     void _updateEH_dt_1D_mountain_seq_extra_copy(const std::vector<float>& Ex_src, const std::vector<float>& Ey_src, const std::vector<float>& Ez_src,
@@ -766,16 +788,6 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
             ((Hx_temp[idx] - Hx_temp[idx - _Nx * _Ny]) - (Hz_temp[idx] - Hz_temp[idx - 1]) - _Jy[idx] * _dx);
           Ez_temp[idx] = _Caz[idx] * Ez_temp[idx] + _Cbz[idx] *
             ((Hy_temp[idx] - Hy_temp[idx - 1]) - (Hx_temp[idx] - Hx_temp[idx - _Nx]) - _Jz[idx] * _dx);
-
-          if(t == 1 && i == 13 && j == 2 && k == 2) {
-            std::cout << "here, Ex_temp[idx] = " << Ex_temp[idx]
-                      << ", Hz_temp[idx] = " << Hz_temp[idx]
-                      << ", Hz_temp[idx - _Nx] = " << Hz_temp[idx - _Nx]
-                      << ", Hy_temp[idx] = " << Hy_temp[idx]
-                      << ", Hy_temp[idx - _Nx * _Ny] = " << Hy_temp[idx - _Nx * _Ny]
-                      << ", _Jx[idx] = " << _Jx[idx]
-                      << "\n";
-          }
 
         }
       }
@@ -1920,27 +1932,27 @@ void gDiamond::_setup_diamond_tiling_gpu(size_t BLX, size_t BLY, size_t BLZ, siz
 
 void gDiamond::print_results() {
 
-  std::cout << "Ex_gpu = \n";
+  std::cout << "Ex_seq = \n";
   for(size_t k=1; k<_Nz-1; k++) {
     for(size_t j=1; j<_Ny-1; j++) {
       for(size_t i=1; i<_Nx-1; i++) {
         size_t idx = i + j*_Nx + k*(_Nx*_Ny);
-        if(_Ex_gpu[idx] != 0) { 
+        if(_Ex_seq[idx] != 0) { 
           std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
-          std::cout << "Ex_gpu[idx] = " << _Ex_gpu[idx] << "\n";
+          std::cout << "Ex_seq[idx] = " << _Ex_seq[idx] << "\n";
         }
       }
     }
   }
 
-  std::cout << "Ex_gpu_bl = \n";
+  std::cout << "Ex_simu = \n";
   for(size_t k=1; k<_Nz-1; k++) {
     for(size_t j=1; j<_Ny-1; j++) {
       for(size_t i=1; i<_Nx-1; i++) {
         size_t idx = i + j*_Nx + k*(_Nx*_Ny);
-        if(_Ex_gpu_bl[idx] != 0) { 
+        if(_Ex_simu[idx] != 0) { 
           std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
-          std::cout << "Ex_gpu_bl[idx] = " << _Ex_gpu_bl[idx] << "\n";
+          std::cout << "Ex_simu[idx] = " << _Ex_simu[idx] << "\n";
         }
       }
     }
