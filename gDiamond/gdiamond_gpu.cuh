@@ -913,6 +913,10 @@ void gDiamond::update_FDTD_gpu_3D_warp_underutilization_fix(size_t num_timesteps
   }
   cudaDeviceSynchronize();
 
+  auto end = std::chrono::high_resolution_clock::now();
+  std::cout << "gpu runtime (naive): " << std::chrono::duration<double>(end-start).count() << "s\n"; 
+  std::cout << "gpu performance: " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / std::chrono::duration<double>(end-start).count() << "Mcells/s\n";
+
   // copy E, H back to host 
   CUDACHECK(cudaMemcpy(_Ex_gpu_bl.data(), Ex, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
   CUDACHECK(cudaMemcpy(_Ey_gpu_bl.data(), Ey, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
@@ -920,10 +924,6 @@ void gDiamond::update_FDTD_gpu_3D_warp_underutilization_fix(size_t num_timesteps
   CUDACHECK(cudaMemcpy(_Hx_gpu_bl.data(), Hx, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
   CUDACHECK(cudaMemcpy(_Hy_gpu_bl.data(), Hy, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
   CUDACHECK(cudaMemcpy(_Hz_gpu_bl.data(), Hz, sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyDeviceToHost));
-
-  auto end = std::chrono::high_resolution_clock::now();
-  std::cout << "gpu runtime (naive): " << std::chrono::duration<double>(end-start).count() << "s\n"; 
-  std::cout << "gpu performance: " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / std::chrono::duration<double>(end-start).count() << "Mcells/s\n";
 
   CUDACHECK(cudaFree(Ex));
   CUDACHECK(cudaFree(Ey));
