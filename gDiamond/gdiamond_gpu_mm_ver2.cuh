@@ -112,37 +112,41 @@ void gDiamond::_updateEH_mix_mapping_ver2(std::vector<float>& Ex_pad, std::vecto
       else { loadH_HALO_needed_z = false; }
 
       // there are some duplicate load here, but would it matter?
-      if(loadH_HALO_needed_x && local_x == 0) {
-        H_shared_x = 0;
-        global_x = xx_heads[xx] + H_shared_x - 1;
+      if (loadH_HALO_needed_x && local_x == 0) {
+        int halo_x = 0;
+        int global_x_halo = xx_heads[xx] + halo_x - 1;
 
-        global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-        H_shared_idx = H_shared_x + H_shared_y * H_SHX + H_shared_z * H_SHX * H_SHY;
+        int global_idx = global_x_halo + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
+        int H_shared_idx = halo_x + H_shared_y * H_SHX + H_shared_z * H_SHX * H_SHY;
+
         Hx_shmem[H_shared_idx] = Hx_pad[global_idx];
         Hy_shmem[H_shared_idx] = Hy_pad[global_idx];
         Hz_shmem[H_shared_idx] = Hz_pad[global_idx];
       }
-      if(loadH_HALO_needed_y && local_y == 0) {
-        H_shared_y = 0;
-        global_y = yy_heads[yy] + H_shared_y - 1;
+      if (loadH_HALO_needed_y && local_y == 0) {
+        int halo_y = 0;
+        int global_y_halo = yy_heads[yy] + halo_y - 1;
 
-        global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-        H_shared_idx = H_shared_x + H_shared_y * H_SHX + H_shared_z * H_SHX * H_SHY;
+        int global_idx = global_x + global_y_halo * Nx_pad + global_z * Nx_pad * Ny_pad;
+        int H_shared_idx = H_shared_x + halo_y * H_SHX + H_shared_z * H_SHX * H_SHY;
+
         Hx_shmem[H_shared_idx] = Hx_pad[global_idx];
         Hy_shmem[H_shared_idx] = Hy_pad[global_idx];
         Hz_shmem[H_shared_idx] = Hz_pad[global_idx];
       }
-      if(loadH_HALO_needed_z && local_z == 0) {
-        H_shared_z = 0;
-        global_z = zz_heads[zz] + H_shared_z - 1;
+      if (loadH_HALO_needed_z && local_z == 0) {
+        int halo_z = 0;
+        int global_z_halo = zz_heads[zz] + halo_z - 1;
 
-        global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-        H_shared_idx = H_shared_x + H_shared_y * H_SHX + H_shared_z * H_SHX * H_SHY;
+        int global_idx = global_x + global_y * Nx_pad + global_z_halo * Nx_pad * Ny_pad;
+        int H_shared_idx = H_shared_x + H_shared_y * H_SHX + halo_z * H_SHX * H_SHY;
+
         Hx_shmem[H_shared_idx] = Hx_pad[global_idx];
         Hy_shmem[H_shared_idx] = Hy_pad[global_idx];
         Hz_shmem[H_shared_idx] = Hz_pad[global_idx];
       }
 
+      
       // load E ---------------------------------------------
       // if(xx == 0 && yy == 0 && zz == 0) {
       //   std::cout << "-------------------------------------------------\n";
@@ -172,33 +176,40 @@ void gDiamond::_updateEH_mix_mapping_ver2(std::vector<float>& Ex_pad, std::vecto
       if constexpr (!Z_is_mountain) { loadE_HALO_needed_z = true; }
       else { loadE_HALO_needed_z = false; }
 
-      if(loadE_HALO_needed_x && local_x == NTX_MM_V2 - 1) {
-        E_shared_x = local_x + 1;
-        global_x = xx_heads[xx] + E_shared_x;
-        global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-        E_shared_idx = E_shared_x + E_shared_y * E_SHX + E_shared_z * E_SHX * E_SHY;
+      if (loadE_HALO_needed_x && local_x == NTX_MM_V2 - 1) {
+        int halo_x = local_x + 1;
+        int global_x_halo = xx_heads[xx] + halo_x;
+
+        int global_idx = global_x_halo + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
+        int E_shared_idx = halo_x + E_shared_y * E_SHX + E_shared_z * E_SHX * E_SHY;
+
         Ex_shmem[E_shared_idx] = Ex_pad[global_idx];
         Ey_shmem[E_shared_idx] = Ey_pad[global_idx];
         Ez_shmem[E_shared_idx] = Ez_pad[global_idx];
       }
-      if(loadE_HALO_needed_y && local_y == NTY_MM_V2 - 1) {
-        E_shared_y = local_y + 1;
-        global_y = yy_heads[yy] + E_shared_y;
-        global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-        E_shared_idx = E_shared_x + E_shared_y * E_SHX + E_shared_z * E_SHX * E_SHY;
+      if (loadE_HALO_needed_y && local_y == NTY_MM_V2 - 1) {
+        int halo_y = local_y + 1;
+        int global_y_halo = yy_heads[yy] + halo_y;
+
+        int global_idx = global_x + global_y_halo * Nx_pad + global_z * Nx_pad * Ny_pad;
+        int E_shared_idx = E_shared_x + halo_y * E_SHX + E_shared_z * E_SHX * E_SHY;
+
         Ex_shmem[E_shared_idx] = Ex_pad[global_idx];
         Ey_shmem[E_shared_idx] = Ey_pad[global_idx];
         Ez_shmem[E_shared_idx] = Ez_pad[global_idx];
       }
-      if(loadE_HALO_needed_z && local_z == NTZ_MM_V2 - 1) {
-        E_shared_z = local_z + 1;
-        global_z = zz_heads[zz] + E_shared_z;
-        global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-        E_shared_idx = E_shared_x + E_shared_y * E_SHX + E_shared_z * E_SHX * E_SHY;
+      if (loadE_HALO_needed_z && local_z == NTZ_MM_V2 - 1) {
+        int halo_z = local_z + 1;
+        int global_z_halo = zz_heads[zz] + halo_z;
+
+        int global_idx = global_x + global_y * Nx_pad + global_z_halo * Nx_pad * Ny_pad;
+        int E_shared_idx = E_shared_x + E_shared_y * E_SHX + halo_z * E_SHX * E_SHY;
+
         Ex_shmem[E_shared_idx] = Ex_pad[global_idx];
         Ey_shmem[E_shared_idx] = Ey_pad[global_idx];
         Ez_shmem[E_shared_idx] = Ez_pad[global_idx];
       }
+      
     }
 
     // calculation
