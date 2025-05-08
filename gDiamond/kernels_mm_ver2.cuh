@@ -5,7 +5,7 @@
 #include "gdiamond.hpp"
 
 // mix mapping
-#define BLT_MM_V2 4
+#define BLT_MM_V2 3 
 
 // one-to-one mapping in X dimension
 #define NTX_MM_V2 16

@@ -28,4 +28,5 @@ nvidia-smi
 # NVIDIA-SMI 535.104.12             Driver Version: 535.104.12   CUDA Version: 12.2
 ```
 
-
+### Note 
+1. (5/8) BLT = 3 produces better results than BLT = 4 in mix mapping ver2. Might switch block\_size from 1024 to 768.
