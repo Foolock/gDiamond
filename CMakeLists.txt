@@ -12,7 +12,7 @@ find_package(OpenMP REQUIRED)
 # compile and link CUDA code separately from the rest of your code to
 # speed up the build process and reduce the size of your final executable.
 set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Wall -O3 --extended-lambda --fmad=false -lineinfo")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Wall -O3 --extended-lambda --fmad=false -lineinfo --maxrregcount=32")
 
 # set compilation flags
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
@@ -22,7 +22,7 @@ set(CMAKE_CUDA_FLAGS_DEBUG "-g -G -O0")
 
 # Ensure that optimization flags (-O3) are only used in Release mode
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
-set(CMAKE_CUDA_FLAGS_RELEASE "-O3 -DNDEBUG -Wall -O3 --extended-lambda --fmad=false")
+set(CMAKE_CUDA_FLAGS_RELEASE "-O3 -DNDEBUG -Wall -O3 --extended-lambda --fmad=false --maxrregcount=32")
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   message(STATUS "Setting build type to Release ")
   set(

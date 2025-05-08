@@ -33,7 +33,7 @@ int main(int argc, char* argv[]) {
   // exp.update_FDTD_seq_check_result(num_timesteps);  
   // exp.update_FDTD_mix_mapping_sequential_ver2(num_timesteps, Tx, Ty, Tz);  
 
-  exp.print_results();
+  // exp.print_results();
 
   if(!exp.check_correctness_gpu()) {
     std::cerr << "results are wrong!\n";

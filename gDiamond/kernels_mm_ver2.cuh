@@ -74,6 +74,10 @@ __global__ void updateEH_mix_mapping_kernel_ver2(float* Ex_pad, float* Ey_pad, f
   const int E_shared_z = local_z;
 
   int global_idx;
+  // global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
+  // if(global_x == 5 && global_y == 5 && global_z == 5) {
+  //   printf("checking kernel, Hx_pad[global_idx] = %f\n", Hx_pad[global_idx]);
+  // }
   int H_shared_idx;
   int E_shared_idx;
 
@@ -342,6 +346,9 @@ __global__ void updateEH_mix_mapping_kernel_ver2(float* Ex_pad, float* Ey_pad, f
      global_y >= storeH_head_Y && global_y <= storeH_tail_Y &&
      global_z >= storeH_head_Z && global_z <= storeH_tail_Z) {
 
+    // Hx_pad_dst[global_idx] = Hx_shmem[H_shared_idx];
+    // Hy_pad_dst[global_idx] = Hy_shmem[H_shared_idx];
+    // Hz_pad_dst[global_idx] = Hz_shmem[H_shared_idx];
     Hx_pad[global_idx] = Hx_shmem[H_shared_idx];
     Hy_pad[global_idx] = Hy_shmem[H_shared_idx];
     Hz_pad[global_idx] = Hz_shmem[H_shared_idx];
@@ -354,10 +361,19 @@ __global__ void updateEH_mix_mapping_kernel_ver2(float* Ex_pad, float* Ey_pad, f
      global_y >= storeE_head_Y && global_y <= storeE_tail_Y &&
      global_z >= storeE_head_Z && global_z <= storeE_tail_Z) {
 
+    // Ex_pad_dst[global_idx] = Ex_shmem[E_shared_idx];
+    // Ey_pad_dst[global_idx] = Ey_shmem[E_shared_idx];
+    // Ez_pad_dst[global_idx] = Ez_shmem[E_shared_idx];
     Ex_pad[global_idx] = Ex_shmem[E_shared_idx];
     Ey_pad[global_idx] = Ey_shmem[E_shared_idx];
     Ez_pad[global_idx] = Ez_shmem[E_shared_idx];
   }
+
+  // if(global_x == 5 && global_y == 5 && global_z == 5) {
+  //   printf("check kernel, Ex_pad_dst[global_idx] = %f\n", Ex_pad_dst[global_idx]);
+  // }
+
+  // printf("hello\n");
 
 }
 

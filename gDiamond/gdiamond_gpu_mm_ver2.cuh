@@ -508,6 +508,8 @@ void gDiamond::_updateEH_mix_mapping_ver2(std::vector<float>& Ex_pad, std::vecto
 
 void gDiamond::update_FDTD_mix_mapping_sequential_ver2(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz) {
 
+  std::cout << "running update_FDTD_mix_mapping_sequential_ver2\n";
+
   // clear source Mz for experiments
   _Mz.clear();
 
@@ -530,21 +532,17 @@ void gDiamond::update_FDTD_mix_mapping_sequential_ver2(size_t num_timesteps, siz
   std::vector<float> Hy_pad(padded_length, 0);
   std::vector<float> Hz_pad(padded_length, 0);
 
-  // transfer data to padded arrays
-  for(size_t z = 0; z < _Nz; z++) {
-    for(size_t y = 0; y < _Ny; y++) {
-      for(size_t x = 0; x < _Nx; x++) {
-        size_t x_pad = x + LEFT_PAD_MM_V2;
-        size_t y_pad = y + LEFT_PAD_MM_V2;
-        size_t z_pad = z + LEFT_PAD_MM_V2;
-        size_t unpadded_index = x + y * _Nx + z * _Nx * _Ny;      
-        size_t padded_index = x_pad + y_pad * Nx_pad + z_pad * Nx_pad * Ny_pad;
-        Ex_pad[padded_index] = _Ex_simu[unpadded_index];
-        Ey_pad[padded_index] = _Ey_simu[unpadded_index];
-        Ez_pad[padded_index] = _Ez_simu[unpadded_index];
-        Hx_pad[padded_index] = _Hx_simu[unpadded_index];
-        Hy_pad[padded_index] = _Hy_simu[unpadded_index];
-        Hz_pad[padded_index] = _Hz_simu[unpadded_index];
+  // initialize padded arrays
+  for(size_t z = 0; z < Nz_pad; z++) {
+    for(size_t y = 0; y < Ny_pad; y++) {
+      for(size_t x = 0; x < Nx_pad; x++) {
+        size_t padded_index = x + y * Nx_pad + z * Nx_pad * Ny_pad;
+        Ex_pad[padded_index] = padded_index;
+        Ey_pad[padded_index] = padded_index;
+        Ez_pad[padded_index] = padded_index;
+        Hx_pad[padded_index] = padded_index;
+        Hy_pad[padded_index] = padded_index;
+        Hz_pad[padded_index] = padded_index;
       }
     }
   }
@@ -646,161 +644,174 @@ void gDiamond::update_FDTD_mix_mapping_sequential_ver2(size_t num_timesteps, siz
                                                  block_size,
                                                  grid_size);
 
-    // phase 2. v, m, m
-    grid_size = xx_num_v * yy_num_m * zz_num_m;
-    _updateEH_mix_mapping_ver2<false, true, true>(Ex_pad, Ey_pad, Ez_pad,
-                                            Hx_pad, Hy_pad, Hz_pad,
-                                            _Cax, _Cbx,
-                                            _Cay, _Cby,
-                                            _Caz, _Cbz,
-                                            _Dax, _Dbx,
-                                            _Day, _Dby,
-                                            _Daz, _Dbz,
-                                            _Jx, _Jy, _Jz,
-                                            _Mx, _My, _Mz,
-                                            _dx,
-                                            _Nx, _Ny, _Nz,
-                                            Nx_pad, Ny_pad, Nz_pad,
-                                            xx_num_v, yy_num_m, zz_num_m,
-                                            xx_heads_v,
-                                            yy_heads_m,
-                                            zz_heads_m,
-                                            block_size,
-                                            grid_size);
+    // // phase 2. v, m, m
+    // grid_size = xx_num_v * yy_num_m * zz_num_m;
+    // _updateEH_mix_mapping_ver2<false, true, true>(Ex_pad, Ey_pad, Ez_pad,
+    //                                         Hx_pad, Hy_pad, Hz_pad,
+    //                                         _Cax, _Cbx,
+    //                                         _Cay, _Cby,
+    //                                         _Caz, _Cbz,
+    //                                         _Dax, _Dbx,
+    //                                         _Day, _Dby,
+    //                                         _Daz, _Dbz,
+    //                                         _Jx, _Jy, _Jz,
+    //                                         _Mx, _My, _Mz,
+    //                                         _dx,
+    //                                         _Nx, _Ny, _Nz,
+    //                                         Nx_pad, Ny_pad, Nz_pad,
+    //                                         xx_num_v, yy_num_m, zz_num_m,
+    //                                         xx_heads_v,
+    //                                         yy_heads_m,
+    //                                         zz_heads_m,
+    //                                         block_size,
+    //                                         grid_size);
 
-    // phase 3. m, v, m
-    grid_size = xx_num_m * yy_num_v * zz_num_m;
-    _updateEH_mix_mapping_ver2<true, false, true>(Ex_pad, Ey_pad, Ez_pad,
-                                            Hx_pad, Hy_pad, Hz_pad,
-                                            _Cax, _Cbx,
-                                            _Cay, _Cby,
-                                            _Caz, _Cbz,
-                                            _Dax, _Dbx,
-                                            _Day, _Dby,
-                                            _Daz, _Dbz,
-                                            _Jx, _Jy, _Jz,
-                                            _Mx, _My, _Mz,
-                                            _dx,
-                                            _Nx, _Ny, _Nz,
-                                            Nx_pad, Ny_pad, Nz_pad,
-                                            xx_num_m, yy_num_v, zz_num_m,
-                                            xx_heads_m,
-                                            yy_heads_v,
-                                            zz_heads_m,
-                                            block_size,
-                                            grid_size);
+    // // phase 3. m, v, m
+    // grid_size = xx_num_m * yy_num_v * zz_num_m;
+    // _updateEH_mix_mapping_ver2<true, false, true>(Ex_pad, Ey_pad, Ez_pad,
+    //                                         Hx_pad, Hy_pad, Hz_pad,
+    //                                         _Cax, _Cbx,
+    //                                         _Cay, _Cby,
+    //                                         _Caz, _Cbz,
+    //                                         _Dax, _Dbx,
+    //                                         _Day, _Dby,
+    //                                         _Daz, _Dbz,
+    //                                         _Jx, _Jy, _Jz,
+    //                                         _Mx, _My, _Mz,
+    //                                         _dx,
+    //                                         _Nx, _Ny, _Nz,
+    //                                         Nx_pad, Ny_pad, Nz_pad,
+    //                                         xx_num_m, yy_num_v, zz_num_m,
+    //                                         xx_heads_m,
+    //                                         yy_heads_v,
+    //                                         zz_heads_m,
+    //                                         block_size,
+    //                                         grid_size);
 
-    // phase 4. m, m, v
-    grid_size = xx_num_m * yy_num_m * zz_num_v;
-    _updateEH_mix_mapping_ver2<true, true, false>(Ex_pad, Ey_pad, Ez_pad,
-                                            Hx_pad, Hy_pad, Hz_pad,
-                                            _Cax, _Cbx,
-                                            _Cay, _Cby,
-                                            _Caz, _Cbz,
-                                            _Dax, _Dbx,
-                                            _Day, _Dby,
-                                            _Daz, _Dbz,
-                                            _Jx, _Jy, _Jz,
-                                            _Mx, _My, _Mz,
-                                            _dx,
-                                            _Nx, _Ny, _Nz,
-                                            Nx_pad, Ny_pad, Nz_pad,
-                                            xx_num_m, yy_num_m, zz_num_v,
-                                            xx_heads_m,
-                                            yy_heads_m,
-                                            zz_heads_v,
-                                            block_size,
-                                            grid_size);
+    // // phase 4. m, m, v
+    // grid_size = xx_num_m * yy_num_m * zz_num_v;
+    // _updateEH_mix_mapping_ver2<true, true, false>(Ex_pad, Ey_pad, Ez_pad,
+    //                                         Hx_pad, Hy_pad, Hz_pad,
+    //                                         _Cax, _Cbx,
+    //                                         _Cay, _Cby,
+    //                                         _Caz, _Cbz,
+    //                                         _Dax, _Dbx,
+    //                                         _Day, _Dby,
+    //                                         _Daz, _Dbz,
+    //                                         _Jx, _Jy, _Jz,
+    //                                         _Mx, _My, _Mz,
+    //                                         _dx,
+    //                                         _Nx, _Ny, _Nz,
+    //                                         Nx_pad, Ny_pad, Nz_pad,
+    //                                         xx_num_m, yy_num_m, zz_num_v,
+    //                                         xx_heads_m,
+    //                                         yy_heads_m,
+    //                                         zz_heads_v,
+    //                                         block_size,
+    //                                         grid_size);
 
-    // phase 5. v, v, m
-    grid_size = xx_num_v * yy_num_v * zz_num_m;
-    _updateEH_mix_mapping_ver2<false, false, true>(Ex_pad, Ey_pad, Ez_pad,
-                                            Hx_pad, Hy_pad, Hz_pad,
-                                            _Cax, _Cbx,
-                                            _Cay, _Cby,
-                                            _Caz, _Cbz,
-                                            _Dax, _Dbx,
-                                            _Day, _Dby,
-                                            _Daz, _Dbz,
-                                            _Jx, _Jy, _Jz,
-                                            _Mx, _My, _Mz,
-                                            _dx,
-                                            _Nx, _Ny, _Nz,
-                                            Nx_pad, Ny_pad, Nz_pad,
-                                            xx_num_v, yy_num_v, zz_num_m,
-                                            xx_heads_v,
-                                            yy_heads_v,
-                                            zz_heads_m,
-                                            block_size,
-                                            grid_size);
+    // // phase 5. v, v, m
+    // grid_size = xx_num_v * yy_num_v * zz_num_m;
+    // _updateEH_mix_mapping_ver2<false, false, true>(Ex_pad, Ey_pad, Ez_pad,
+    //                                         Hx_pad, Hy_pad, Hz_pad,
+    //                                         _Cax, _Cbx,
+    //                                         _Cay, _Cby,
+    //                                         _Caz, _Cbz,
+    //                                         _Dax, _Dbx,
+    //                                         _Day, _Dby,
+    //                                         _Daz, _Dbz,
+    //                                         _Jx, _Jy, _Jz,
+    //                                         _Mx, _My, _Mz,
+    //                                         _dx,
+    //                                         _Nx, _Ny, _Nz,
+    //                                         Nx_pad, Ny_pad, Nz_pad,
+    //                                         xx_num_v, yy_num_v, zz_num_m,
+    //                                         xx_heads_v,
+    //                                         yy_heads_v,
+    //                                         zz_heads_m,
+    //                                         block_size,
+    //                                         grid_size);
 
-    // phase 6. v, m, v
-    grid_size = xx_num_v * yy_num_m * zz_num_v;
-    _updateEH_mix_mapping_ver2<false, true, false>(Ex_pad, Ey_pad, Ez_pad,
-                                            Hx_pad, Hy_pad, Hz_pad,
-                                            _Cax, _Cbx,
-                                            _Cay, _Cby,
-                                            _Caz, _Cbz,
-                                            _Dax, _Dbx,
-                                            _Day, _Dby,
-                                            _Daz, _Dbz,
-                                            _Jx, _Jy, _Jz,
-                                            _Mx, _My, _Mz,
-                                            _dx,
-                                            _Nx, _Ny, _Nz,
-                                            Nx_pad, Ny_pad, Nz_pad,
-                                            xx_num_v, yy_num_m, zz_num_v,
-                                            xx_heads_v,
-                                            yy_heads_m,
-                                            zz_heads_v,
-                                            block_size,
-                                            grid_size);
+    // // phase 6. v, m, v
+    // grid_size = xx_num_v * yy_num_m * zz_num_v;
+    // _updateEH_mix_mapping_ver2<false, true, false>(Ex_pad, Ey_pad, Ez_pad,
+    //                                         Hx_pad, Hy_pad, Hz_pad,
+    //                                         _Cax, _Cbx,
+    //                                         _Cay, _Cby,
+    //                                         _Caz, _Cbz,
+    //                                         _Dax, _Dbx,
+    //                                         _Day, _Dby,
+    //                                         _Daz, _Dbz,
+    //                                         _Jx, _Jy, _Jz,
+    //                                         _Mx, _My, _Mz,
+    //                                         _dx,
+    //                                         _Nx, _Ny, _Nz,
+    //                                         Nx_pad, Ny_pad, Nz_pad,
+    //                                         xx_num_v, yy_num_m, zz_num_v,
+    //                                         xx_heads_v,
+    //                                         yy_heads_m,
+    //                                         zz_heads_v,
+    //                                         block_size,
+    //                                         grid_size);
 
-    // phase 7. m, v, v
-    grid_size = xx_num_m * yy_num_v * zz_num_v;
-    _updateEH_mix_mapping_ver2<true, false, false>(Ex_pad, Ey_pad, Ez_pad,
-                                            Hx_pad, Hy_pad, Hz_pad,
-                                            _Cax, _Cbx,
-                                            _Cay, _Cby,
-                                            _Caz, _Cbz,
-                                            _Dax, _Dbx,
-                                            _Day, _Dby,
-                                            _Daz, _Dbz,
-                                            _Jx, _Jy, _Jz,
-                                            _Mx, _My, _Mz,
-                                            _dx,
-                                            _Nx, _Ny, _Nz,
-                                            Nx_pad, Ny_pad, Nz_pad,
-                                            xx_num_m, yy_num_v, zz_num_v,
-                                            xx_heads_m,
-                                            yy_heads_v,
-                                            zz_heads_v,
-                                            block_size,
-                                            grid_size);
+    // // phase 7. m, v, v
+    // grid_size = xx_num_m * yy_num_v * zz_num_v;
+    // _updateEH_mix_mapping_ver2<true, false, false>(Ex_pad, Ey_pad, Ez_pad,
+    //                                         Hx_pad, Hy_pad, Hz_pad,
+    //                                         _Cax, _Cbx,
+    //                                         _Cay, _Cby,
+    //                                         _Caz, _Cbz,
+    //                                         _Dax, _Dbx,
+    //                                         _Day, _Dby,
+    //                                         _Daz, _Dbz,
+    //                                         _Jx, _Jy, _Jz,
+    //                                         _Mx, _My, _Mz,
+    //                                         _dx,
+    //                                         _Nx, _Ny, _Nz,
+    //                                         Nx_pad, Ny_pad, Nz_pad,
+    //                                         xx_num_m, yy_num_v, zz_num_v,
+    //                                         xx_heads_m,
+    //                                         yy_heads_v,
+    //                                         zz_heads_v,
+    //                                         block_size,
+    //                                         grid_size);
 
-    // phase 8. v, v, v
-    grid_size = xx_num_v * yy_num_v * zz_num_v;
-    _updateEH_mix_mapping_ver2<false, false, false>(Ex_pad, Ey_pad, Ez_pad,
-                                                    Hx_pad, Hy_pad, Hz_pad,
-                                                    _Cax, _Cbx,
-                                                    _Cay, _Cby,
-                                                    _Caz, _Cbz,
-                                                    _Dax, _Dbx,
-                                                    _Day, _Dby,
-                                                    _Daz, _Dbz,
-                                                    _Jx, _Jy, _Jz,
-                                                    _Mx, _My, _Mz,
-                                                    _dx,
-                                                    _Nx, _Ny, _Nz,
-                                                    Nx_pad, Ny_pad, Nz_pad,
-                                                    xx_num_v, yy_num_v, zz_num_v,
-                                                    xx_heads_v,
-                                                    yy_heads_v,
-                                                    zz_heads_v,
-                                                    block_size,
-                                                    grid_size);
+    // // phase 8. v, v, v
+    // grid_size = xx_num_v * yy_num_v * zz_num_v;
+    // _updateEH_mix_mapping_ver2<false, false, false>(Ex_pad, Ey_pad, Ez_pad,
+    //                                                 Hx_pad, Hy_pad, Hz_pad,
+    //                                                 _Cax, _Cbx,
+    //                                                 _Cay, _Cby,
+    //                                                 _Caz, _Cbz,
+    //                                                 _Dax, _Dbx,
+    //                                                 _Day, _Dby,
+    //                                                 _Daz, _Dbz,
+    //                                                 _Jx, _Jy, _Jz,
+    //                                                 _Mx, _My, _Mz,
+    //                                                 _dx,
+    //                                                 _Nx, _Ny, _Nz,
+    //                                                 Nx_pad, Ny_pad, Nz_pad,
+    //                                                 xx_num_v, yy_num_v, zz_num_v,
+    //                                                 xx_heads_v,
+    //                                                 yy_heads_v,
+    //                                                 zz_heads_v,
+    //                                                 block_size,
+    //                                                 grid_size);
 
   }
+
+  // check padded arrays
+  // for(size_t z = 0; z < Nz_pad; z++) {
+  //   for(size_t y = 0; y < Ny_pad; y++) {
+  //     for(size_t x = 0; x < Nx_pad; x++) {
+  //       size_t padded_index = x + y * Nx_pad + z * Nx_pad * Ny_pad;
+  //       if(Ex_pad[padded_index] != 0) {
+  //         std::cout << "(x, y, z) = " << x << ", " << y << ", " << z << ", ";
+  //         std::cout << "Ex_pad[padded_index] = " << Ex_pad[padded_index] << "\n";
+  //       }
+  //     }
+  //   }
+  // }
 
   // transfer data back to unpadded arrays
   for(size_t z = 0; z < _Nz; z++) {
@@ -825,6 +836,8 @@ void gDiamond::update_FDTD_mix_mapping_sequential_ver2(size_t num_timesteps, siz
 
 void gDiamond::update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz) {
 
+  std::cout << "running update_FDTD_mix_mapping_gpu_ver2\n";
+
   // pad E, H array
   const size_t Nx_pad = _Nx + LEFT_PAD_MM_V2 + RIGHT_PAD_MM_V2; 
   const size_t Ny_pad = _Ny + LEFT_PAD_MM_V2 + RIGHT_PAD_MM_V2; 
@@ -837,6 +850,21 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx,
   std::vector<float> Hx_pad(padded_length, 0);
   std::vector<float> Hy_pad(padded_length, 0);
   std::vector<float> Hz_pad(padded_length, 0);
+
+  // // initialize padded arrays
+  // for(size_t z = 0; z < Nz_pad; z++) {
+  //   for(size_t y = 0; y < Ny_pad; y++) {
+  //     for(size_t x = 0; x < Nx_pad; x++) {
+  //       size_t padded_index = x + y * Nx_pad + z * Nx_pad * Ny_pad;
+  //       Ex_pad[padded_index] = padded_index;
+  //       Ey_pad[padded_index] = padded_index;
+  //       Ez_pad[padded_index] = padded_index;
+  //       Hx_pad[padded_index] = padded_index;
+  //       Hy_pad[padded_index] = padded_index;
+  //       Hz_pad[padded_index] = padded_index;
+  //     }
+  //   }
+  // }
 
   // tiling parameters
   size_t xx_num_m = Tx + 1;
@@ -955,7 +983,7 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx,
   CUDACHECK(cudaMalloc(&d_zz_heads_m, sizeof(int) * zz_num_m));
   CUDACHECK(cudaMalloc(&d_zz_heads_v, sizeof(int) * zz_num_v));
 
-  // initialize E, H as 0
+  // // initialize E, H as 0
   CUDACHECK(cudaMemset(d_Ex_pad, 0, sizeof(float) * padded_length));
   CUDACHECK(cudaMemset(d_Ey_pad, 0, sizeof(float) * padded_length));
   CUDACHECK(cudaMemset(d_Ez_pad, 0, sizeof(float) * padded_length));
@@ -1015,26 +1043,35 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx,
   std::cout << "block_size = " << block_size << "\n";
   size_t grid_size;
 
+  auto start = std::chrono::high_resolution_clock::now();
+
   for(size_t tt = 0; tt < num_timesteps / BLT_MM_V2; tt++) {
     // phase 1. m, m, m
     grid_size = xx_num_m * yy_num_m * zz_num_m;
+    // std::cerr << "grid_size = " << grid_size << "\n";
     updateEH_mix_mapping_kernel_ver2<true, true, true><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
-                                                                             d_Hx_pad, d_Hy_pad, d_Hz_pad,
-                                                                             Cax, Cbx,
-                                                                             Cay, Cby,
-                                                                             Caz, Cbz,
-                                                                             Dax, Dbx,
-                                                                             Day, Dby,
-                                                                             Daz, Dbz,
-                                                                             Jx, Jy, Jz,
-                                                                             Mx, My, Mz,
-                                                                             _dx,
-                                                                             _Nx, _Ny, _Nz,
-                                                                             Nx_pad, Ny_pad, Nz_pad,
-                                                                             xx_num_m, yy_num_m, zz_num_m,
-                                                                             d_xx_heads_m,
-                                                                             d_yy_heads_m,
-                                                                             d_zz_heads_m);
+                                                                                  d_Hx_pad, d_Hy_pad, d_Hz_pad,
+                                                                                  Cax, Cbx,
+                                                                                  Cay, Cby,
+                                                                                  Caz, Cbz,
+                                                                                  Dax, Dbx,
+                                                                                  Day, Dby,
+                                                                                  Daz, Dbz,
+                                                                                  Jx, Jy, Jz,
+                                                                                  Mx, My, Mz,
+                                                                                  _dx,
+                                                                                  _Nx, _Ny, _Nz,
+                                                                                  Nx_pad, Ny_pad, Nz_pad,
+                                                                                  xx_num_m, yy_num_m, zz_num_m,
+                                                                                  d_xx_heads_m,
+                                                                                  d_yy_heads_m,
+                                                                                  d_zz_heads_m);
+
+    // // Add this line right after the kernel launch
+    // cudaError_t err = cudaGetLastError();
+    // if (err != cudaSuccess) {
+    //   printf("CUDA kernel launch error: %s\n", cudaGetErrorString(err));
+    // }
 
     // phase 2. v, m, m
     grid_size = xx_num_v * yy_num_m * zz_num_m;
@@ -1178,6 +1215,10 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx,
   }
   cudaDeviceSynchronize();
 
+  auto end = std::chrono::high_resolution_clock::now();
+  std::cout << "gpu runtime (mix mapping ver2): " << std::chrono::duration<double>(end-start).count() << "s\n"; 
+  std::cout << "gpu performance: " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / std::chrono::duration<double>(end-start).count() << "Mcells/s\n";
+
   // copy E, H back to host
   CUDACHECK(cudaMemcpyAsync(Ex_pad.data(), d_Ex_pad, sizeof(float) * padded_length, cudaMemcpyDeviceToHost));
   CUDACHECK(cudaMemcpyAsync(Ey_pad.data(), d_Ey_pad, sizeof(float) * padded_length, cudaMemcpyDeviceToHost));
@@ -1185,19 +1226,6 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx,
   CUDACHECK(cudaMemcpyAsync(Hx_pad.data(), d_Hx_pad, sizeof(float) * padded_length, cudaMemcpyDeviceToHost));
   CUDACHECK(cudaMemcpyAsync(Hy_pad.data(), d_Hy_pad, sizeof(float) * padded_length, cudaMemcpyDeviceToHost));
   CUDACHECK(cudaMemcpyAsync(Hz_pad.data(), d_Hz_pad, sizeof(float) * padded_length, cudaMemcpyDeviceToHost));
-
-  // check padded arrays
-  for(size_t z = 0; z < Nz_pad; z++) {
-    for(size_t y = 0; y < Ny_pad; y++) {
-      for(size_t x = 0; x < Nx_pad; x++) {
-        size_t padded_index = x + y * Nx_pad + z * Nx_pad * Ny_pad;
-        if(Ex_pad[padded_index] != 0) {
-          std::cout << "(x, y, z) = " << x << ", " << y << ", " << z << ", ";
-          std::cout << "Ex_pad[padded_index] = " << Ex_pad[padded_index] << "\n";
-        }
-      }
-    }
-  }
 
   // transfer data back to unpadded arrays
   for(size_t z = 0; z < _Nz; z++) {
