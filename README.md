@@ -30,3 +30,4 @@ nvidia-smi
 
 ### Note 
 1. (5/8) BLT = 3 produces better results than BLT = 4 in mix mapping ver2. Might switch block\_size from 1024 to 768.
+2. (5/8) For mix mapping ver2, the unrolled version, --maxrregcount = 72 or 64 or without this flag, reaches best performance. The pre-unrolled version reaches best performance with --maxrregcount = 32 (cannot run without the flag). Need NCU report to support this. (check occupancy).

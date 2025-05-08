@@ -1049,7 +1049,7 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx,
     // phase 1. m, m, m
     grid_size = xx_num_m * yy_num_m * zz_num_m;
     // std::cerr << "grid_size = " << grid_size << "\n";
-    updateEH_mix_mapping_kernel_ver2<true, true, true><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
+    updateEH_mix_mapping_kernel_ver2_unroll<true, true, true><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
                                                                                   d_Hx_pad, d_Hy_pad, d_Hz_pad,
                                                                                   Cax, Cbx,
                                                                                   Cay, Cby,
@@ -1067,15 +1067,11 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx,
                                                                                   d_yy_heads_m,
                                                                                   d_zz_heads_m);
 
-    // // Add this line right after the kernel launch
-    // cudaError_t err = cudaGetLastError();
-    // if (err != cudaSuccess) {
-    //   printf("CUDA kernel launch error: %s\n", cudaGetErrorString(err));
-    // }
+    
 
     // phase 2. v, m, m
     grid_size = xx_num_v * yy_num_m * zz_num_m;
-    updateEH_mix_mapping_kernel_ver2<false, true, true><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
+    updateEH_mix_mapping_kernel_ver2_unroll<false, true, true><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
                                                                              d_Hx_pad, d_Hy_pad, d_Hz_pad,
                                                                              Cax, Cbx,
                                                                              Cay, Cby,
@@ -1095,7 +1091,7 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx,
 
     // phase 3. m, v, m
     grid_size = xx_num_m * yy_num_v * zz_num_m;
-    updateEH_mix_mapping_kernel_ver2<true, false, true><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
+    updateEH_mix_mapping_kernel_ver2_unroll<true, false, true><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
                                                                              d_Hx_pad, d_Hy_pad, d_Hz_pad,
                                                                              Cax, Cbx,
                                                                              Cay, Cby,
@@ -1115,7 +1111,7 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx,
 
     // phase 4. m, m, v
     grid_size = xx_num_m * yy_num_m * zz_num_v;
-    updateEH_mix_mapping_kernel_ver2<true, true, false><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
+    updateEH_mix_mapping_kernel_ver2_unroll<true, true, false><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
                                                                              d_Hx_pad, d_Hy_pad, d_Hz_pad,
                                                                              Cax, Cbx,
                                                                              Cay, Cby,
@@ -1135,7 +1131,7 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx,
 
     // phase 5. v, v, m
     grid_size = xx_num_v * yy_num_v * zz_num_m;
-    updateEH_mix_mapping_kernel_ver2<false, false, true><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
+    updateEH_mix_mapping_kernel_ver2_unroll<false, false, true><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
                                                                              d_Hx_pad, d_Hy_pad, d_Hz_pad,
                                                                              Cax, Cbx,
                                                                              Cay, Cby,
@@ -1155,7 +1151,7 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx,
 
     // phase 6. v, m, v
     grid_size = xx_num_v * yy_num_m * zz_num_v;
-    updateEH_mix_mapping_kernel_ver2<false, true, false><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
+    updateEH_mix_mapping_kernel_ver2_unroll<false, true, false><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
                                                                              d_Hx_pad, d_Hy_pad, d_Hz_pad,
                                                                              Cax, Cbx,
                                                                              Cay, Cby,
@@ -1175,7 +1171,7 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx,
 
     // phase 7. m, v, v
     grid_size = xx_num_m * yy_num_v * zz_num_v;
-    updateEH_mix_mapping_kernel_ver2<true, false, false><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
+    updateEH_mix_mapping_kernel_ver2_unroll<true, false, false><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
                                                                              d_Hx_pad, d_Hy_pad, d_Hz_pad,
                                                                              Cax, Cbx,
                                                                              Cay, Cby,
@@ -1195,7 +1191,7 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx,
 
     // phase 8. v, v, v 
     grid_size = xx_num_v * yy_num_v * zz_num_v;
-    updateEH_mix_mapping_kernel_ver2<false, false, false><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
+    updateEH_mix_mapping_kernel_ver2_unroll<false, false, false><<<grid_size, block_size>>>(d_Ex_pad, d_Ey_pad, d_Ez_pad,
                                                                              d_Hx_pad, d_Hy_pad, d_Hz_pad,
                                                                              Cax, Cbx,
                                                                              Cay, Cby,
@@ -1212,6 +1208,10 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx,
                                                                              d_xx_heads_v,
                                                                              d_yy_heads_v,
                                                                              d_zz_heads_v);
+    // cudaError_t err = cudaGetLastError();
+    // if (err != cudaSuccess) {
+    //   printf("CUDA kernel launch error: %s\n", cudaGetErrorString(err));
+    // }
   }
   cudaDeviceSynchronize();
 
