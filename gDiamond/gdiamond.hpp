@@ -1958,27 +1958,27 @@ void gDiamond::_setup_diamond_tiling_gpu(size_t BLX, size_t BLY, size_t BLZ, siz
 
 void gDiamond::print_results() {
 
-  std::cout << "Ex_gpu_bl = \n";
+  std::cout << "Ex_seq = \n";
   for(size_t k=1; k<_Nz-1; k++) {
     for(size_t j=1; j<_Ny-1; j++) {
       for(size_t i=1; i<_Nx-1; i++) {
         size_t idx = i + j*_Nx + k*(_Nx*_Ny);
-        if(_Ex_gpu_bl[idx] != 0) { 
+        if(_Ex_seq[idx] != 0) { 
           std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
-          std::cout << "Ex_gpu_bl[idx] = " << _Ex_gpu_bl[idx] << "\n";
+          std::cout << "Ex_seq[idx] = " << _Ex_seq[idx] << "\n";
         }
       }
     }
   }
 
-  std::cout << "Ex_gpu = \n";
+  std::cout << "Ex_simu = \n";
   for(size_t k=1; k<_Nz-1; k++) {
     for(size_t j=1; j<_Ny-1; j++) {
       for(size_t i=1; i<_Nx-1; i++) {
         size_t idx = i + j*_Nx + k*(_Nx*_Ny);
-        if(_Ex_gpu[idx] != 0) { 
+        if(_Ex_simu[idx] != 0) { 
           std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
-          std::cout << "Ex_gpu[idx] = " << _Ex_gpu[idx] << "\n";
+          std::cout << "Ex_simu[idx] = " << _Ex_simu[idx] << "\n";
         }
       }
     }

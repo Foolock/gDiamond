@@ -279,17 +279,20 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
     const int storeH_head_Z = storeE_head_Z;
     const int storeH_tail_Z = storeE_tail_Z - 1; 
 
-    // if(xx == 0 && yy == 0 && zz == 0) {
-    //   std::cout << "storeE_head_X = " << storeE_head_X << ", storeE_tail_X = " << storeE_tail_X
-    //             << ", storeH_head_X = " << storeH_head_X << ", storeH_tail_X = " << storeH_tail_X << "\n";
-    //   std::cout << "storeE_head_Y = " << storeE_head_Y << ", storeE_tail_Y = " << storeE_tail_Y
-    //             << ", storeH_head_Y = " << storeH_head_Y << ", storeH_tail_Y = " << storeH_tail_Y << "\n";
-    //   std::cout << "storeE_head_Z = " << storeE_head_Z << ", storeE_tail_Z = " << storeE_tail_Z
-    //             << ", storeH_head_Z = " << storeH_head_Z << ", storeH_tail_Z = " << storeH_tail_Z << "\n";
-    // }
+    // std::cout << "xx = " << xx << ", yy = " << yy << ", zz = " << zz << "\n";
+    // std::cout << "storeE_head_X = " << storeE_head_X << ", storeE_tail_X = " << storeE_tail_X
+    //           << ", storeH_head_X = " << storeH_head_X << ", storeH_tail_X = " << storeH_tail_X << "\n";
+    // std::cout << "storeE_head_Y = " << storeE_head_Y << ", storeE_tail_Y = " << storeE_tail_Y
+    //           << ", storeH_head_Y = " << storeH_head_Y << ", storeH_tail_Y = " << storeH_tail_Y << "\n";
+    // std::cout << "storeE_head_Z = " << storeE_head_Z << ", storeE_tail_Z = " << storeE_tail_Z
+    //           << ", storeH_head_Z = " << storeH_head_Z << ", storeH_tail_Z = " << storeH_tail_Z << "\n";
+    // std::cout << "\n";
 
     for(size_t thread_id = 0; thread_id < block_size; thread_id++) {
       
+      local_x = thread_id % NTX_MM_V3;
+      local_y = (thread_id / NTX_MM_V3) % NTY_MM_V3;
+      local_z = thread_id / (NTX_MM_V3 * NTY_MM_V3);
       H_shared_x = local_x + 1;
       H_shared_y = local_y + 1;
       H_shared_z = local_z + 1;
@@ -411,11 +414,10 @@ void gDiamond::update_FDTD_mix_mapping_sequential_ver3(size_t num_timesteps, siz
 
   size_t block_size = NTX_MM_V3 * NTY_MM_V3 * NTZ_MM_V3;
   std::cout << "block_size = " << block_size << "\n";
-  size_t grid_size;
+  size_t grid_size = xx_num * yy_num * zz_num;
 
   for(size_t tt = 0; tt < num_timesteps / BLT_MM_V3; tt++) {
     
-    grid_size = xx_num * yy_num * zz_num;
     _updateEH_mix_mapping_ver3(Ex_pad_src, Ey_pad_src, Ez_pad_src,
                                Hx_pad_src, Hy_pad_src, Hz_pad_src,
                                Ex_pad_dst, Ey_pad_dst, Ez_pad_dst,
