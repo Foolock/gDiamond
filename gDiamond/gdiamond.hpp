@@ -148,8 +148,10 @@ class gDiamond {
     // mix mapping for 3D diamond tiling
     void update_FDTD_mix_mapping_sequential(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // simulate GPU workflow  
     void update_FDTD_mix_mapping_sequential_ver2(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
+    void update_FDTD_mix_mapping_sequential_ver3(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
     void update_FDTD_mix_mapping_gpu(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
     void update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
+    void update_FDTD_mix_mapping_gpu_ver3(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
 
     // check correctness
     bool check_correctness_gpu_2D();
@@ -189,6 +191,29 @@ class gDiamond {
     template <bool X_is_mountain, bool Y_is_mountain, bool Z_is_mountain>
     void _updateEH_mix_mapping_ver2(std::vector<float>& Ex_pad, std::vector<float>& Ey_pad, std::vector<float>& Ez_pad,
                                     std::vector<float>& Hx_pad, std::vector<float>& Hy_pad, std::vector<float>& Hz_pad,
+                                    const std::vector<float>& Cax, const std::vector<float>& Cbx,
+                                    const std::vector<float>& Cay, const std::vector<float>& Cby,
+                                    const std::vector<float>& Caz, const std::vector<float>& Cbz,
+                                    const std::vector<float>& Dax, const std::vector<float>& Dbx,
+                                    const std::vector<float>& Day, const std::vector<float>& Dby,
+                                    const std::vector<float>& Daz, const std::vector<float>& Dbz,
+                                    const std::vector<float>& Jx, const std::vector<float>& Jy, const std::vector<float>& Jz,
+                                    const std::vector<float>& Mx, const std::vector<float>& My, const std::vector<float>& Mz,
+                                    float dx, 
+                                    int Nx, int Ny, int Nz,
+                                    int Nx_pad, int Ny_pad, int Nz_pad, 
+                                    int xx_num, int yy_num, int zz_num, 
+                                    const std::vector<int>& xx_heads, 
+                                    const std::vector<int>& yy_heads,
+                                    const std::vector<int>& zz_heads,
+                                    size_t block_size,
+                                    size_t grid_size);
+
+    // notice that for overlapped mix mapping ver3, we need to have a src and dst copy of E, H data
+    void _updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::vector<float>& Ey_pad_src, std::vector<float>& Ez_pad_src,
+                                    std::vector<float>& Hx_pad_src, std::vector<float>& Hy_pad_src, std::vector<float>& Hz_pad_src,
+                                    std::vector<float>& Ex_pad_dst, std::vector<float>& Ey_pad_dst, std::vector<float>& Ez_pad_dst,
+                                    std::vector<float>& Hx_pad_dst, std::vector<float>& Hy_pad_dst, std::vector<float>& Hz_pad_dst,
                                     const std::vector<float>& Cax, const std::vector<float>& Cbx,
                                     const std::vector<float>& Cay, const std::vector<float>& Cby,
                                     const std::vector<float>& Caz, const std::vector<float>& Cbz,

@@ -13,6 +13,7 @@ add_executable(seq ${GDIAMOND_EXAMPLE_DIR}/seq.cpp)
 add_executable(seq_figures ${GDIAMOND_EXAMPLE_DIR}/seq_figures.cpp)
 add_executable(gpu_mm ${GDIAMOND_EXAMPLE_DIR}/gpu_mm.cu)
 add_executable(gpu_mm_ver2 ${GDIAMOND_EXAMPLE_DIR}/gpu_mm_ver2.cu)
+add_executable(gpu_mm_ver3 ${GDIAMOND_EXAMPLE_DIR}/gpu_mm_ver3.cu)
 
 list(APPEND GDIAMOND_EXAMPLES
   gpu
@@ -29,6 +30,7 @@ list(APPEND GDIAMOND_EXAMPLES
   seq_figures
   gpu_mm
   gpu_mm_ver2
+  gpu_mm_ver3
 )
 
 find_package(OpenMP)
