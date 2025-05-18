@@ -17,6 +17,8 @@
    }                                                                       \
 } (void)0  // Ensures a semicolon is required after the macro call.
 
+#define SWAP_PTR(a, b) do { auto _tmp = (a); (a) = (b); (b) = _tmp; } while (0)
+
 namespace gdiamond {
 
 // notice that for overlapped mix mapping ver3, we need to have a src and dst copy of E, H data
@@ -55,12 +57,12 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
     int E_shared_idx;
 
     // declare shared memory
-    float Hx_shmem[H_SHX * H_SHY * H_SHZ];
-    float Hy_shmem[H_SHX * H_SHY * H_SHZ];
-    float Hz_shmem[H_SHX * H_SHY * H_SHZ];
-    float Ex_shmem[E_SHX * E_SHY * E_SHZ];
-    float Ey_shmem[E_SHX * E_SHY * E_SHZ];
-    float Ez_shmem[E_SHX * E_SHY * E_SHZ];
+    float Hx_shmem[H_SHX_V3 * H_SHY_V3 * H_SHZ_V3];
+    float Hy_shmem[H_SHX_V3 * H_SHY_V3 * H_SHZ_V3];
+    float Hz_shmem[H_SHX_V3 * H_SHY_V3 * H_SHZ_V3];
+    float Ex_shmem[E_SHX_V3 * E_SHY_V3 * E_SHZ_V3];
+    float Ey_shmem[E_SHX_V3 * E_SHY_V3 * E_SHZ_V3];
+    float Ez_shmem[E_SHX_V3 * E_SHY_V3 * E_SHZ_V3];
 
     // load shared memory
     for(size_t thread_id = 0; thread_id < block_size; thread_id++) {
@@ -83,8 +85,8 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
       global_z = zz_heads[zz] + local_z;
 
       // load core ---------------------------------------------
-      H_shared_idx = H_shared_x + H_shared_y * H_SHX + H_shared_z * H_SHX * H_SHY;
-      E_shared_idx = E_shared_x + E_shared_y * E_SHX + E_shared_z * E_SHX * E_SHY;
+      H_shared_idx = H_shared_x + H_shared_y * H_SHX_V3 + H_shared_z * H_SHX_V3 * H_SHY_V3;
+      E_shared_idx = E_shared_x + E_shared_y * E_SHX_V3 + E_shared_z * E_SHX_V3 * E_SHY_V3;
       global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
       Hx_shmem[H_shared_idx] = Hx_pad_src[global_idx];
       Hy_shmem[H_shared_idx] = Hy_pad_src[global_idx];
@@ -99,7 +101,7 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
         int global_x_halo = xx_heads[xx] + halo_x - 1;
 
         global_idx = global_x_halo + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-        H_shared_idx = halo_x + H_shared_y * H_SHX + H_shared_z * H_SHX * H_SHY;
+        H_shared_idx = halo_x + H_shared_y * H_SHX_V3 + H_shared_z * H_SHX_V3 * H_SHY_V3;
 
         Hx_shmem[H_shared_idx] = Hx_pad_src[global_idx];
         Hy_shmem[H_shared_idx] = Hy_pad_src[global_idx];
@@ -110,7 +112,7 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
         int global_y_halo = yy_heads[yy] + halo_y - 1;
 
         global_idx = global_x + global_y_halo * Nx_pad + global_z * Nx_pad * Ny_pad;
-        H_shared_idx = H_shared_x + halo_y * H_SHX + H_shared_z * H_SHX * H_SHY;
+        H_shared_idx = H_shared_x + halo_y * H_SHX_V3 + H_shared_z * H_SHX_V3 * H_SHY_V3;
 
         Hx_shmem[H_shared_idx] = Hx_pad_src[global_idx];
         Hy_shmem[H_shared_idx] = Hy_pad_src[global_idx];
@@ -121,7 +123,7 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
         int global_z_halo = zz_heads[zz] + halo_z - 1;
 
         global_idx = global_x + global_y * Nx_pad + global_z_halo * Nx_pad * Ny_pad;
-        H_shared_idx = H_shared_x + H_shared_y * H_SHX + halo_z * H_SHX * H_SHY;
+        H_shared_idx = H_shared_x + H_shared_y * H_SHX_V3 + halo_z * H_SHX_V3 * H_SHY_V3;
 
         Hx_shmem[H_shared_idx] = Hx_pad_src[global_idx];
         Hy_shmem[H_shared_idx] = Hy_pad_src[global_idx];
@@ -134,7 +136,7 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
         int global_x_halo = xx_heads[xx] + halo_x;
 
         global_idx = global_x_halo + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-        E_shared_idx = halo_x + E_shared_y * E_SHX + E_shared_z * E_SHX * E_SHY;
+        E_shared_idx = halo_x + E_shared_y * E_SHX_V3 + E_shared_z * E_SHX_V3 * E_SHY_V3;
 
         Ex_shmem[E_shared_idx] = Ex_pad_src[global_idx];
         Ey_shmem[E_shared_idx] = Ey_pad_src[global_idx];
@@ -145,7 +147,7 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
         int global_y_halo = yy_heads[yy] + halo_y;
 
         global_idx = global_x + global_y_halo * Nx_pad + global_z * Nx_pad * Ny_pad;
-        E_shared_idx = E_shared_x + halo_y * E_SHX + E_shared_z * E_SHX * E_SHY;
+        E_shared_idx = E_shared_x + halo_y * E_SHX_V3 + E_shared_z * E_SHX_V3 * E_SHY_V3;
 
         Ex_shmem[E_shared_idx] = Ex_pad_src[global_idx];
         Ey_shmem[E_shared_idx] = Ey_pad_src[global_idx];
@@ -156,7 +158,7 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
         int global_z_halo = zz_heads[zz] + halo_z;
 
         global_idx = global_x + global_y * Nx_pad + global_z_halo * Nx_pad * Ny_pad;
-        E_shared_idx = E_shared_x + E_shared_y * E_SHX + halo_z * E_SHX * E_SHY;
+        E_shared_idx = E_shared_x + E_shared_y * E_SHX_V3 + halo_z * E_SHX_V3 * E_SHY_V3;
 
         Ex_shmem[E_shared_idx] = Ex_pad_src[global_idx];
         Ey_shmem[E_shared_idx] = Ey_pad_src[global_idx];
@@ -202,8 +204,8 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
 
         // we pad all the dimension, so need to substract LEFT_PAD here to correctly access constant arrays
         global_idx = (global_x - LEFT_PAD_MM_V3) + (global_y - LEFT_PAD_MM_V3) * Nx + (global_z - LEFT_PAD_MM_V3) * Nx * Ny;
-        E_shared_idx = E_shared_x + E_shared_y * E_SHX + E_shared_z * E_SHX * E_SHY;
-        H_shared_idx = H_shared_x + H_shared_y * H_SHX + H_shared_z * H_SHX * H_SHY;
+        E_shared_idx = E_shared_x + E_shared_y * E_SHX_V3 + E_shared_z * E_SHX_V3 * E_SHY_V3;
+        H_shared_idx = H_shared_x + H_shared_y * H_SHX_V3 + H_shared_z * H_SHX_V3 * H_SHY_V3;
 
         if(global_x >= 1 + LEFT_PAD_MM_V3 && global_x <= Nx - 2 + LEFT_PAD_MM_V3 &&
            global_y >= 1 + LEFT_PAD_MM_V3 && global_y <= Ny - 2 + LEFT_PAD_MM_V3 &&
@@ -213,13 +215,13 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
            global_z >= calE_head_Z && global_z <= calE_tail_Z) {
 
           Ex_shmem[E_shared_idx] = Cax[global_idx] * Ex_shmem[E_shared_idx] + Cbx[global_idx] *
-                    ((Hz_shmem[H_shared_idx] - Hz_shmem[H_shared_idx - H_SHX]) - (Hy_shmem[H_shared_idx] - Hy_shmem[H_shared_idx - H_SHX * H_SHY]) - Jx[global_idx] * dx);
+                    ((Hz_shmem[H_shared_idx] - Hz_shmem[H_shared_idx - H_SHX_V3]) - (Hy_shmem[H_shared_idx] - Hy_shmem[H_shared_idx - H_SHX_V3 * H_SHY_V3]) - Jx[global_idx] * dx);
 
           Ey_shmem[E_shared_idx] = Cay[global_idx] * Ey_shmem[E_shared_idx] + Cby[global_idx] *
-                    ((Hx_shmem[H_shared_idx] - Hx_shmem[H_shared_idx - H_SHX * H_SHY]) - (Hz_shmem[H_shared_idx] - Hz_shmem[H_shared_idx - 1]) - Jy[global_idx] * dx);
+                    ((Hx_shmem[H_shared_idx] - Hx_shmem[H_shared_idx - H_SHX_V3 * H_SHY_V3]) - (Hz_shmem[H_shared_idx] - Hz_shmem[H_shared_idx - 1]) - Jy[global_idx] * dx);
 
           Ez_shmem[E_shared_idx] = Caz[global_idx] * Ez_shmem[E_shared_idx] + Cbz[global_idx] *
-                    ((Hy_shmem[H_shared_idx] - Hy_shmem[H_shared_idx - 1]) - (Hx_shmem[H_shared_idx] - Hx_shmem[H_shared_idx - H_SHX]) - Jz[global_idx] * dx);
+                    ((Hy_shmem[H_shared_idx] - Hy_shmem[H_shared_idx - 1]) - (Hx_shmem[H_shared_idx] - Hx_shmem[H_shared_idx - H_SHX_V3]) - Jz[global_idx] * dx);
         }
       }
 
@@ -240,8 +242,8 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
         global_z = zz_heads[zz] + local_z;
 
         global_idx = (global_x - LEFT_PAD_MM_V3) + (global_y - LEFT_PAD_MM_V3) * Nx + (global_z - LEFT_PAD_MM_V3) * Nx * Ny;
-        E_shared_idx = E_shared_x + E_shared_y * E_SHX + E_shared_z * E_SHX * E_SHY;
-        H_shared_idx = H_shared_x + H_shared_y * H_SHX + H_shared_z * H_SHX * H_SHY;
+        E_shared_idx = E_shared_x + E_shared_y * E_SHX_V3 + E_shared_z * E_SHX_V3 * E_SHY_V3;
+        H_shared_idx = H_shared_x + H_shared_y * H_SHX_V3 + H_shared_z * H_SHX_V3 * H_SHY_V3;
 
         if(global_x >= 1 + LEFT_PAD_MM_V3 && global_x <= Nx - 2 + LEFT_PAD_MM_V3 &&
            global_y >= 1 + LEFT_PAD_MM_V3 && global_y <= Ny - 2 + LEFT_PAD_MM_V3 &&
@@ -251,13 +253,13 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
            global_z >= calH_head_Z && global_z <= calH_tail_Z) {
 
           Hx_shmem[H_shared_idx] = Dax[global_idx] * Hx_shmem[H_shared_idx] + Dbx[global_idx] *
-                    ((Ey_shmem[E_shared_idx + E_SHX * E_SHY] - Ey_shmem[E_shared_idx]) - (Ez_shmem[E_shared_idx + E_SHX] - Ez_shmem[E_shared_idx]) - Mx[global_idx] * dx);
+                    ((Ey_shmem[E_shared_idx + E_SHX_V3 * E_SHY_V3] - Ey_shmem[E_shared_idx]) - (Ez_shmem[E_shared_idx + E_SHX_V3] - Ez_shmem[E_shared_idx]) - Mx[global_idx] * dx);
 
           Hy_shmem[H_shared_idx] = Day[global_idx] * Hy_shmem[H_shared_idx] + Dby[global_idx] *
-                    ((Ez_shmem[E_shared_idx + 1] - Ez_shmem[E_shared_idx]) - (Ex_shmem[E_shared_idx + E_SHX * E_SHY] - Ex_shmem[E_shared_idx]) - My[global_idx] * dx);
+                    ((Ez_shmem[E_shared_idx + 1] - Ez_shmem[E_shared_idx]) - (Ex_shmem[E_shared_idx + E_SHX_V3 * E_SHY_V3] - Ex_shmem[E_shared_idx]) - My[global_idx] * dx);
 
           Hz_shmem[H_shared_idx] = Daz[global_idx] * Hz_shmem[H_shared_idx] + Dbz[global_idx] *
-                    ((Ex_shmem[E_shared_idx + E_SHX] - Ex_shmem[E_shared_idx]) - (Ey_shmem[E_shared_idx + 1] - Ey_shmem[E_shared_idx]) - Mz[global_idx] * dx);
+                    ((Ex_shmem[E_shared_idx + E_SHX_V3] - Ex_shmem[E_shared_idx]) - (Ey_shmem[E_shared_idx + 1] - Ey_shmem[E_shared_idx]) - Mz[global_idx] * dx);
         }
       }
     }
@@ -267,17 +269,17 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
     // X head and tail is refer to unpadded global_x
     // same thing applys to Y and Z
     const int storeE_head_X = xx_heads[xx] + LEFT_PAD_MM_V3 - 1;
-    const int storeE_tail_X = storeE_head_X + VALLEY_X_V3; 
+    const int storeE_tail_X = storeE_head_X + VALLEY_X_V3 - 1; 
     const int storeH_head_X = storeE_head_X;
-    const int storeH_tail_X = storeE_tail_X - 1; 
+    const int storeH_tail_X = storeE_tail_X; 
     const int storeE_head_Y = yy_heads[yy] + LEFT_PAD_MM_V3 - 1;
-    const int storeE_tail_Y = storeE_head_Y + VALLEY_Y_V3; 
+    const int storeE_tail_Y = storeE_head_Y + VALLEY_Y_V3 - 1; 
     const int storeH_head_Y = storeE_head_Y;
-    const int storeH_tail_Y = storeE_tail_Y - 1; 
+    const int storeH_tail_Y = storeE_tail_Y; 
     const int storeE_head_Z = zz_heads[zz] + LEFT_PAD_MM_V3 - 1;
-    const int storeE_tail_Z = storeE_head_Z + VALLEY_Z_V3; 
+    const int storeE_tail_Z = storeE_head_Z + VALLEY_Z_V3 - 1; 
     const int storeH_head_Z = storeE_head_Z;
-    const int storeH_tail_Z = storeE_tail_Z - 1; 
+    const int storeH_tail_Z = storeE_tail_Z; 
 
     // std::cout << "xx = " << xx << ", yy = " << yy << ", zz = " << zz << "\n";
     // std::cout << "storeE_head_X = " << storeE_head_X << ", storeE_tail_X = " << storeE_tail_X
@@ -312,7 +314,7 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
          global_z >= storeH_head_Z && global_z <= storeH_tail_Z) {
 
         global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-        H_shared_idx = H_shared_x + H_shared_y * H_SHX + H_shared_z * H_SHX * H_SHY;
+        H_shared_idx = H_shared_x + H_shared_y * H_SHX_V3 + H_shared_z * H_SHX_V3 * H_SHY_V3;
         Hx_pad_dst[global_idx] = Hx_shmem[H_shared_idx];
         Hy_pad_dst[global_idx] = Hy_shmem[H_shared_idx];
         Hz_pad_dst[global_idx] = Hz_shmem[H_shared_idx];
@@ -327,7 +329,7 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
          global_z >= storeE_head_Z && global_z <= storeE_tail_Z) {
 
         global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad; 
-        E_shared_idx = E_shared_x + E_shared_y * E_SHX + E_shared_z * E_SHX * E_SHY;  
+        E_shared_idx = E_shared_x + E_shared_y * E_SHX_V3 + E_shared_z * E_SHX_V3 * E_SHY_V3;  
         Ex_pad_dst[global_idx] = Ex_shmem[E_shared_idx];
         Ey_pad_dst[global_idx] = Ey_shmem[E_shared_idx];
         Ez_pad_dst[global_idx] = Ez_shmem[E_shared_idx];
@@ -470,9 +472,305 @@ void gDiamond::update_FDTD_mix_mapping_sequential_ver3(size_t num_timesteps, siz
 
 }   
 
+void gDiamond::update_FDTD_mix_mapping_gpu_ver3(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz) {
+
+  std::cerr << "running update_FDTD_mix_mapping_gpu_ver3\n";
+
+  // pad E, H array
+  const size_t Nx_pad = _Nx + LEFT_PAD_MM_V3 + RIGHT_PAD_MM_V3;
+  const size_t Ny_pad = _Ny + LEFT_PAD_MM_V3 + RIGHT_PAD_MM_V3;
+  const size_t Nz_pad = _Nz + LEFT_PAD_MM_V3 + RIGHT_PAD_MM_V3;
+  const size_t padded_length = Nx_pad * Ny_pad * Nz_pad;
+
+  std::vector<float> Ex_pad_src(padded_length, 0);
+  std::vector<float> Ey_pad_src(padded_length, 0);
+  std::vector<float> Ez_pad_src(padded_length, 0);
+  std::vector<float> Hx_pad_src(padded_length, 0);
+  std::vector<float> Hy_pad_src(padded_length, 0);
+  std::vector<float> Hz_pad_src(padded_length, 0);
+
+  std::vector<float> Ex_pad_dst(padded_length, 0);
+  std::vector<float> Ey_pad_dst(padded_length, 0);
+  std::vector<float> Ez_pad_dst(padded_length, 0);
+  std::vector<float> Hx_pad_dst(padded_length, 0);
+  std::vector<float> Hy_pad_dst(padded_length, 0);
+  std::vector<float> Hz_pad_dst(padded_length, 0);
+
+  // tiling parameters
+  // for mix mapping ver3, all tiles are mountains
+  size_t xx_num = Tx;
+  size_t yy_num = Ty;
+  size_t zz_num = Tz;
+  std::vector<int> xx_heads(xx_num, 0); // head indices of mountains
+  std::vector<int> yy_heads(yy_num, 0);
+  std::vector<int> zz_heads(zz_num, 0);
+
+  for(size_t index=0; index<xx_num; index++) {
+    xx_heads[index] = (index == 0)? 1 :
+                             xx_heads[index-1] + (VALLEY_X_V3);
+  }
+
+  for(size_t index=0; index<yy_num; index++) {
+    yy_heads[index] = (index == 0)? 1 :
+                             yy_heads[index-1] + (VALLEY_Y_V3);
+  }
+
+  for(size_t index=0; index<zz_num; index++) {
+    zz_heads[index] = (index == 0)? 1 :
+                             zz_heads[index-1] + (VALLEY_Z_V3);
+  }
+
+  float *d_Ex_pad_src, *d_Ey_pad_src, *d_Ez_pad_src;
+  float *d_Hx_pad_src, *d_Hy_pad_src, *d_Hz_pad_src;
+  float *d_Ex_pad_dst, *d_Ey_pad_dst, *d_Ez_pad_dst;
+  float *d_Hx_pad_dst, *d_Hy_pad_dst, *d_Hz_pad_dst;
+
+  float *Jx, *Jy, *Jz;
+  float *Mx, *My, *Mz;
+  float *Cax, *Cay, *Caz, *Cbx, *Cby, *Cbz;
+  float *Dax, *Day, *Daz, *Dbx, *Dby, *Dbz;
+
+  int *d_xx_heads;
+  int *d_yy_heads;
+  int *d_zz_heads;
+
+  size_t unpadded_length = _Nx * _Ny * _Nz;
+
+  CUDACHECK(cudaMalloc(&d_Ex_pad_src, sizeof(float) * padded_length));
+  CUDACHECK(cudaMalloc(&d_Ey_pad_src, sizeof(float) * padded_length));
+  CUDACHECK(cudaMalloc(&d_Ez_pad_src, sizeof(float) * padded_length));
+  CUDACHECK(cudaMalloc(&d_Hx_pad_src, sizeof(float) * padded_length));
+  CUDACHECK(cudaMalloc(&d_Hy_pad_src, sizeof(float) * padded_length));
+  CUDACHECK(cudaMalloc(&d_Hz_pad_src, sizeof(float) * padded_length));
+
+  CUDACHECK(cudaMalloc(&d_Ex_pad_dst, sizeof(float) * padded_length));
+  CUDACHECK(cudaMalloc(&d_Ey_pad_dst, sizeof(float) * padded_length));
+  CUDACHECK(cudaMalloc(&d_Ez_pad_dst, sizeof(float) * padded_length));
+  CUDACHECK(cudaMalloc(&d_Hx_pad_dst, sizeof(float) * padded_length));
+  CUDACHECK(cudaMalloc(&d_Hy_pad_dst, sizeof(float) * padded_length));
+  CUDACHECK(cudaMalloc(&d_Hz_pad_dst, sizeof(float) * padded_length));
+
+  CUDACHECK(cudaMalloc(&Jx, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMalloc(&Jy, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMalloc(&Jz, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMalloc(&Mx, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMalloc(&My, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMalloc(&Mz, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMalloc(&Cax, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMalloc(&Cbx, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMalloc(&Cay, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMalloc(&Cby, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMalloc(&Caz, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMalloc(&Cbz, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMalloc(&Dax, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMalloc(&Dbx, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMalloc(&Day, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMalloc(&Dby, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMalloc(&Daz, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMalloc(&Dbz, sizeof(float) * unpadded_length));
+
+  CUDACHECK(cudaMalloc(&d_xx_heads, sizeof(int) * xx_num));
+  CUDACHECK(cudaMalloc(&d_yy_heads, sizeof(int) * yy_num));
+  CUDACHECK(cudaMalloc(&d_zz_heads, sizeof(int) * zz_num));
+
+  // initialize E, H as 0
+  CUDACHECK(cudaMemset(d_Ex_pad_src, 0, sizeof(float) * padded_length));
+  CUDACHECK(cudaMemset(d_Ey_pad_src, 0, sizeof(float) * padded_length));
+  CUDACHECK(cudaMemset(d_Ez_pad_src, 0, sizeof(float) * padded_length));
+  CUDACHECK(cudaMemset(d_Hx_pad_src, 0, sizeof(float) * padded_length));
+  CUDACHECK(cudaMemset(d_Hy_pad_src, 0, sizeof(float) * padded_length));
+  CUDACHECK(cudaMemset(d_Hz_pad_src, 0, sizeof(float) * padded_length));
+  CUDACHECK(cudaMemset(d_Ex_pad_dst, 0, sizeof(float) * padded_length));
+  CUDACHECK(cudaMemset(d_Ey_pad_dst, 0, sizeof(float) * padded_length));
+  CUDACHECK(cudaMemset(d_Ez_pad_dst, 0, sizeof(float) * padded_length));
+  CUDACHECK(cudaMemset(d_Hx_pad_dst, 0, sizeof(float) * padded_length));
+  CUDACHECK(cudaMemset(d_Hy_pad_dst, 0, sizeof(float) * padded_length));
+  CUDACHECK(cudaMemset(d_Hz_pad_dst, 0, sizeof(float) * padded_length));
+
+  // initialize J, M, Ca, Cb, Da, Db as 0
+  CUDACHECK(cudaMemset(Jx, 0, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMemset(Jy, 0, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMemset(Jz, 0, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMemset(Mx, 0, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMemset(My, 0, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMemset(Mz, 0, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMemset(Cax, 0, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMemset(Cbx, 0, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMemset(Cay, 0, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMemset(Cby, 0, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMemset(Caz, 0, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMemset(Cbz, 0, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMemset(Dax, 0, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMemset(Dbx, 0, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMemset(Day, 0, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMemset(Dby, 0, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMemset(Daz, 0, sizeof(float) * unpadded_length));
+  CUDACHECK(cudaMemset(Dbz, 0, sizeof(float) * unpadded_length));
+
+  // transfer source
+  for(size_t t=0; t<num_timesteps; t++) {
+    float Mz_value = M_source_amp * std::sin(SOURCE_OMEGA * t * dt);
+    CUDACHECK(cudaMemcpy(Mz + _source_idx, &Mz_value, sizeof(float), cudaMemcpyHostToDevice));
+  }
+
+  // copy Ca, Cb, Da, Db
+  CUDACHECK(cudaMemcpyAsync(Cax, _Cax.data(), sizeof(float) * unpadded_length, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Cay, _Cay.data(), sizeof(float) * unpadded_length, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Caz, _Caz.data(), sizeof(float) * unpadded_length, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Cbx, _Cbx.data(), sizeof(float) * unpadded_length, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Cby, _Cby.data(), sizeof(float) * unpadded_length, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Cbz, _Cbz.data(), sizeof(float) * unpadded_length, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Dax, _Dax.data(), sizeof(float) * unpadded_length, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Day, _Day.data(), sizeof(float) * unpadded_length, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Daz, _Daz.data(), sizeof(float) * unpadded_length, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Dbx, _Dbx.data(), sizeof(float) * unpadded_length, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Dby, _Dby.data(), sizeof(float) * unpadded_length, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(Dbz, _Dbz.data(), sizeof(float) * unpadded_length, cudaMemcpyHostToDevice));
+
+  // copy tiling parameters
+  CUDACHECK(cudaMemcpyAsync(d_xx_heads, xx_heads.data(), sizeof(int) * xx_num, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(d_yy_heads, yy_heads.data(), sizeof(int) * yy_num, cudaMemcpyHostToDevice));
+  CUDACHECK(cudaMemcpyAsync(d_zz_heads, zz_heads.data(), sizeof(int) * zz_num, cudaMemcpyHostToDevice));
+
+  size_t block_size = NTX_MM_V3 * NTY_MM_V3 * NTZ_MM_V3;
+  std::cout << "block_size = " << block_size << "\n";
+  size_t grid_size = xx_num * yy_num * zz_num;
+
+  for(size_t tt = 0; tt < num_timesteps / BLT_MM_V3; tt++) {
+    updateEH_mix_mapping_kernel_ver3<<<grid_size, block_size>>>(d_Ex_pad_src, d_Ey_pad_src, d_Ez_pad_src,
+                                                                d_Hx_pad_src, d_Hy_pad_src, d_Hz_pad_src,
+                                                                d_Ex_pad_dst, d_Ey_pad_dst, d_Ez_pad_dst,
+                                                                d_Hx_pad_dst, d_Hy_pad_dst, d_Hz_pad_dst,
+                                                                Cax, Cbx,
+                                                                Cay, Cby,
+                                                                Caz, Cbz,
+                                                                Dax, Dbx,
+                                                                Day, Dby,
+                                                                Daz, Dbz,
+                                                                Jx, Jy, Jz,
+                                                                Mx, My, Mz,
+                                                                _dx,
+                                                                _Nx, _Ny, _Nz,
+                                                                Nx_pad, Ny_pad, Nz_pad,
+                                                                xx_num, yy_num, zz_num,
+                                                                d_xx_heads,
+                                                                d_yy_heads,
+                                                                d_zz_heads);
+
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+      printf("CUDA kernel launch error: %s\n", cudaGetErrorString(err));
+    }
+
+    // SWAP_PTR(d_Ex_pad_src, d_Ex_pad_dst);
+    // SWAP_PTR(d_Ey_pad_src, d_Ey_pad_dst);
+    // SWAP_PTR(d_Ez_pad_src, d_Ez_pad_dst);
+    // SWAP_PTR(d_Hx_pad_src, d_Hx_pad_dst);
+    // SWAP_PTR(d_Hy_pad_src, d_Hy_pad_dst);
+    // SWAP_PTR(d_Hz_pad_src, d_Hz_pad_dst);
+    std::swap(d_Ex_pad_src, d_Ex_pad_dst);
+    std::swap(d_Ey_pad_src, d_Ey_pad_dst);
+    std::swap(d_Ez_pad_src, d_Ez_pad_dst);
+    std::swap(d_Hx_pad_src, d_Hx_pad_dst);
+    std::swap(d_Hy_pad_src, d_Hy_pad_dst);
+    std::swap(d_Hz_pad_src, d_Hz_pad_dst);
+  }
+  cudaDeviceSynchronize();
+
+  // copy E, H back to host
+  CUDACHECK(cudaMemcpyAsync(Ex_pad_src.data(), d_Ex_pad_src, sizeof(float) * padded_length, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpyAsync(Ey_pad_src.data(), d_Ey_pad_src, sizeof(float) * padded_length, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpyAsync(Ez_pad_src.data(), d_Ez_pad_src, sizeof(float) * padded_length, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpyAsync(Hx_pad_src.data(), d_Hx_pad_src, sizeof(float) * padded_length, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpyAsync(Hy_pad_src.data(), d_Hy_pad_src, sizeof(float) * padded_length, cudaMemcpyDeviceToHost));
+  CUDACHECK(cudaMemcpyAsync(Hz_pad_src.data(), d_Hz_pad_src, sizeof(float) * padded_length, cudaMemcpyDeviceToHost));
+
+  // check padded arrays
+  // for(size_t z = 0; z < Nz_pad; z++) {
+  //   for(size_t y = 0; y < Ny_pad; y++) {
+  //     for(size_t x = 0; x < Nx_pad; x++) {
+  //       size_t padded_index = x + y * Nx_pad + z * Nx_pad * Ny_pad;
+  //       if(Ex_pad_src[padded_index] != 0) {
+  //         std::cout << "(x, y, z) = " << x << ", " << y << ", " << z << ", ";
+  //         std::cout << "Ex_pad_src[padded_index] = " << Ex_pad_src[padded_index] << "\n";
+  //       }
+  //     }
+  //   }
+  // }
+
+  // transfer data back to unpadded arrays
+  for(size_t z = 0; z < _Nz; z++) {
+    for(size_t y = 0; y < _Ny; y++) {
+      for(size_t x = 0; x < _Nx; x++) {
+        size_t x_pad = x + LEFT_PAD_MM_V3;
+        size_t y_pad = y + LEFT_PAD_MM_V3;
+        size_t z_pad = z + LEFT_PAD_MM_V3;
+        size_t unpadded_index = x + y * _Nx + z * _Nx * _Ny;
+        size_t padded_index = x_pad + y_pad * Nx_pad + z_pad * Nx_pad * Ny_pad;
+        _Ex_gpu[unpadded_index] = Ex_pad_src[padded_index];
+        _Ey_gpu[unpadded_index] = Ey_pad_src[padded_index];
+        _Ez_gpu[unpadded_index] = Ez_pad_src[padded_index];
+        _Hx_gpu[unpadded_index] = Hx_pad_src[padded_index];
+        _Hy_gpu[unpadded_index] = Hy_pad_src[padded_index];
+        _Hz_gpu[unpadded_index] = Hz_pad_src[padded_index];
+      }
+    }
+  }
+
+  CUDACHECK(cudaFree(d_Ex_pad_src));
+  CUDACHECK(cudaFree(d_Ey_pad_src));
+  CUDACHECK(cudaFree(d_Ez_pad_src));
+  CUDACHECK(cudaFree(d_Hx_pad_src));
+  CUDACHECK(cudaFree(d_Hy_pad_src));
+  CUDACHECK(cudaFree(d_Hz_pad_src));
+
+  CUDACHECK(cudaFree(d_Ex_pad_dst));
+  CUDACHECK(cudaFree(d_Ey_pad_dst));
+  CUDACHECK(cudaFree(d_Ez_pad_dst));
+  CUDACHECK(cudaFree(d_Hx_pad_dst));
+  CUDACHECK(cudaFree(d_Hy_pad_dst));
+  CUDACHECK(cudaFree(d_Hz_pad_dst));
+
+  CUDACHECK(cudaFree(Jx));
+  CUDACHECK(cudaFree(Jy));
+  CUDACHECK(cudaFree(Jz));
+  CUDACHECK(cudaFree(Mx));
+  CUDACHECK(cudaFree(My));
+  CUDACHECK(cudaFree(Mz));
+  CUDACHECK(cudaFree(Cax));
+  CUDACHECK(cudaFree(Cbx));
+  CUDACHECK(cudaFree(Cay));
+  CUDACHECK(cudaFree(Cby));
+  CUDACHECK(cudaFree(Caz));
+  CUDACHECK(cudaFree(Cbz));
+  CUDACHECK(cudaFree(Dax));
+  CUDACHECK(cudaFree(Dbx));
+  CUDACHECK(cudaFree(Day));
+  CUDACHECK(cudaFree(Dby));
+  CUDACHECK(cudaFree(Daz));
+  CUDACHECK(cudaFree(Dbz));
+
+  CUDACHECK(cudaFree(d_xx_heads));
+  CUDACHECK(cudaFree(d_yy_heads));
+  CUDACHECK(cudaFree(d_zz_heads));
+}   
+
 } // end of namespace gdiamond
 
 #endif
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
