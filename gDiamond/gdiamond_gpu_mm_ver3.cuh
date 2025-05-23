@@ -639,8 +639,9 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver3(size_t num_timesteps, size_t Tx,
   std::cout << "block_size = " << block_size << "\n";
   size_t grid_size = xx_num * yy_num * zz_num;
 
+  auto start = std::chrono::high_resolution_clock::now();
   for(size_t tt = 0; tt < num_timesteps / BLT_MM_V3; tt++) {
-    updateEH_mix_mapping_kernel_ver3<<<grid_size, block_size>>>(d_Ex_pad_src, d_Ey_pad_src, d_Ez_pad_src,
+    updateEH_mix_mapping_kernel_ver3_unroll<<<grid_size, block_size>>>(d_Ex_pad_src, d_Ey_pad_src, d_Ez_pad_src,
                                                                 d_Hx_pad_src, d_Hy_pad_src, d_Hz_pad_src,
                                                                 d_Ex_pad_dst, d_Ey_pad_dst, d_Ez_pad_dst,
                                                                 d_Hx_pad_dst, d_Hy_pad_dst, d_Hz_pad_dst,
@@ -660,25 +661,29 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver3(size_t num_timesteps, size_t Tx,
                                                                 d_yy_heads,
                                                                 d_zz_heads);
 
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) {
-      printf("CUDA kernel launch error: %s\n", cudaGetErrorString(err));
-    }
+    // cudaError_t err = cudaGetLastError();
+    // if (err != cudaSuccess) {
+    //   printf("CUDA kernel launch error: %s\n", cudaGetErrorString(err));
+    // }
 
-    // SWAP_PTR(d_Ex_pad_src, d_Ex_pad_dst);
-    // SWAP_PTR(d_Ey_pad_src, d_Ey_pad_dst);
-    // SWAP_PTR(d_Ez_pad_src, d_Ez_pad_dst);
-    // SWAP_PTR(d_Hx_pad_src, d_Hx_pad_dst);
-    // SWAP_PTR(d_Hy_pad_src, d_Hy_pad_dst);
-    // SWAP_PTR(d_Hz_pad_src, d_Hz_pad_dst);
-    std::swap(d_Ex_pad_src, d_Ex_pad_dst);
-    std::swap(d_Ey_pad_src, d_Ey_pad_dst);
-    std::swap(d_Ez_pad_src, d_Ez_pad_dst);
-    std::swap(d_Hx_pad_src, d_Hx_pad_dst);
-    std::swap(d_Hy_pad_src, d_Hy_pad_dst);
-    std::swap(d_Hz_pad_src, d_Hz_pad_dst);
+    SWAP_PTR(d_Ex_pad_src, d_Ex_pad_dst);
+    SWAP_PTR(d_Ey_pad_src, d_Ey_pad_dst);
+    SWAP_PTR(d_Ez_pad_src, d_Ez_pad_dst);
+    SWAP_PTR(d_Hx_pad_src, d_Hx_pad_dst);
+    SWAP_PTR(d_Hy_pad_src, d_Hy_pad_dst);
+    SWAP_PTR(d_Hz_pad_src, d_Hz_pad_dst);
+    // std::swap(d_Ex_pad_src, d_Ex_pad_dst);
+    // std::swap(d_Ey_pad_src, d_Ey_pad_dst);
+    // std::swap(d_Ez_pad_src, d_Ez_pad_dst);
+    // std::swap(d_Hx_pad_src, d_Hx_pad_dst);
+    // std::swap(d_Hy_pad_src, d_Hy_pad_dst);
+    // std::swap(d_Hz_pad_src, d_Hz_pad_dst);
   }
   cudaDeviceSynchronize();
+
+  auto end = std::chrono::high_resolution_clock::now();
+  std::cout << "gpu runtime (mix mapping ver3): " << std::chrono::duration<double>(end-start).count() << "s\n"; 
+  std::cout << "gpu performance: " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / std::chrono::duration<double>(end-start).count() << "Mcells/s\n";
 
   // copy E, H back to host
   CUDACHECK(cudaMemcpyAsync(Ex_pad_src.data(), d_Ex_pad_src, sizeof(float) * padded_length, cudaMemcpyDeviceToHost));
