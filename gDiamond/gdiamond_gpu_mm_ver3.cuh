@@ -130,7 +130,9 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
         Hz_shmem[H_shared_idx] = Hz_pad_src[global_idx];
       }
 
+      /*
       // E HALO
+      // E HALO is not needed since there is no valley tile in mix mapping ver 3
       if (local_x == NTX_MM_V3 - 1) {
         int halo_x = local_x + 1;
         int global_x_halo = xx_heads[xx] + halo_x;
@@ -164,6 +166,7 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
         Ey_shmem[E_shared_idx] = Ey_pad_src[global_idx];
         Ez_shmem[E_shared_idx] = Ez_pad_src[global_idx];
       }
+      */
     }
 
     // calculation

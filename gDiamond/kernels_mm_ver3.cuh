@@ -156,40 +156,7 @@ __global__ void updateEH_mix_mapping_kernel_ver3(float* Ex_pad_src, float* Ey_pa
     Hz_shmem[H_shared_idx] = Hz_pad_src[global_idx];
   }
 
-  // E HALO
-  if (local_x == NTX_MM_V3 - 1) {
-    int halo_x = local_x + 1;
-    int global_x_halo = xx_heads[xx] + halo_x;
-
-    global_idx = global_x_halo + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-    E_shared_idx = halo_x + E_shared_y * E_SHX_V3 + E_shared_z * E_SHX_V3 * E_SHY_V3;
-
-    Ex_shmem[E_shared_idx] = Ex_pad_src[global_idx];
-    Ey_shmem[E_shared_idx] = Ey_pad_src[global_idx];
-    Ez_shmem[E_shared_idx] = Ez_pad_src[global_idx];
-  }
-  if (local_y == NTY_MM_V3 - 1) {
-    int halo_y = local_y + 1;
-    int global_y_halo = yy_heads[yy] + halo_y;
-
-    global_idx = global_x + global_y_halo * Nx_pad + global_z * Nx_pad * Ny_pad;
-    E_shared_idx = E_shared_x + halo_y * E_SHX_V3 + E_shared_z * E_SHX_V3 * E_SHY_V3;
-
-    Ex_shmem[E_shared_idx] = Ex_pad_src[global_idx];
-    Ey_shmem[E_shared_idx] = Ey_pad_src[global_idx];
-    Ez_shmem[E_shared_idx] = Ez_pad_src[global_idx];
-  }
-  if (local_z == NTZ_MM_V3 - 1) {
-    int halo_z = local_z + 1;
-    int global_z_halo = zz_heads[zz] + halo_z;
-
-    global_idx = global_x + global_y * Nx_pad + global_z_halo * Nx_pad * Ny_pad;
-    E_shared_idx = E_shared_x + E_shared_y * E_SHX_V3 + halo_z * E_SHX_V3 * E_SHY_V3;
-
-    Ex_shmem[E_shared_idx] = Ex_pad_src[global_idx];
-    Ey_shmem[E_shared_idx] = Ey_pad_src[global_idx];
-    Ez_shmem[E_shared_idx] = Ez_pad_src[global_idx];
-  }
+  // E HALO is not needed since there is no valley tile in mix mapping ver 3
 
   __syncthreads();
 
