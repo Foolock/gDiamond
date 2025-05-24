@@ -1,4 +1,4 @@
-#include "gdiamond_gpu.cuh"
+#include "gdiamond_gpu_naive_vectorized.cuh"
 #include "gdiamond_gpu_mm_ver3.cuh"
 
 int main(int argc, char* argv[]) {
@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
   std::cout << "simulation space: Nx = " << Nx << ", Ny = " << Ny << ", Nz = " << Nz << "\n";
   gdiamond::gDiamond exp(Nx, Ny, Nz); 
 
-  exp.update_FDTD_gpu_3D_warp_underutilization_fix(num_timesteps); 
+  exp.update_FDTD_gpu_3D_warp_underutilization_fix_vectorized(num_timesteps); 
   exp.update_FDTD_mix_mapping_gpu_ver3(num_timesteps, Tx, Ty, Tz);  
 
   // exp.print_results();
