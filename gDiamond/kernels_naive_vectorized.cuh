@@ -3,6 +3,12 @@
 
 #include "gdiamond.hpp"
 
+// pad X, Y, Z dimension by 4 to simplify kernel control float
+#define LEFT_PAD 4
+#define RIGHT_PAD 4
+
+#define FLOAT4(ptr) (reinterpret_cast<float4*>(&(ptr))[0])
+
 __global__ void updateE_3Dmap_fix_vectorized(float * Ex, float * Ey, float * Ez,
                         float * Hx, float * Hy, float * Hz,
                         float * Cax, float * Cbx, float * Cay,
@@ -10,26 +16,21 @@ __global__ void updateE_3Dmap_fix_vectorized(float * Ex, float * Ey, float * Ez,
                         float * Jx, float * Jy, float * Jz,
                         float dx, int Nx, int Ny, int Nz)
 {
+  unsigned int base_idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4; 
 
-  unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  // boundary check
+  if(base_idx + 3 >= Nx * Ny * Nz) return; 
 
-  unsigned int i = tid % Nx;
-  unsigned int j = (tid % (Nx * Ny)) / Nx;
-  unsigned int k = tid / (Nx * Ny);
+  // now each base_idx corresponds to the start index of 4 continuous floats
+  
+  int i, j, k;
+  // the first float
+  i = base_idx % Nx;
+  j = (base_idx / Nx) % Ny;
+  k = base_idx / (Nx * Ny);
 
-  if (i >= 1 && i < Nx - 1 && j >= 1 && j < Ny - 1 && k >= 1 && k < Nz - 1)
-  {
-    int idx = i + j * Nx + k * (Nx * Ny);
-
-    Ex[idx] = Cax[idx] * Ex[idx] + Cbx[idx] *
-              ((Hz[idx] - Hz[idx - Nx]) - (Hy[idx] - Hy[idx - Nx * Ny]) - Jx[idx] * dx);
-
-    Ey[idx] = Cay[idx] * Ey[idx] + Cby[idx] *
-              ((Hx[idx] - Hx[idx - Nx * Ny]) - (Hz[idx] - Hz[idx - 1]) - Jy[idx] * dx);
-
-    Ez[idx] = Caz[idx] * Ez[idx] + Cbz[idx] *
-              ((Hy[idx] - Hy[idx - 1]) - (Hx[idx] - Hx[idx - Nx]) - Jz[idx] * dx);
-  }
+  // 
+  
 }
 
 __global__ void updateH_3Dmap_fix_vectorized(float * Ex, float * Ey, float * Ez,
@@ -40,7 +41,7 @@ __global__ void updateH_3Dmap_fix_vectorized(float * Ex, float * Ey, float * Ez,
                         float * Mx, float * My, float * Mz,
                         float dx, int Nx, int Ny, int Nz)
 {
-
+ 
   unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
   unsigned int i = tid % Nx;
@@ -61,7 +62,6 @@ __global__ void updateH_3Dmap_fix_vectorized(float * Ex, float * Ey, float * Ez,
               ((Ex[idx + Nx] - Ex[idx]) - (Ey[idx + 1] - Ey[idx]) - Mz[idx] * dx);
   }
 }
-
 
 #endif
 

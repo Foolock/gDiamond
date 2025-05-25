@@ -18,6 +18,7 @@ std::tuple<int, int, int> naive_mapping(int thread_id, int Nx, int Ny, int Nz) {
     return {x, y, z};
 }
 
+
 std::tuple<int, int, int> tile_mapping1(int xx_num, int yy_num, int zz_num,
                                        std::vector<int> xx_heads, std::vector<int> yy_heads, std::vector<int> zz_heads,
                                        int block_id, int thread_id, int Nx, int Ny, int Nz) {

@@ -104,7 +104,7 @@ void gDiamond::update_FDTD_gpu_3D_warp_underutilization_fix_vectorized(size_t nu
   CUDACHECK(cudaMemcpy(Dbz, _Dbz.data(), sizeof(float) * _Nx * _Ny * _Nz, cudaMemcpyHostToDevice));
 
   // set block and grid
-  size_t grid_size = (_Nx*_Ny*_Nz + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  size_t grid_size = ((_Nx * _Ny * _Nz / 4) + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
   auto start = std::chrono::high_resolution_clock::now();
 
