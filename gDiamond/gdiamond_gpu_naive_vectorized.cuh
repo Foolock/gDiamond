@@ -1,6 +1,10 @@
 #ifndef GDIAMOND_GPU_NAIVE_VECTORIZED_CUH
 #define GDIAMOND_GPU_NAIVE_VECTORIZED_CUH
 
+/*
+  this implementation assume X, Y, Z dimension is a multiple of 4
+*/
+
 #include "gdiamond.hpp"
 #include "kernels_naive_vectorized.cuh"
 #include <cuda_runtime.h>
@@ -129,7 +133,7 @@ void gDiamond::update_FDTD_gpu_3D_warp_underutilization_fix_vectorized(size_t nu
   cudaDeviceSynchronize();
 
   auto end = std::chrono::high_resolution_clock::now();
-  std::cout << "gpu runtime (naive): " << std::chrono::duration<double>(end-start).count() << "s\n"; 
+  std::cout << "gpu runtime (naive vectorized): " << std::chrono::duration<double>(end-start).count() << "s\n"; 
   std::cout << "gpu performance: " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / std::chrono::duration<double>(end-start).count() << "Mcells/s\n";
 
   // copy E, H back to host 
