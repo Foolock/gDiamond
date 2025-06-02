@@ -153,6 +153,7 @@ class gDiamond {
     void update_FDTD_mix_mapping_sequential(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // simulate GPU workflow  
     void update_FDTD_mix_mapping_sequential_ver2(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
     void update_FDTD_mix_mapping_sequential_ver3(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
+    void update_FDTD_mix_mapping_sequential_ver4(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
     void update_FDTD_mix_mapping_gpu(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
     void update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
     void update_FDTD_mix_mapping_gpu_ver3(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
