@@ -172,7 +172,7 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
     // calculation
     for(int t = 0; t < BLT_MM_V3; t++) {
 
-      // X head and tail is refer to unpadded global_x
+      // X head and tail is refer to padded global_x
       // same thing applys to Y and Z
       int calE_head_X = xx_heads[xx] + t;
       int calE_tail_X = xx_heads[xx] + BLX_MM_V3 - 1 - t;
@@ -269,7 +269,7 @@ void gDiamond::_updateEH_mix_mapping_ver3(std::vector<float>& Ex_pad_src, std::v
 
     // store back to global memory
 
-    // X head and tail is refer to unpadded global_x
+    // X head and tail is refer to padded global_x
     // same thing applys to Y and Z
     const int storeE_head_X = xx_heads[xx] + LEFT_PAD_MM_V3 - 1;
     const int storeE_tail_X = storeE_head_X + VALLEY_X_V3 - 1; 

@@ -167,7 +167,7 @@ __global__ void updateEH_mix_mapping_kernel_ver3(float* Ex_pad_src, float* Ey_pa
   E_shared_idx = E_shared_x + E_shared_y * E_SHX_V3 + E_shared_z * E_SHX_V3 * E_SHY_V3;
   H_shared_idx = H_shared_x + H_shared_y * H_SHX_V3 + H_shared_z * H_SHX_V3 * H_SHY_V3;
 
-  // X head and tail is refer to unpadded global_x
+  // X head and tail is refer to padded global_x
   // same thing applys to Y and Z
   int calE_head_X, calE_tail_X;
   int calH_head_X, calH_tail_X;
@@ -241,7 +241,7 @@ __global__ void updateEH_mix_mapping_kernel_ver3(float* Ex_pad_src, float* Ey_pa
   // no need to recalculate H_shared_idx, E_shared_idx
   global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
 
-  // X head and tail is refer to unpadded global_x
+  // X head and tail is refer to padded global_x
   // same thing applys to Y and Z
   const int storeE_head_X = xx_heads[xx] + LEFT_PAD_MM_V3 - 1;
   const int storeE_tail_X = storeE_head_X + VALLEY_X_V3;

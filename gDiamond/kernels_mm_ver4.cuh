@@ -59,6 +59,15 @@
 #define LEFT_PAD_MM_V4 BLT_MM_V4
 #define RIGHT_PAD_MM_V4 BLT_MM_V4
 
+// shared memory size
+#define H_SHX_V4 (BLX_P + BLT_MM_V4) 
+#define H_SHY_V4 (BLY_P + BLT_MM_V4) 
+#define H_SHZ_V4 (BLZ_P + BLT_MM_V4) 
+#define E_SHX_V4 (BLX_P + BLT_MM_V4)
+#define E_SHY_V4 (BLY_P + BLT_MM_V4)
+#define E_SHZ_V4 (BLZ_P + BLT_MM_V4)
+
+
 
 #endif
 
