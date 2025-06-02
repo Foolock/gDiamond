@@ -137,11 +137,187 @@ void gDiamond::_updateEH_mix_mapping_ver4(std::vector<float>& Ex_pad_src, std::v
         Hy_shmem[H_shared_idx] = Hy_pad_src[global_idx];
         Hz_shmem[H_shared_idx] = Hz_pad_src[global_idx];
       }
-
     }
 
-  }
+    // calculation (replication)
+    for(int t = 0; t < BLT_MM_V4; t++) {
 
+      // X head and tail is refer to padded global_x
+      // same thing applys to Y and Z
+      int calE_head_X = xx_heads[xx] + t;
+      int calE_tail_X = xx_heads[xx] + BLX_R - 1 - t;
+      int calH_head_X = calE_head_X;
+      int calH_tail_X = calE_tail_X - 1;
+
+      int calE_head_Y = yy_heads[yy] + t;
+      int calE_tail_Y = yy_heads[yy] + BLY_R - 1 - t;
+      int calH_head_Y = calE_head_Y;
+      int calH_tail_Y = calE_tail_Y - 1;
+
+      int calE_head_Z = zz_heads[zz] + t;
+      int calE_tail_Z = zz_heads[zz] + BLZ_R - 1 - t;
+      int calH_head_Z = calE_head_Z;
+      int calH_tail_Z = calE_tail_Z - 1;
+
+      // if(xx == 0 && yy == 0 && zz == 0) {
+      //   std::cout << "t = " << t << "\n";
+      //   std::cout << "calE_head_X = " << calE_head_X << ", calE_tail_X = " << calE_tail_X
+      //             << ", calH_head_X = " << calH_head_X << ", calH_tail_X = " << calH_tail_X << "\n";
+      //   std::cout << "calE_head_Y = " << calE_head_Y << ", calE_tail_Y = " << calE_tail_Y
+      //             << ", calH_head_Y = " << calH_head_Y << ", calH_tail_Y = " << calH_tail_Y << "\n";
+      //   std::cout << "calE_head_Z = " << calE_head_Z << ", calE_tail_Z = " << calE_tail_Z
+      //             << ", calH_head_Z = " << calH_head_Z << ", calH_tail_Z = " << calH_tail_Z << "\n";
+      // }
+
+      // update E
+      for(size_t thread_id = 0; thread_id < block_size; thread_id++) {
+        local_x = thread_id % NTX_MM_V4;
+        local_y = (thread_id / NTX_MM_V4) % NTY_MM_V4;
+        local_z = thread_id / (NTX_MM_V4 * NTY_MM_V4);
+        H_shared_x = local_x + 1;
+        H_shared_y = local_y + 1;
+        H_shared_z = local_z + 1;
+        E_shared_x = local_x;
+        E_shared_y = local_y;
+        E_shared_z = local_z;
+        global_x = xx_heads[xx] + local_x;
+        global_y = yy_heads[yy] + local_y;
+        global_z = zz_heads[zz] + local_z;
+
+        // we pad all the dimension, so need to substract LEFT_PAD here to correctly access constant arrays
+        global_idx = (global_x - LEFT_PAD_MM_V4) + (global_y - LEFT_PAD_MM_V4) * Nx + (global_z - LEFT_PAD_MM_V4) * Nx * Ny;
+        E_shared_idx = E_shared_x + E_shared_y * E_SHX_V4 + E_shared_z * E_SHX_V4 * E_SHY_V4;
+        H_shared_idx = H_shared_x + H_shared_y * H_SHX_V4 + H_shared_z * H_SHX_V4 * H_SHY_V4;
+
+        if(global_x >= 1 + LEFT_PAD_MM_V4 && global_x <= Nx - 2 + LEFT_PAD_MM_V4 &&
+           global_y >= 1 + LEFT_PAD_MM_V4 && global_y <= Ny - 2 + LEFT_PAD_MM_V4 &&
+           global_z >= 1 + LEFT_PAD_MM_V4 && global_z <= Nz - 2 + LEFT_PAD_MM_V4 &&
+           global_x >= calE_head_X && global_x <= calE_tail_X &&
+           global_y >= calE_head_Y && global_y <= calE_tail_Y &&
+           global_z >= calE_head_Z && global_z <= calE_tail_Z) {
+
+          Ex_shmem[E_shared_idx] = Cax[global_idx] * Ex_shmem[E_shared_idx] + Cbx[global_idx] *
+                    ((Hz_shmem[H_shared_idx] - Hz_shmem[H_shared_idx - H_SHX_V4]) - (Hy_shmem[H_shared_idx] - Hy_shmem[H_shared_idx - H_SHX_V4 * H_SHY_V4]) - Jx[global_idx] * dx);
+
+          Ey_shmem[E_shared_idx] = Cay[global_idx] * Ey_shmem[E_shared_idx] + Cby[global_idx] *
+                    ((Hx_shmem[H_shared_idx] - Hx_shmem[H_shared_idx - H_SHX_V4 * H_SHY_V4]) - (Hz_shmem[H_shared_idx] - Hz_shmem[H_shared_idx - 1]) - Jy[global_idx] * dx);
+
+          Ez_shmem[E_shared_idx] = Caz[global_idx] * Ez_shmem[E_shared_idx] + Cbz[global_idx] *
+                    ((Hy_shmem[H_shared_idx] - Hy_shmem[H_shared_idx - 1]) - (Hx_shmem[H_shared_idx] - Hx_shmem[H_shared_idx - H_SHX_V4]) - Jz[global_idx] * dx);
+        }
+      }
+
+      // update H
+      for(size_t thread_id = 0; thread_id < block_size; thread_id++) {
+        local_x = thread_id % NTX_MM_V4;
+        local_y = (thread_id / NTX_MM_V4) % NTY_MM_V4;
+        local_z = thread_id / (NTX_MM_V4 * NTY_MM_V4);
+        H_shared_x = local_x + 1;
+        H_shared_y = local_y + 1;
+        H_shared_z = local_z + 1;
+        E_shared_x = local_x;
+        E_shared_y = local_y;
+        E_shared_z = local_z;
+        global_x = xx_heads[xx] + local_x;
+        global_y = yy_heads[yy] + local_y;
+        global_z = zz_heads[zz] + local_z;
+
+        global_idx = (global_x - LEFT_PAD_MM_V4) + (global_y - LEFT_PAD_MM_V4) * Nx + (global_z - LEFT_PAD_MM_V4) * Nx * Ny;
+        E_shared_idx = E_shared_x + E_shared_y * E_SHX_V4 + E_shared_z * E_SHX_V4 * E_SHY_V4;
+        H_shared_idx = H_shared_x + H_shared_y * H_SHX_V4 + H_shared_z * H_SHX_V4 * H_SHY_V4;
+
+        if(global_x >= 1 + LEFT_PAD_MM_V4 && global_x <= Nx - 2 + LEFT_PAD_MM_V4 &&
+           global_y >= 1 + LEFT_PAD_MM_V4 && global_y <= Ny - 2 + LEFT_PAD_MM_V4 &&
+           global_z >= 1 + LEFT_PAD_MM_V4 && global_z <= Nz - 2 + LEFT_PAD_MM_V4 &&
+           global_x >= calH_head_X && global_x <= calH_tail_X &&
+           global_y >= calH_head_Y && global_y <= calH_tail_Y &&
+           global_z >= calH_head_Z && global_z <= calH_tail_Z) {
+
+          Hx_shmem[H_shared_idx] = Dax[global_idx] * Hx_shmem[H_shared_idx] + Dbx[global_idx] *
+                    ((Ey_shmem[E_shared_idx + E_SHX_V4 * E_SHY_V4] - Ey_shmem[E_shared_idx]) - (Ez_shmem[E_shared_idx + E_SHX_V4] - Ez_shmem[E_shared_idx]) - Mx[global_idx] * dx);
+
+          Hy_shmem[H_shared_idx] = Day[global_idx] * Hy_shmem[H_shared_idx] + Dby[global_idx] *
+                    ((Ez_shmem[E_shared_idx + 1] - Ez_shmem[E_shared_idx]) - (Ex_shmem[E_shared_idx + E_SHX_V4 * E_SHY_V4] - Ex_shmem[E_shared_idx]) - My[global_idx] * dx);
+
+          Hz_shmem[H_shared_idx] = Daz[global_idx] * Hz_shmem[H_shared_idx] + Dbz[global_idx] *
+                    ((Ex_shmem[E_shared_idx + E_SHX_V4] - Ex_shmem[E_shared_idx]) - (Ey_shmem[E_shared_idx + 1] - Ey_shmem[E_shared_idx]) - Mz[global_idx] * dx);
+        }
+      }
+    }
+
+    // store back to global memory (replication)
+
+    // X head and tail is refer to padded global_x
+    // same thing applys to Y and Z
+    const int storeE_head_X = xx_heads[xx] + BLX_R - BLT_MM_V4;
+    const int storeE_tail_X = xx_heads[xx] + BLX_R - 1;
+    const int storeH_head_X = storeE_head_X;
+    const int storeH_tail_X = storeE_tail_X - 1;
+
+    const int storeE_head_Y = yy_heads[yy] + BLY_R - BLT_MM_V4;
+    const int storeE_tail_Y = yy_heads[yy] + BLY_R - 1;
+    const int storeH_head_Y = storeE_head_Y;
+    const int storeH_tail_Y = storeE_tail_Y - 1;
+
+    const int storeE_head_Z = zz_heads[zz] + BLZ_R - BLT_MM_V4;
+    const int storeE_tail_Z = zz_heads[zz] + BLZ_R - 1;
+    const int storeH_head_Z = storeE_head_Z;
+    const int storeH_tail_Z = storeE_tail_Z - 1;
+
+    // if(xx == 0 && yy == 0 && zz == 0) {
+    //   std::cout << "storeE_head_X = " << storeE_head_X << ", storeE_tail_X = " << storeE_tail_X
+    //             << ", storeH_head_X = " << storeH_head_X << ", storeH_tail_X = " << storeH_tail_X << "\n";
+    //   std::cout << "storeE_head_Y = " << storeE_head_Y << ", storeE_tail_Y = " << storeE_tail_Y
+    //             << ", storeH_head_Y = " << storeH_head_Y << ", storeH_tail_Y = " << storeH_tail_Y << "\n";
+    //   std::cout << "storeE_head_Z = " << storeE_head_Z << ", storeE_tail_Z = " << storeE_tail_Z
+    //             << ", storeH_head_Z = " << storeH_head_Z << ", storeH_tail_Z = " << storeH_tail_Z << "\n";
+    // }
+
+    for(size_t thread_id = 0; thread_id < block_size; thread_id++) {
+      local_x = thread_id % NTX_MM_V4;
+      local_y = (thread_id / NTX_MM_V4) % NTY_MM_V4;
+      local_z = thread_id / (NTX_MM_V4 * NTY_MM_V4);
+      H_shared_x = local_x + 1;
+      H_shared_y = local_y + 1;
+      H_shared_z = local_z + 1;
+      E_shared_x = local_x;
+      E_shared_y = local_y;
+      E_shared_z = local_z;
+      global_x = xx_heads[xx] + E_shared_x;
+      global_y = yy_heads[yy] + E_shared_y;
+      global_z = zz_heads[zz] + E_shared_z;
+
+      // store H ---------------------------------------------
+      if(global_x >= 1 + LEFT_PAD_MM_V4 && global_x <= Nx - 2 + LEFT_PAD_MM_V4 &&
+         global_y >= 1 + LEFT_PAD_MM_V4 && global_y <= Ny - 2 + LEFT_PAD_MM_V4 &&
+         global_z >= 1 + LEFT_PAD_MM_V4 && global_z <= Nz - 2 + LEFT_PAD_MM_V4 &&
+         global_x >= storeH_head_X && global_x <= storeH_tail_X &&
+         global_y >= storeH_head_Y && global_y <= storeH_tail_Y &&
+         global_z >= storeH_head_Z && global_z <= storeH_tail_Z) {
+
+        global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
+        H_shared_idx = H_shared_x + H_shared_y * H_SHX_V4 + H_shared_z * H_SHX_V4 * H_SHY_V4;
+        Hx_pad_rep[global_idx] = Hx_shmem[H_shared_idx];
+        Hy_pad_rep[global_idx] = Hy_shmem[H_shared_idx];
+        Hz_pad_rep[global_idx] = Hz_shmem[H_shared_idx];
+      }
+
+      // store E ---------------------------------------------
+      if(global_x >= 1 + LEFT_PAD_MM_V4 && global_x <= Nx - 2 + LEFT_PAD_MM_V4 &&
+         global_y >= 1 + LEFT_PAD_MM_V4 && global_y <= Ny - 2 + LEFT_PAD_MM_V4 &&
+         global_z >= 1 + LEFT_PAD_MM_V4 && global_z <= Nz - 2 + LEFT_PAD_MM_V4 &&
+         global_x >= storeE_head_X && global_x <= storeE_tail_X &&
+         global_y >= storeE_head_Y && global_y <= storeE_tail_Y &&
+         global_z >= storeE_head_Z && global_z <= storeE_tail_Z) {
+
+        global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
+        E_shared_idx = E_shared_x + E_shared_y * E_SHX_V4 + E_shared_z * E_SHX_V4 * E_SHY_V4;
+        Ex_pad_rep[global_idx] = Ex_shmem[E_shared_idx];
+        Ey_pad_rep[global_idx] = Ey_shmem[E_shared_idx];
+        Ez_pad_rep[global_idx] = Ez_shmem[E_shared_idx];
+      }
+    }
+  }
 }
 
 void gDiamond::update_FDTD_mix_mapping_sequential_ver4(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz) {
@@ -225,7 +401,29 @@ void gDiamond::update_FDTD_mix_mapping_sequential_ver4(size_t num_timesteps, siz
   size_t grid_size = xx_num * yy_num * zz_num;
 
   for(size_t tt = 0; tt < num_timesteps / BLT_MM_V4; tt++) {
-
+    _updateEH_mix_mapping_ver4(Ex_pad_src, Ey_pad_src, Ez_pad_src,
+                               Hx_pad_src, Hy_pad_src, Hz_pad_src,
+                               Ex_pad_rep, Ey_pad_rep, Ez_pad_rep,
+                               Hx_pad_rep, Hy_pad_rep, Hz_pad_rep,
+                               Ex_pad_dst, Ey_pad_dst, Ez_pad_dst,
+                               Hx_pad_dst, Hy_pad_dst, Hz_pad_dst,
+                               _Cax, _Cbx,
+                               _Cay, _Cby,
+                               _Caz, _Cbz,
+                               _Dax, _Dbx,
+                               _Day, _Dby,
+                               _Daz, _Dbz,
+                               _Jx, _Jy, _Jz,
+                               _Mx, _My, _Mz,
+                               _dx,
+                               _Nx, _Ny, _Nz,
+                               Nx_pad, Ny_pad, Nz_pad,
+                               xx_num, yy_num, zz_num,
+                               xx_heads,
+                               yy_heads,
+                               zz_heads,
+                               block_size,
+                               grid_size);
   }
 
 }  
