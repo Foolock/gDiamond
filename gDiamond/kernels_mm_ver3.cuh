@@ -212,8 +212,6 @@ __global__ void updateEH_mix_mapping_kernel_ver3(float* Ex_pad_src, float* Ey_pa
     }
 
     __syncthreads();
-  __syncthreads();
-  __syncthreads();
 
     // update H 
     if(global_x >= 1 + LEFT_PAD_MM_V3 && global_x <= Nx - 2 + LEFT_PAD_MM_V3 &&

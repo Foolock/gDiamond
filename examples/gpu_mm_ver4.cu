@@ -35,6 +35,27 @@ int main(int argc, char* argv[]) {
   gdiamond::gDiamond exp(Nx, Ny, Nz);
 
   exp.update_FDTD_mix_mapping_sequential_ver4(num_timesteps, Tx, Ty, Tz);
+  exp.update_FDTD_mix_mapping_gpu_ver4(num_timesteps, Tx, Ty, Tz);
+
+  // exp.print_results();
+
+  if(!exp.check_correctness_rep()) {
+    std::cerr << "results are wrong!\n";
+    std::exit(EXIT_FAILURE);
+  }
+
+  std::cerr << "results are matched.\n";
 
   return 0;
 }
+
+
+
+
+
+
+
+
+
+
+

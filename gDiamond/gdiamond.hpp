@@ -157,6 +157,7 @@ class gDiamond {
     void update_FDTD_mix_mapping_gpu(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
     void update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
     void update_FDTD_mix_mapping_gpu_ver3(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
+    void update_FDTD_mix_mapping_gpu_ver4(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
 
     // check correctness
     bool check_correctness_gpu_2D();
@@ -166,6 +167,7 @@ class gDiamond {
     bool check_correctness_omp_dt();
     bool check_correctness_simu();
     bool check_correctness_simu_shmem();
+    bool check_correctness_rep();
     
     void print_results();
 
@@ -1318,6 +1320,25 @@ bool gDiamond::check_correctness_simu_shmem() {
   return correct;
 } 
 
+bool gDiamond::check_correctness_rep() {
+  bool correct = true;
+
+  for(size_t i=0; i<_Nx*_Ny*_Nz; i++) {
+    if(fabs(_Ex_gpu[i] - _Ex_simu[i]) >= 1e-8 ||
+       fabs(_Ey_gpu[i] - _Ey_simu[i]) >= 1e-8 ||
+       fabs(_Ez_gpu[i] - _Ez_simu[i]) >= 1e-8 ||
+       fabs(_Hx_gpu[i] - _Hx_simu[i]) >= 1e-8 ||
+       fabs(_Hy_gpu[i] - _Hy_simu[i]) >= 1e-8 ||
+       fabs(_Hz_gpu[i] - _Hz_simu[i]) >= 1e-8
+    ) {
+      correct = false;
+      break;
+    }
+  }
+
+  return correct;
+}
+
 void gDiamond::_get_indices_and_ranges(size_t BLX, size_t BLT, size_t Nx,
                                        std::vector<std::vector<size_t>>& mountain_indices,
                                        std::vector<std::vector<size_t>>& mountain_ranges,
@@ -1990,19 +2011,6 @@ void gDiamond::_setup_diamond_tiling_gpu(size_t BLX, size_t BLY, size_t BLZ, siz
 
 void gDiamond::print_results() {
 
-  std::cout << "Ex_gpu_bl = \n";
-  for(size_t k=1; k<_Nz-1; k++) {
-    for(size_t j=1; j<_Ny-1; j++) {
-      for(size_t i=1; i<_Nx-1; i++) {
-        size_t idx = i + j*_Nx + k*(_Nx*_Ny);
-        if(_Ex_gpu_bl[idx] != 0) { 
-          std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
-          std::cout << "Ex_gpu_bl[idx] = " << _Ex_gpu_bl[idx] << "\n";
-        }
-      }
-    }
-  }
-
   std::cout << "Ex_gpu = \n";
   for(size_t k=1; k<_Nz-1; k++) {
     for(size_t j=1; j<_Ny-1; j++) {
@@ -2011,6 +2019,19 @@ void gDiamond::print_results() {
         if(_Ex_gpu[idx] != 0) { 
           std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
           std::cout << "Ex_gpu[idx] = " << _Ex_gpu[idx] << "\n";
+        }
+      }
+    }
+  }
+
+  std::cout << "Ex_simu = \n";
+  for(size_t k=1; k<_Nz-1; k++) {
+    for(size_t j=1; j<_Ny-1; j++) {
+      for(size_t i=1; i<_Nx-1; i++) {
+        size_t idx = i + j*_Nx + k*(_Nx*_Ny);
+        if(_Ex_simu[idx] != 0) { 
+          std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
+          std::cout << "Ex_simu[idx] = " << _Ex_simu[idx] << "\n";
         }
       }
     }
