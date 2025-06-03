@@ -655,8 +655,9 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver4(size_t num_timesteps, size_t Tx,
   std::cout << "block_size = " << block_size << "\n";
   size_t grid_size = xx_num * yy_num * zz_num;
 
+  auto start = std::chrono::high_resolution_clock::now();
   for(size_t tt = 0; tt < num_timesteps / BLT_MM_V4; tt++) {
-    updateEH_mix_mapping_kernel_ver4<<<grid_size, block_size>>>(d_Ex_pad_src, d_Ey_pad_src, d_Ez_pad_src,
+    updateEH_mix_mapping_kernel_ver4_unroll<<<grid_size, block_size>>>(d_Ex_pad_src, d_Ey_pad_src, d_Ez_pad_src,
                                                                 d_Hx_pad_src, d_Hy_pad_src, d_Hz_pad_src,
                                                                 d_Ex_pad_rep, d_Ey_pad_rep, d_Ez_pad_rep,
                                                                 d_Hx_pad_rep, d_Hy_pad_rep, d_Hz_pad_rep,
@@ -687,6 +688,9 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver4(size_t num_timesteps, size_t Tx,
     SWAP_PTR(d_Hz_pad_src, d_Hz_pad_rep);
   }
   cudaDeviceSynchronize();
+  auto end = std::chrono::high_resolution_clock::now();
+  std::cout << "gpu runtime (replication part): " << std::chrono::duration<double>(end-start).count() << "s\n";
+  std::cout << "gpu performance: " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / std::chrono::duration<double>(end-start).count() << "Mcells/s\n";
 
   // copy E, H back to host
   CUDACHECK(cudaMemcpyAsync(Ex_pad_src.data(), d_Ex_pad_src, sizeof(float) * padded_length, cudaMemcpyDeviceToHost));

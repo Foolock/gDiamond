@@ -35,6 +35,7 @@ int main(int argc, char* argv[]) {
   gdiamond::gDiamond exp(Nx, Ny, Nz);
 
   exp.update_FDTD_mix_mapping_sequential_ver4(num_timesteps, Tx, Ty, Tz);
+  exp.update_FDTD_gpu_3D_warp_underutilization_fix(num_timesteps); 
   exp.update_FDTD_mix_mapping_gpu_ver4(num_timesteps, Tx, Ty, Tz);
 
   // exp.print_results();
