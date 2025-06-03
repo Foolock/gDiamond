@@ -5,6 +5,7 @@
 
 #include "gdiamond.hpp"
 
+// cannot change the BLT here!!!!!! I did not parameterize BLT
 #define BLT_MM_V4 4 
 
 /*
@@ -34,7 +35,7 @@
 // width of parallelogram in Y 
 #define BLY_P NTY_MM_V4
 // number of parallelgrams in each big mountain in Y
-#define NUM_P_Y 2 
+#define NUM_P_Y 1 
 // width of mountain bottom of the big mountain in Y
 #define MOUNTAIN_Y_V4 (BLY_R + NUM_P_Y * BLY_P)
 #define VALLEY_Y_V4 (MOUNTAIN_Y_V4 - 2 * (BLT_MM_V4 - 1) - 1) 
@@ -50,7 +51,7 @@
 // width of parallelogram in Z 
 #define BLZ_P NTZ_MM_V4
 // number of parallelgrams in each big mountain in Z
-#define NUM_P_Z 2 
+#define NUM_P_Z 1 
 // width of mountain bottom of the big mountain in Z
 #define MOUNTAIN_Z_V4 (BLZ_R + NUM_P_Z * BLZ_P)
 #define VALLEY_Z_V4 (MOUNTAIN_Z_V4 - 2 * (BLT_MM_V4 - 1) - 1) 
@@ -267,17 +268,19 @@ __global__ void updateEH_mix_mapping_kernel_ver4(float* Ex_pad_src, float* Ey_pa
   const int storeE_head_X = xx_heads[xx] + BLX_R - BLT_MM_V4;
   const int storeE_tail_X = xx_heads[xx] + BLX_R - 1;
   const int storeH_head_X = storeE_head_X;
-  const int storeH_tail_X = storeE_tail_X - 1;
+  // one extra store in H to make it simple
+  // for parallelogram calculation
+  const int storeH_tail_X = storeE_tail_X;
 
   const int storeE_head_Y = yy_heads[yy] + BLY_R - BLT_MM_V4;
   const int storeE_tail_Y = yy_heads[yy] + BLY_R - 1;
   const int storeH_head_Y = storeE_head_Y;
-  const int storeH_tail_Y = storeE_tail_Y - 1;
+  const int storeH_tail_Y = storeE_tail_Y;
 
   const int storeE_head_Z = zz_heads[zz] + BLZ_R - BLT_MM_V4;
   const int storeE_tail_Z = zz_heads[zz] + BLZ_R - 1;
   const int storeH_head_Z = storeE_head_Z;
-  const int storeH_tail_Z = storeE_tail_Z - 1;
+  const int storeH_tail_Z = storeE_tail_Z;
 
   // store H ---------------------------------------------
   if(global_x >= 1 + LEFT_PAD_MM_V4 && global_x <= Nx - 2 + LEFT_PAD_MM_V4 &&
@@ -626,6 +629,8 @@ __global__ void updateEH_mix_mapping_kernel_ver4_unroll(float* Ex_pad_src, float
     Ey_pad_rep[global_idx] = Ey_shmem[E_shared_idx];
     Ez_pad_rep[global_idx] = Ez_shmem[E_shared_idx];
   }
+
+  __syncthreads();
 }
 
 
