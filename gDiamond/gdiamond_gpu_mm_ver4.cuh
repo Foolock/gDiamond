@@ -19,14 +19,6 @@
 
 #define SWAP_PTR(a, b) do { auto _tmp = (a); (a) = (b); (b) = _tmp; } while (0)
 
-#define REINDEX_H_X(H_shared_x) (((H_shared_x) == 0 || (H_shared_x) == 1) ? ((H_shared_x) + NTX_MM_V4) : ((H_shared_x) - 2))
-#define REINDEX_H_Y(H_shared_y) (((H_shared_y) == 0 || (H_shared_y) == 1) ? ((H_shared_y) + NTY_MM_V4) : ((H_shared_y) - 2))
-#define REINDEX_H_Z(H_shared_z) (((H_shared_z) == 0 || (H_shared_z) == 1) ? ((H_shared_z) + NTZ_MM_V4) : ((H_shared_z) - 2))
-
-#define REINDEX_E_X(E_shared_x) (((E_shared_x) == 0 || (E_shared_x) == 1) ? ((E_shared_x) + NTX_MM_V4) : ((E_shared_x) - 2))
-#define REINDEX_E_Y(E_shared_y) (((E_shared_y) == 0 || (E_shared_y) == 1) ? ((E_shared_y) + NTY_MM_V4) : ((E_shared_y) - 2))
-#define REINDEX_E_Z(E_shared_z) (((E_shared_z) == 0 || (E_shared_z) == 1) ? ((E_shared_z) + NTZ_MM_V4) : ((E_shared_z) - 2))
-
 namespace gdiamond {
 
 void gDiamond::_updateEH_mix_mapping_ver4(std::vector<float>& Ex_pad_src, std::vector<float>& Ey_pad_src, std::vector<float>& Ez_pad_src,
@@ -896,7 +888,6 @@ void gDiamond::_updateEH_mix_mapping_ver4(std::vector<float>& Ex_pad_src, std::v
         Ez_pad_dst[global_idx] = Ez_shmem[E_shared_idx];
       }
 
-
       // so hard to make it right...
     }
 
@@ -1017,13 +1008,12 @@ void gDiamond::update_FDTD_mix_mapping_sequential_ver4(size_t num_timesteps, siz
                                block_size,
                                grid_size);
 
-    // first transfer replication results just for checking
-    SWAP_PTR(Ex_pad_src, Ex_pad_rep);
-    SWAP_PTR(Ey_pad_src, Ey_pad_rep);
-    SWAP_PTR(Ez_pad_src, Ez_pad_rep);
-    SWAP_PTR(Hx_pad_src, Hx_pad_rep);
-    SWAP_PTR(Hy_pad_src, Hy_pad_rep);
-    SWAP_PTR(Hz_pad_src, Hz_pad_rep);
+    SWAP_PTR(Ex_pad_src, Ex_pad_dst);
+    SWAP_PTR(Ey_pad_src, Ey_pad_dst);
+    SWAP_PTR(Ez_pad_src, Ez_pad_dst);
+    SWAP_PTR(Hx_pad_src, Hx_pad_dst);
+    SWAP_PTR(Hy_pad_src, Hy_pad_dst);
+    SWAP_PTR(Hz_pad_src, Hz_pad_dst);
   }
 
   // transfer data back to unpadded arrays
@@ -1262,17 +1252,16 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver4(size_t num_timesteps, size_t Tx,
                                                                 d_yy_heads,
                                                                 d_zz_heads);
 
-    // first transfer replication results just for checking
-    SWAP_PTR(d_Ex_pad_src, d_Ex_pad_rep);
-    SWAP_PTR(d_Ey_pad_src, d_Ey_pad_rep);
-    SWAP_PTR(d_Ez_pad_src, d_Ez_pad_rep);
-    SWAP_PTR(d_Hx_pad_src, d_Hx_pad_rep);
-    SWAP_PTR(d_Hy_pad_src, d_Hy_pad_rep);
-    SWAP_PTR(d_Hz_pad_src, d_Hz_pad_rep);
+    SWAP_PTR(d_Ex_pad_src, d_Ex_pad_dst);
+    SWAP_PTR(d_Ey_pad_src, d_Ey_pad_dst);
+    SWAP_PTR(d_Ez_pad_src, d_Ez_pad_dst);
+    SWAP_PTR(d_Hx_pad_src, d_Hx_pad_dst);
+    SWAP_PTR(d_Hy_pad_src, d_Hy_pad_dst);
+    SWAP_PTR(d_Hz_pad_src, d_Hz_pad_dst);
   }
   cudaDeviceSynchronize();
   auto end = std::chrono::high_resolution_clock::now();
-  std::cout << "gpu runtime (replication part): " << std::chrono::duration<double>(end-start).count() << "s\n";
+  std::cout << "gpu runtime (mix mapping ver4): " << std::chrono::duration<double>(end-start).count() << "s\n";
   std::cout << "gpu performance: " << (_Nx * _Ny * _Nz / 1.0e6 * num_timesteps) / std::chrono::duration<double>(end-start).count() << "Mcells/s\n";
 
   // copy E, H back to host
