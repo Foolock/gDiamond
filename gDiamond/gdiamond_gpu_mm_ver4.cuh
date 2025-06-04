@@ -889,6 +889,75 @@ void gDiamond::_updateEH_mix_mapping_ver4(std::vector<float>& Ex_pad_src, std::v
       }
 
       // so hard to make it right...
+      // store H Halo ---------------------------------------------
+      if(local_x < 2) {
+        int halo_x = local_x + NTX_MM_V4;
+        int global_x_halo = xx_heads[xx] + BLX_R + halo_x - 4;
+
+        global_idx = global_x_halo + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
+        H_shared_idx = REINDEX_H_X(halo_x) + REINDEX_H_Y(H_shared_y) * H_SHX_V4 + REINDEX_H_Z(H_shared_z) * H_SHX_V4 * H_SHY_V4; 
+
+        Hx_pad_dst[global_idx] = Hx_shmem[H_shared_idx];
+        Hy_pad_dst[global_idx] = Hy_shmem[H_shared_idx];
+        Hz_pad_dst[global_idx] = Hz_shmem[H_shared_idx];
+      }
+      if(local_y < 2) {
+        int halo_y = local_y + NTY_MM_V4;
+        int global_y_halo = yy_heads[yy] + BLY_R + halo_y - 4;
+
+        global_idx = global_x + global_y_halo * Nx_pad + global_z * Nx_pad * Ny_pad;
+        H_shared_idx = REINDEX_H_X(H_shared_x) + REINDEX_H_Y(halo_y) * H_SHX_V4 + REINDEX_H_Z(H_shared_z) * H_SHX_V4 * H_SHY_V4;
+
+        Hx_pad_dst[global_idx] = Hx_shmem[H_shared_idx];
+        Hy_pad_dst[global_idx] = Hy_shmem[H_shared_idx];
+        Hz_pad_dst[global_idx] = Hz_shmem[H_shared_idx];
+      }
+      if(local_z < 2) {
+        int halo_z = local_z + NTZ_MM_V4;
+        int global_z_halo = zz_heads[zz] + BLZ_R + halo_z - 4;
+
+        global_idx = global_x + global_y * Nx_pad + global_z_halo * Nx_pad * Ny_pad;
+        H_shared_idx = REINDEX_H_X(H_shared_x) + REINDEX_H_Y(H_shared_y) * H_SHX_V4 + REINDEX_H_Z(halo_z) * H_SHX_V4 * H_SHY_V4;
+
+        Hx_pad_dst[global_idx] = Hx_shmem[H_shared_idx];
+        Hy_pad_dst[global_idx] = Hy_shmem[H_shared_idx];
+        Hz_pad_dst[global_idx] = Hz_shmem[H_shared_idx];
+      }
+
+      // store E Halo ---------------------------------------------
+      if(local_x >= NTX_MM_V4 - 2) {
+        int halo_x = local_x + 2;
+        int global_x_halo = xx_heads[xx] + BLX_R + halo_x - 4;
+
+        global_idx = global_x_halo + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
+        E_shared_idx = REINDEX_E_X(halo_x) + REINDEX_E_Y(E_shared_y) * E_SHX_V4 + REINDEX_E_Z(E_shared_z) * E_SHX_V4 * E_SHY_V4;
+
+        Ex_pad_dst[global_idx] = Ex_shmem[E_shared_idx];
+        Ey_pad_dst[global_idx] = Ey_shmem[E_shared_idx];
+        Ez_pad_dst[global_idx] = Ez_shmem[E_shared_idx];
+      }
+      if(local_y >= NTY_MM_V4 - 2) {
+        int halo_y = local_y + 2;
+        int global_y_halo = yy_heads[yy] + BLY_R + halo_y - 4;
+
+        global_idx = global_x + global_y_halo * Nx_pad + global_z * Nx_pad * Ny_pad;
+        E_shared_idx = REINDEX_E_X(E_shared_x) + REINDEX_E_Y(halo_y) * E_SHX_V4 + REINDEX_E_Z(E_shared_z) * E_SHX_V4 * E_SHY_V4;
+
+        Ex_pad_dst[global_idx] = Ex_shmem[E_shared_idx];
+        Ey_pad_dst[global_idx] = Ey_shmem[E_shared_idx];
+        Ez_pad_dst[global_idx] = Ez_shmem[E_shared_idx];
+      }
+      if(local_z >= NTZ_MM_V4 - 2) {
+        int halo_z = local_z + 2;
+        int global_z_halo = zz_heads[zz] + BLZ_R + halo_z - 4;
+
+        global_idx = global_x + global_y * Nx_pad + global_z_halo * Nx_pad * Ny_pad;
+        E_shared_idx = REINDEX_E_X(E_shared_x) + REINDEX_E_Y(E_shared_y) * E_SHX_V4 + REINDEX_E_Z(halo_z) * E_SHX_V4 * E_SHY_V4;
+
+        Ex_pad_dst[global_idx] = Ex_shmem[E_shared_idx];
+        Ey_pad_dst[global_idx] = Ey_shmem[E_shared_idx];
+        Ez_pad_dst[global_idx] = Ez_shmem[E_shared_idx];
+      }
     }
 
   }
