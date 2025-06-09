@@ -31,3 +31,4 @@ nvidia-smi
 ### Note 
 1. (5/8) BLT = 3 produces better results than BLT = 4 in mix mapping ver2. Might switch block\_size from 1024 to 768.
 2. (5/8) For mix mapping ver2, the unrolled version, --maxrregcount = 72 or 64 or without this flag, reaches best performance. The pre-unrolled version reaches best performance with --maxrregcount = 32 (cannot run without the flag). Need NCU report to support this. (check occupancy).
+3. (6/8) Mix mapping ver 4 won't work because I haven't considered the multi-shape effect within one mountain tile. Adding mix mapping ver 5 with hyperplane to fix that. 
