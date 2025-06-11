@@ -1,52 +1,73 @@
 #include <iostream>
+#include <vector>
+#include <cmath>
 #include <cuda_runtime.h>
 
-__global__ void shared_memory_test_kernel(int *out, int shared_mem_size) {
-    extern __shared__ int shared_mem[]; // Shared memory allocation
+__global__ void max_shmem_kernel(float* out, int N) {
+    extern __shared__ float shmem[];
 
-    int tid = threadIdx.x;
-    if (tid < shared_mem_size / sizeof(int)) {
-        shared_mem[tid] = tid;  // Fill shared memory
+    int tid = blockDim.x * blockIdx.x + threadIdx.x;
+    if (tid < N) {
+        shmem[tid] = tid * 2.0f;
     }
     __syncthreads();
 
-    if (tid == 0) {
-        int sum = 0;
-        for (int i = 0; i < shared_mem_size / sizeof(int); i++) {
-            sum += shared_mem[i];  // Simple computation to avoid optimization
-        }
-        out[blockIdx.x] = sum;
+    if (tid < N) {
+        out[tid] = shmem[tid];
     }
 }
 
-void checkCudaErrors(cudaError_t err, const char *msg) {
-    if (err != cudaSuccess) {
-        std::cerr << "CUDA Error: " << msg << " -> " << cudaGetErrorString(err) << std::endl;
-        exit(EXIT_FAILURE);
+void cpu_version(std::vector<float>& ref, int N) {
+    for (int i = 0; i < N; ++i) {
+        ref[i] = i * 2.0f;
     }
 }
 
 int main() {
-    int grid_size = 5000;    // Change this as needed
-    int block_size = 512;  // Change this as needed
-    int shared_mem_size = 48 * 1024; // Adjust this value to test limits
+    const int N = 24816; // 99264 bytes / sizeof(float)
+    const int threadsPerBlock = 256;
+    const size_t shmemBytes = N * sizeof(float);
 
-    int *d_out, *h_out;
-    h_out = (int*)malloc(grid_size * sizeof(int));
+    std::vector<float> host_ref(N);
+    std::vector<float> host_out(N);
 
-    checkCudaErrors(cudaMalloc((void**)&d_out, grid_size * sizeof(int)), "Allocating device output memory");
+    float* d_out;
+    cudaMalloc(&d_out, N * sizeof(float));
 
-    shared_memory_test_kernel<<<grid_size, block_size, shared_mem_size>>>(d_out, shared_mem_size);
-    checkCudaErrors(cudaGetLastError(), "Kernel launch failed");
-    checkCudaErrors(cudaDeviceSynchronize(), "Kernel execution failed");
+    // Allow large shared memory size
+    cudaFuncSetAttribute(
+        max_shmem_kernel,
+        cudaFuncAttributeMaxDynamicSharedMemorySize,
+        (int)shmemBytes
+    );
 
-    checkCudaErrors(cudaMemcpy(h_out, d_out, grid_size * sizeof(int), cudaMemcpyDeviceToHost), "Copying output to host");
+    size_t grid_size = (N + threadsPerBlock - 1) / threadsPerBlock;
+    max_shmem_kernel<<<grid_size, threadsPerBlock, shmemBytes>>>(d_out, N);
+    cudaDeviceSynchronize();
 
-    std::cout << "Kernel execution completed. First output: " << h_out[0] << std::endl;
+    cudaMemcpy(host_out.data(), d_out, N * sizeof(float), cudaMemcpyDeviceToHost);
 
-    free(h_out);
+    // CPU computation
+    cpu_version(host_ref, N);
+
+    // Check correctness
+    bool correct = true;
+    for (int i = 0; i < N; ++i) {
+        if (std::abs(host_ref[i] - host_out[i]) > 1e-5) {
+            std::cerr << "Mismatch at " << i << ": CPU = " << host_ref[i]
+                      << ", GPU = " << host_out[i] << '\n';
+            correct = false;
+            break;
+        }
+    }
+
+    if (correct) {
+        std::cout << "✅ Output matches CPU reference for N = " << N << '\n';
+    } else {
+        std::cout << "❌ Output mismatch\n";
+    }
+
     cudaFree(d_out);
-
     return 0;
 }
 

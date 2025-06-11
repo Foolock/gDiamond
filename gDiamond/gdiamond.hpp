@@ -150,6 +150,9 @@ class gDiamond {
                                                                                         // with extra copy to dst in phase 1 and phase 2, no final needed
 
     // mix mapping for 3D diamond tiling
+    // ver 2 is clean diamond tiling (verified)
+    // ver 3 is replication tiling (verified) 
+    // ver4 is wrong... ver5 has not been completed due to shared memory problem (increased complexity) 
     void update_FDTD_mix_mapping_sequential(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz); // simulate GPU workflow  
     void update_FDTD_mix_mapping_sequential_ver2(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
     void update_FDTD_mix_mapping_sequential_ver3(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
@@ -159,6 +162,9 @@ class gDiamond {
     void update_FDTD_mix_mapping_gpu_ver2(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
     void update_FDTD_mix_mapping_gpu_ver3(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
     void update_FDTD_mix_mapping_gpu_ver4(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);   
+
+    // replication tiling with larger shmem
+    void update_FDTD_replication_tiling_sequential(size_t num_timesteps, size_t Tx, size_t Ty, size_t Tz);
 
     // check correctness
     bool check_correctness_gpu_2D();

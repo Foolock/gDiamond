@@ -323,19 +323,20 @@ void gDiamond::_updateEH_mix_mapping_ver5(std::vector<float>& Ex_pad_src, std::v
         local_z = thread_id / (NTX_MM_V5 * NTY_MM_V5);
 
         // H_shared and E_shared index are set differently when load replication / parallelogram
-        H_shared_x = (sub_xx == 0)? local_x + 1 : local_x + 2;
-        H_shared_y = (sub_yy == 0)? local_y + 1 : local_y + 2;
-        H_shared_z = (sub_zz == 0)? local_z + 1 : local_z + 2;
-        E_shared_x = (sub_xx == 0)? local_x : local_x + 2;
-        E_shared_y = (sub_yy == 0)? local_y : local_y + 2;
-        E_shared_z = (sub_zz == 0)? local_z : local_z + 2;
+        // when calculate **E** in parallelogram, offset between local and H/E_shared is 2 - t
+        H_shared_x = (sub_xx == 0)? local_x + 1 : local_x + 2 - t;
+        H_shared_y = (sub_yy == 0)? local_y + 1 : local_y + 2 - t;
+        H_shared_z = (sub_zz == 0)? local_z + 1 : local_z + 2 - t;
+        E_shared_x = (sub_xx == 0)? local_x : local_x + 2 - t;
+        E_shared_y = (sub_yy == 0)? local_y : local_y + 2 - t;
+        E_shared_z = (sub_zz == 0)? local_z : local_z + 2 - t;
 
         // global index in replication / parallelogram is set differently when calculate **E** replication / parallelogram
         // Difference: if calculate replication (sub == 0), global_x = xx_head + local_x, same for Y, Z 
         //             if calculate parallelogram (sub > 0), global_x = xx_head - t + local_x, same for Y, Z 
-        global_x = xx_head + local_x;
-        global_y = yy_head + local_y;
-        global_z = zz_head + local_z;
+        global_x = (sub_xx == 0)? xx_head + local_x : xx_head - t + local_x;
+        global_y = (sub_yy == 0)? yy_head + local_y : yy_head - t + local_y;
+        global_z = (sub_zz == 0)? zz_head + local_z : zz_head - t + local_z;
 
         // we pad all the dimension, so need to substract LEFT_PAD here to correctly access constant arrays
         global_idx = (global_x - LEFT_PAD_MM_V5) + (global_y - LEFT_PAD_MM_V5) * Nx + (global_z - LEFT_PAD_MM_V5) * Nx * Ny;
@@ -358,7 +359,7 @@ void gDiamond::_updateEH_mix_mapping_ver5(std::vector<float>& Ex_pad_src, std::v
           Ez_shmem[E_shared_idx] = Caz[global_idx] * Ez_shmem[E_shared_idx] + Cbz[global_idx] *
                     ((Hy_shmem[H_shared_idx] - Hy_shmem[H_shared_idx - 1]) - (Hx_shmem[H_shared_idx] - Hx_shmem[H_shared_idx - H_SHX_V5]) - Jz[global_idx] * dx);
 
-          // if(super_xx == 0 && super_yy == 0 && super_zz == 0 && sub_xx == 1 && sub_yy == 0 && sub_zz == 0) {
+          // if(super_xx == 0 && super_yy == 0 && super_zz == 0 && sub_xx == 1 && sub_yy == 1 && sub_zz == 0) {
           //   std::cout << "------------------------------------------------------\n";
           //   std::cout << "t = " << t << "\n";
           //   std::cout << "local_x = " << local_x << ", local_y = " << local_y << ", local_z = " << local_z << "\n";
@@ -368,6 +369,104 @@ void gDiamond::_updateEH_mix_mapping_ver5(std::vector<float>& Ex_pad_src, std::v
           // }
 
         }
+      }
+
+      // update H
+      for(size_t thread_id = 0; thread_id < block_size; thread_id++) {
+        local_x = thread_id % NTX_MM_V5;
+        local_y = (thread_id / NTX_MM_V5) % NTY_MM_V5;
+        local_z = thread_id / (NTX_MM_V5 * NTY_MM_V5);
+
+        // H_shared and E_shared index are set differently when load replication / parallelogram
+        // when calculate **H** in parallelogram, offset between local and H/E_shared is 1 - t
+        H_shared_x = (sub_xx == 0)? local_x + 1 : local_x + 1 - t;
+        H_shared_y = (sub_yy == 0)? local_y + 1 : local_y + 1 - t;
+        H_shared_z = (sub_zz == 0)? local_z + 1 : local_z + 1 - t;
+        E_shared_x = (sub_xx == 0)? local_x : local_x + 1 - t;
+        E_shared_y = (sub_yy == 0)? local_y : local_y + 1 - t;
+        E_shared_z = (sub_zz == 0)? local_z : local_z + 1 - t;
+
+        // global index in replication / parallelogram is set differently when calculate **H** replication / parallelogram
+        // Difference: if calculate replication (sub == 0), global_x = xx_head + local_x, same for Y, Z 
+        //             if calculate parallelogram (sub > 0), global_x = xx_head - t + local_x - 1, same for Y, Z 
+        global_x = (sub_xx == 0)? xx_head + local_x : xx_head - t + local_x - 1;
+        global_y = (sub_yy == 0)? yy_head + local_y : yy_head - t + local_y - 1;
+        global_z = (sub_zz == 0)? zz_head + local_z : zz_head - t + local_z - 1;
+
+        global_idx = (global_x - LEFT_PAD_MM_V5) + (global_y - LEFT_PAD_MM_V5) * Nx + (global_z - LEFT_PAD_MM_V5) * Nx * Ny;
+        E_shared_idx = E_shared_x + E_shared_y * E_SHX_V5 + E_shared_z * E_SHX_V5 * E_SHY_V5;
+        H_shared_idx = H_shared_x + H_shared_y * H_SHX_V5 + H_shared_z * H_SHX_V5 * H_SHY_V5;
+
+        if(global_x >= 1 + LEFT_PAD_MM_V5 && global_x <= Nx - 2 + LEFT_PAD_MM_V5 &&
+           global_y >= 1 + LEFT_PAD_MM_V5 && global_y <= Ny - 2 + LEFT_PAD_MM_V5 &&
+           global_z >= 1 + LEFT_PAD_MM_V5 && global_z <= Nz - 2 + LEFT_PAD_MM_V5 &&
+           global_x >= calH_head_X && global_x <= calH_tail_X &&
+           global_y >= calH_head_Y && global_y <= calH_tail_Y &&
+           global_z >= calH_head_Z && global_z <= calH_tail_Z) {
+
+          Hx_shmem[H_shared_idx] = Dax[global_idx] * Hx_shmem[H_shared_idx] + Dbx[global_idx] *
+                    ((Ey_shmem[E_shared_idx + E_SHX_V5 * E_SHY_V5] - Ey_shmem[E_shared_idx]) - (Ez_shmem[E_shared_idx + E_SHX_V5] - Ez_shmem[E_shared_idx]) - Mx[global_idx] * dx);
+
+          Hy_shmem[H_shared_idx] = Day[global_idx] * Hy_shmem[H_shared_idx] + Dby[global_idx] *
+                    ((Ez_shmem[E_shared_idx + 1] - Ez_shmem[E_shared_idx]) - (Ex_shmem[E_shared_idx + E_SHX_V5 * E_SHY_V5] - Ex_shmem[E_shared_idx]) - My[global_idx] * dx);
+
+          Hz_shmem[H_shared_idx] = Daz[global_idx] * Hz_shmem[H_shared_idx] + Dbz[global_idx] *
+                    ((Ex_shmem[E_shared_idx + E_SHX_V5] - Ex_shmem[E_shared_idx]) - (Ey_shmem[E_shared_idx + 1] - Ey_shmem[E_shared_idx]) - Mz[global_idx] * dx);
+        
+          // if(super_xx == 0 && super_yy == 0 && super_zz == 0 && sub_xx == 1 && sub_yy == 1 && sub_zz == 0) {
+          //   std::cout << "------------------------------------------------------\n";
+          //   std::cout << "t = " << t << "\n";
+          //   std::cout << "local_x = " << local_x << ", local_y = " << local_y << ", local_z = " << local_z << "\n";
+          //   std::cout << "E_shared_x = " << E_shared_x << ", E_shared_y = " << E_shared_y << ", E_shared_z = " << E_shared_z << "\n";
+          //   std::cout << "H_shared_x = " << H_shared_x << ", H_shared_y = " << H_shared_y << ", H_shared_z = " << H_shared_z << "\n";
+          //   std::cout << "global_x = " << global_x << ", global_y = " << global_y << ", global_z = " << global_z << "\n";
+          // }
+
+        }
+      }
+    }
+
+    // load new HALO, evict old data to global memory
+    // Since this eviction only happens on the side of the parallelogram,
+    // the evict data will all be stored into temp copy 
+
+    // evict old data
+    for(size_t thread_id = 0; thread_id < block_size; thread_id++) {
+      local_x = thread_id % NTX_MM_V5;
+      local_y = (thread_id / NTX_MM_V5) % NTY_MM_V5;
+      local_z = thread_id / (NTX_MM_V5 * NTY_MM_V5);
+
+      // H_shared and E_shared index are set differently in replication / parallelogram
+      // In eviction, follow the same pattern in shared memory load 
+      H_shared_x = (sub_xx == 0)? local_x + 1 : local_x + 2;
+      H_shared_y = (sub_yy == 0)? local_y + 1 : local_y + 2;
+      H_shared_z = (sub_zz == 0)? local_z + 1 : local_z + 2;
+      E_shared_x = (sub_xx == 0)? local_x : local_x + 2;
+      E_shared_y = (sub_yy == 0)? local_y : local_y + 2;
+      E_shared_z = (sub_zz == 0)? local_z : local_z + 2;
+
+      // global index is the same with head index as base 
+      global_x = xx_head + local_x;
+      global_y = yy_head + local_y;
+      global_z = zz_head + local_z;
+
+      // evict old H ---------------------------------------------
+      // For one dimension, it only happens if this dimension is a parallelogram
+      if (sub_xx > 0 && local_x < 2) {
+
+        int halo_x = local_x + NTX_MM_V5;
+        int global_x_halo = xx_head + halo_x - 2;
+
+        if(local_y == 0 && local_z == 0) {
+          std::cout << "evict H: local_x = " << local_x << ", halo_x = " << halo_x << ", global_x_halo = " << global_x_halo << "\n";
+        }
+
+        global_idx = global_x_halo + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
+        H_shared_idx = halo_x + H_shared_y * H_SHX_V5 + H_shared_z * H_SHX_V5 * H_SHY_V5;
+
+        Hx_pad_temp[global_idx] = Hx_shmem[H_shared_idx];
+        Hy_pad_temp[global_idx] = Hy_shmem[H_shared_idx];
+        Hz_pad_temp[global_idx] = Hz_shmem[H_shared_idx];
       }
 
     }
