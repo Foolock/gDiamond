@@ -5927,44 +5927,6 @@ void gDiamond::update_FDTD_cpu_simulation_1_D_pt(size_t num_timesteps) { // CPU 
   }
 }
 
-void gDiamond::_find_diagonal_hyperplanes(int Nx, int Ny, int Nz, 
-                                          std::vector<Pt_idx>& hyperplanes, 
-                                          std::vector<int>& hyperplane_heads, 
-                                          std::vector<int>& hyperplanes_sizes) {
-  int total_pixels = 0;
-
-  // Generate hyperplanes and store them in a flattened array
-  for (int d = 0; d < Nx + Ny + Nz - 2; ++d) {
-    hyperplane_heads.push_back(total_pixels); // Start index of current hyperplane
-    int count = 0;
-    for (int x = 0; x < Nx; ++x) {
-      for (int y = 0; y < Ny; ++y) {
-        for (int z = 0; z < Nz; ++z) {
-          if (x + y + z == d) {
-            hyperplanes.push_back({x, y, z});
-            count++;
-          }
-        }
-      }
-    }
-    hyperplanes_sizes.push_back(count); // Store number of pixels in this hyperplane
-    total_pixels += count;
-  }
-
-  // Print all hyperplanes
-  // for (size_t d = 0; d < hyperplane_heads.size(); ++d) {
-  //   std::cout << "Hyperplane " << d << ": ";
-  //   int startIdx = hyperplane_heads[d];
-  //   int size = hyperplanes_sizes[d];
-  //   for (int i = 0; i < size; ++i) {
-  //     Pt_idx p = hyperplanes[startIdx + i];
-  //     std::cout << "(" << p.x << ", " << p.y << ", " << p.z << ") ";
-  //   }
-  //   std::cout << std::endl;
-  // }
-
-}
-
 void gDiamond::update_FDTD_cpu_simulation_3_D_pt(size_t num_timesteps) { // CPU single thread 3-D simulation of parallelogram tiling
 
   // clear source Mz for experiments

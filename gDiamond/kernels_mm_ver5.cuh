@@ -19,7 +19,7 @@
 // width of parallelogram in X 
 #define BLX_P NTX_MM_V5
 // number of parallelgrams in each big mountain in X
-#define NUM_P_X 1
+#define NUM_P_X 2 
 // width of mountain bottom of the big mountain in X
 #define MOUNTAIN_X_V5 (BLX_R + NUM_P_X * BLX_P)
 #define VALLEY_X_V5 (MOUNTAIN_X_V5 - 2 * (BLT_MM_V5 - 1) - 1) 
@@ -35,7 +35,7 @@
 // width of parallelogram in Y 
 #define BLY_P NTY_MM_V5
 // number of parallelgrams in each big mountain in Y
-#define NUM_P_Y 1 
+#define NUM_P_Y 2 
 // width of mountain bottom of the big mountain in Y
 #define MOUNTAIN_Y_V5 (BLY_R + NUM_P_Y * BLY_P)
 #define VALLEY_Y_V5 (MOUNTAIN_Y_V5 - 2 * (BLT_MM_V5 - 1) - 1) 
@@ -51,7 +51,7 @@
 // width of parallelogram in Z 
 #define BLZ_P NTZ_MM_V5
 // number of parallelgrams in each big mountain in Z
-#define NUM_P_Z 1 
+#define NUM_P_Z 2 
 // width of mountain bottom of the big mountain in Z
 #define MOUNTAIN_Z_V5 (BLZ_R + NUM_P_Z * BLZ_P)
 #define VALLEY_Z_V5 (MOUNTAIN_Z_V5 - 2 * (BLT_MM_V5 - 1) - 1) 

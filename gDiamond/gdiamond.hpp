@@ -267,6 +267,31 @@ class gDiamond {
                                     size_t block_size,
                                     size_t grid_size);
 
+    void _updateEH_mix_mapping_ver5(std::vector<float>& Ex_pad_src, std::vector<float>& Ey_pad_src, std::vector<float>& Ez_pad_src,
+                                    std::vector<float>& Hx_pad_src, std::vector<float>& Hy_pad_src, std::vector<float>& Hz_pad_src,
+                                    std::vector<float>& Ex_pad_temp, std::vector<float>& Ey_pad_temp, std::vector<float>& Ez_pad_temp,
+                                    std::vector<float>& Hx_pad_temp, std::vector<float>& Hy_pad_temp, std::vector<float>& Hz_pad_temp,
+                                    const std::vector<float>& Cax, const std::vector<float>& Cbx,
+                                    const std::vector<float>& Cay, const std::vector<float>& Cby,
+                                    const std::vector<float>& Caz, const std::vector<float>& Cbz,
+                                    const std::vector<float>& Dax, const std::vector<float>& Dbx,
+                                    const std::vector<float>& Day, const std::vector<float>& Dby,
+                                    const std::vector<float>& Daz, const std::vector<float>& Dbz,
+                                    const std::vector<float>& Jx, const std::vector<float>& Jy, const std::vector<float>& Jz,
+                                    const std::vector<float>& Mx, const std::vector<float>& My, const std::vector<float>& Mz,
+                                    float dx, 
+                                    int Nx, int Ny, int Nz,
+                                    int Nx_pad, int Ny_pad, int Nz_pad, 
+                                    int xx_num, int yy_num, int zz_num, 
+                                    const std::vector<int>& xx_heads, 
+                                    const std::vector<int>& yy_heads,
+                                    const std::vector<int>& zz_heads,
+                                    int num_subtiles,
+                                    int hyperplane_head,
+                                    const std::vector<Pt_idx>& hyperplanes,
+                                    size_t block_size,
+                                    size_t grid_size);
+
     // for diamond tiling reimplementation
     void _updateEH_dt_1D_mountain_seq_extra_copy(const std::vector<float>& Ex_src, const std::vector<float>& Ey_src, const std::vector<float>& Ez_src,
                                       const std::vector<float>& Hx_src, const std::vector<float>& Hy_src, const std::vector<float>& Hz_src,
@@ -439,10 +464,49 @@ class gDiamond {
                              size_t grid_size); 
     
     // for parallelogram tiling CPU simulation
-    void _find_diagonal_hyperplanes(int Nx, int Ny, int Nz, 
+    void _find_diagonal_hyperplanes(int Tx, int Ty, int Tz, 
                                     std::vector<Pt_idx>& hyperplanes, 
                                     std::vector<int>& hyperplane_heads, 
-                                    std::vector<int>& hyperplanes_sizes);
+                                    std::vector<int>& hyperplanes_sizes) {
+      int total_pixels = 0;
+      int useful_tiles = 0;
+
+      // Generate hyperplanes and store them in a flattened array
+      for (int d = 0; d < Tx + Ty + Tz - 2; ++d) {
+        hyperplane_heads.push_back(total_pixels); // Start index of current hyperplane
+        int count = 0;
+        for (int x = 0; x < Tx; ++x) {
+          for (int y = 0; y < Ty; ++y) {
+            for (int z = 0; z < Tz; ++z) {
+              if (x + y + z == d) {
+                hyperplanes.push_back({x, y, z});
+                count++;
+                if(x != 0 && y != 0 && z != 0) {
+                  useful_tiles++;
+                }
+              }
+            }
+          }
+        }
+        hyperplanes_sizes.push_back(count); // Store number of pixels in this hyperplane
+        total_pixels += count;
+      }
+
+      // Print all hyperplanes
+      for (size_t d = 0; d < hyperplane_heads.size(); ++d) {
+        std::cout << "Hyperplane " << d << ": ";
+        int startIdx = hyperplane_heads[d];
+        int size = hyperplanes_sizes[d];
+        for (int i = 0; i < size; ++i) {
+          Pt_idx p = hyperplanes[startIdx + i];
+          std::cout << "(" << p.x << ", " << p.y << ", " << p.z << ") ";
+        }
+        std::cout << std::endl;
+      }
+
+      std::cout << "number of useful tiles = " << useful_tiles << ", useful tile % = " << (useful_tiles * 1.0) / ((Tx * Ty * Tz) * 1.0) << "\n";
+
+    }
 
     void _updateEH_pt_seq(std::vector<float>& Ex, std::vector<float>& Ey, std::vector<float>& Ez,
                           std::vector<float>& Hx, std::vector<float>& Hy, std::vector<float>& Hz,
