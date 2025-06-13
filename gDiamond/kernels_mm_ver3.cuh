@@ -8,7 +8,7 @@
 #define BLT_MM_V3 2 
 
 // one-to-one mapping in X dimension
-#define NTX_MM_V3 16
+#define NTX_MM_V3 16 
 #define MOUNTAIN_X_V3 16 
 // valley is actually mountain top 
 #define VALLEY_X_V3 (MOUNTAIN_X_V3 - 2 * (BLT_MM_V3 - 1) - 1) 
@@ -461,12 +461,15 @@ __global__ void updateEH_mix_mapping_kernel_ver3_unroll(float* Ex_pad_src, float
   int H_shared_idx;
   int E_shared_idx;
 
-  __shared__ float Hx_shmem[H_SHX_V3 * H_SHY_V3 * H_SHZ_V3];
-  __shared__ float Hy_shmem[H_SHX_V3 * H_SHY_V3 * H_SHZ_V3];
-  __shared__ float Hz_shmem[H_SHX_V3 * H_SHY_V3 * H_SHZ_V3];
-  __shared__ float Ex_shmem[E_SHX_V3 * E_SHY_V3 * E_SHZ_V3];
-  __shared__ float Ey_shmem[E_SHX_V3 * E_SHY_V3 * E_SHZ_V3];
-  __shared__ float Ez_shmem[E_SHX_V3 * E_SHY_V3 * E_SHZ_V3];
+  extern __shared__ float shared_mem[];  // Single dynamic buffer
+  constexpr int H_size = H_SHX_V3 * H_SHY_V3 * H_SHZ_V3;
+  constexpr int E_size = E_SHX_V3 * E_SHY_V3 * E_SHZ_V3;
+  float* Hx_shmem = shared_mem;
+  float* Hy_shmem = Hx_shmem + H_size;
+  float* Hz_shmem = Hy_shmem + H_size;
+  float* Ex_shmem = Hz_shmem + H_size;
+  float* Ey_shmem = Ex_shmem + E_size;
+  float* Ez_shmem = Ey_shmem + E_size;
 
   // load shared memory
 

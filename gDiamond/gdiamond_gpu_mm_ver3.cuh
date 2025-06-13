@@ -639,9 +639,19 @@ void gDiamond::update_FDTD_mix_mapping_gpu_ver3(size_t num_timesteps, size_t Tx,
   std::cout << "block_size = " << block_size << "\n";
   size_t grid_size = xx_num * yy_num * zz_num;
 
+  // Allow large shared memory size
+  int total_shmem_btyes = (H_SHX_V3 * H_SHY_V3 * H_SHZ_V3 * 3 + E_SHX_V3 * E_SHY_V3 * E_SHZ_V3 * 3) * sizeof(float); 
+  cudaFuncSetAttribute(
+    updateEH_mix_mapping_kernel_ver3_unroll,
+    cudaFuncAttributeMaxDynamicSharedMemorySize,
+    (int)total_shmem_btyes
+  );
+  std::cout << "total_shmem_btyes = " << total_shmem_btyes << "\n";
+  std::cout << "grid_size = " << grid_size << "\n";
+
   auto start = std::chrono::high_resolution_clock::now();
   for(size_t tt = 0; tt < num_timesteps / BLT_MM_V3; tt++) {
-    updateEH_mix_mapping_kernel_ver3_unroll<<<grid_size, block_size>>>(d_Ex_pad_src, d_Ey_pad_src, d_Ez_pad_src,
+    updateEH_mix_mapping_kernel_ver3_unroll<<<grid_size, block_size, total_shmem_btyes>>>(d_Ex_pad_src, d_Ey_pad_src, d_Ez_pad_src,
                                                                 d_Hx_pad_src, d_Hy_pad_src, d_Hz_pad_src,
                                                                 d_Ex_pad_dst, d_Ey_pad_dst, d_Ez_pad_dst,
                                                                 d_Hx_pad_dst, d_Hy_pad_dst, d_Hz_pad_dst,

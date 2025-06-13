@@ -16,7 +16,6 @@ add_executable(gpu_mm_ver2 ${GDIAMOND_EXAMPLE_DIR}/gpu_mm_ver2.cu)
 add_executable(gpu_mm_ver3 ${GDIAMOND_EXAMPLE_DIR}/gpu_mm_ver3.cu)
 add_executable(gpu_mm_ver4 ${GDIAMOND_EXAMPLE_DIR}/gpu_mm_ver4.cu)
 add_executable(gpu_mm_ver5 ${GDIAMOND_EXAMPLE_DIR}/gpu_mm_ver5.cu)
-add_executable(gpu_vectorized ${GDIAMOND_EXAMPLE_DIR}/gpu_vectorized.cu)
 
 list(APPEND GDIAMOND_EXAMPLES
   gpu
@@ -36,7 +35,6 @@ list(APPEND GDIAMOND_EXAMPLES
   gpu_mm_ver3
   gpu_mm_ver4
   gpu_mm_ver5
-  gpu_vectorized
 )
 
 find_package(OpenMP)
