@@ -34,7 +34,17 @@ int main(int argc, char* argv[]) {
   std::cout << "simulation space: Nx = " << Nx << ", Ny = " << Ny << ", Nz = " << Nz << "\n";
   gdiamond::gDiamond exp(Nx, Ny, Nz);
 
+  exp.update_FDTD_seq_check_result(num_timesteps);
   exp.update_FDTD_mix_mapping_sequential_ver5_larger_shmem(num_timesteps, Tx, Ty, Tz);
+
+  exp.print_results();
+
+  if(!exp.check_correctness_simu()) {
+    std::cerr << "results are wrong!\n";
+    std::exit(EXIT_FAILURE);
+  }
+
+  std::cerr << "results are matched.\n";
 
   return 0;
 }

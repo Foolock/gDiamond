@@ -94,15 +94,15 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
     const int yy_head = yy_heads[super_yy] + (sub_yy > 0) * (BLY_R + (sub_yy - 1) * BLY_P);
     const int zz_head = zz_heads[super_zz] + (sub_zz > 0) * (BLZ_R + (sub_zz - 1) * BLZ_P);
 
-    if(super_xx == 0 && super_yy == 0 && super_zz == 0) {
-      std::cout << "sub_xx = " << sub_xx 
-                << ", sub_yy = " << sub_yy 
-                << ", sub_zz = " << sub_zz
-                << ", xx_head = " << xx_head
-                << ", yy_head = " << yy_head
-                << ", zz_head = " << zz_head
-                << "\n";
-    }
+    // if(super_xx == 0 && super_yy == 0 && super_zz == 0) {
+    //   std::cout << "sub_xx = " << sub_xx 
+    //             << ", sub_yy = " << sub_yy 
+    //             << ", sub_zz = " << sub_zz
+    //             << ", xx_head = " << xx_head
+    //             << ", yy_head = " << yy_head
+    //             << ", zz_head = " << zz_head
+    //             << "\n";
+    // }
 
     /*
      * ---------------------
@@ -533,28 +533,6 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
     //           << ", storeH_head_Z_core = " << storeH_head_Z_core << ", storeH_tail_Z_core = " << storeH_tail_Z_core << "\n";
     // std::cout << "\n";
 
-    const int storeE_head_X_halo = xx_head + is_rep_x * 3 + (1 - is_rep_x) * (NTX_MM_V5 - 3);
-    const int storeE_tail_X_halo = storeE_head_X_halo + is_rep_x * 3 + (1 - is_rep_x) * 2;
-    const int storeH_head_X_halo = storeE_head_X_halo - (1 - is_rep_x);
-    const int storeH_tail_X_halo = storeH_head_X_halo + 2; // same for both cases
-    const int storeE_head_Y_halo = yy_head + is_rep_y * 3 + (1 - is_rep_y) * (NTY_MM_V5 - 3);
-    const int storeE_tail_Y_halo = storeE_head_Y_halo + is_rep_y * 3 + (1 - is_rep_y) * 2;
-    const int storeH_head_Y_halo = storeE_head_Y_halo - (1 - is_rep_y);
-    const int storeH_tail_Y_halo = storeH_head_Y_halo + 2;
-    const int storeE_head_Z_halo = zz_head + is_rep_z * 3 + (1 - is_rep_z) * (NTZ_MM_V5 - 3);
-    const int storeE_tail_Z_halo = storeE_head_Z_halo + is_rep_z * 3 + (1 - is_rep_z) * 2;
-    const int storeH_head_Z_halo = storeE_head_Z_halo - (1 - is_rep_z);
-    const int storeH_tail_Z_halo = storeH_head_Z_halo + 2;
-
-    // std::cout << "super_xx = " << super_xx << ", super_yy = " << super_yy << ", super_zz = " << super_zz << "\n";
-    // std::cout << "storeE_head_X_halo = " << storeE_head_X_halo << ", storeE_tail_X_halo = " << storeE_tail_X_halo
-    //           << ", storeH_head_X_halo = " << storeH_head_X_halo << ", storeH_tail_X_halo = " << storeH_tail_X_halo << "\n";
-    // std::cout << "storeE_head_Y_halo = " << storeE_head_Y_halo << ", storeE_tail_Y_halo = " << storeE_tail_Y_halo
-    //           << ", storeH_head_Y_halo = " << storeH_head_Y_halo << ", storeH_tail_Y_halo = " << storeH_tail_Y_halo << "\n";
-    // std::cout << "storeE_head_Z_halo = " << storeE_head_Z_halo << ", storeE_tail_Z_halo = " << storeE_tail_Z_halo
-    //           << ", storeH_head_Z_halo = " << storeH_head_Z_halo << ", storeH_tail_Z_halo = " << storeH_tail_Z_halo << "\n";
-    // std::cout << "\n";
-
     for(size_t thread_id = 0; thread_id < block_size; thread_id++) {
       local_x = thread_id % NTX_MM_V5;
       local_y = (thread_id / NTX_MM_V5) % NTY_MM_V5;
@@ -607,6 +585,75 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
 
       /*
        * ---------------------
+       * store to global memory, store H halo 
+       * ---------------------
+       */
+      
+      // halo data is stored only when this dimension is parallelogram (sub > 0)
+      // there are 3 H halos needed to be stored separately by local thread 0, 1, 2
+      if(sub_xx > 0 && local_x < 3) {
+        int halo_x = local_x + NTX_MM_V5;
+        int global_x_halo = xx_head - 4 + local_x + NTX_MM_V5;
+
+        global_idx = global_x_halo + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
+        H_shared_idx = halo_x + H_shared_y * H_SHX_V5 + H_shared_z * H_SHX_V5 * H_SHY_V5;
+
+        if(global_x_halo >= 1 + LEFT_PAD_MM_V5 && global_x_halo <= Nx - 2 + LEFT_PAD_MM_V5 &&
+           global_y >= 1 + LEFT_PAD_MM_V5 && global_y <= Ny - 2 + LEFT_PAD_MM_V5 &&
+           global_z >= 1 + LEFT_PAD_MM_V5 && global_z <= Nz - 2 + LEFT_PAD_MM_V5) {
+
+          // std::cout << "local_x = " << local_x << ", halo_x = " << halo_x << ", global_x_halo = " << global_x_halo << ", ";
+          // if(store_to_src) std::cout << "storing to src\n";
+          // else std::cout << "storing to rep\n";
+
+          Hx_pad_dst[global_idx] = Hx_shmem[H_shared_idx];
+          Hy_pad_dst[global_idx] = Hy_shmem[H_shared_idx];
+          Hz_pad_dst[global_idx] = Hz_shmem[H_shared_idx];
+        }
+      }
+      if(sub_yy > 0 && local_y < 3) {
+        int halo_y = local_y + NTY_MM_V5;
+        int global_y_halo = yy_head - 4 + local_y + NTY_MM_V5;
+
+        global_idx = global_x + global_y_halo * Nx_pad + global_z * Nx_pad * Ny_pad;
+        H_shared_idx = H_shared_x + halo_y * H_SHX_V5 + H_shared_z * H_SHX_V5 * H_SHY_V5;
+
+        if(global_x >= 1 + LEFT_PAD_MM_V5 && global_x <= Nx - 2 + LEFT_PAD_MM_V5 &&
+           global_y_halo >= 1 + LEFT_PAD_MM_V5 && global_y_halo <= Ny - 2 + LEFT_PAD_MM_V5 &&
+           global_z >= 1 + LEFT_PAD_MM_V5 && global_z <= Nz - 2 + LEFT_PAD_MM_V5) {
+
+          // std::cout << "local_y = " << local_y << ", halo_y = " << halo_y << ", global_y_halo = " << global_y_halo << ", ";
+          // if(store_to_src) std::cout << "storing to src\n";
+          // else std::cout << "storing to rep\n";
+
+          Hx_pad_dst[global_idx] = Hx_shmem[H_shared_idx];
+          Hy_pad_dst[global_idx] = Hy_shmem[H_shared_idx];
+          Hz_pad_dst[global_idx] = Hz_shmem[H_shared_idx];
+        }
+      }
+      if(sub_zz > 0 && local_z < 3) {
+        int halo_z = local_z + NTZ_MM_V5;
+        int global_z_halo = zz_head - 4 + local_z + NTZ_MM_V5;
+
+        global_idx = global_x + global_y * Nx_pad + global_z_halo * Nx_pad * Ny_pad;
+        H_shared_idx = H_shared_x + H_shared_y * H_SHX_V5 + halo_z * H_SHX_V5 * H_SHY_V5;
+
+        if(global_x >= 1 + LEFT_PAD_MM_V5 && global_x <= Nx - 2 + LEFT_PAD_MM_V5 &&
+           global_y >= 1 + LEFT_PAD_MM_V5 && global_y <= Ny - 2 + LEFT_PAD_MM_V5 &&
+           global_z_halo >= 1 + LEFT_PAD_MM_V5 && global_z_halo <= Nz - 2 + LEFT_PAD_MM_V5) {
+
+          // std::cout << "local_z = " << local_z << ", halo_z = " << halo_z << ", global_z_halo = " << global_z_halo << ", ";
+          // if(store_to_src) std::cout << "storing to src\n";
+          // else std::cout << "storing to rep\n";
+
+          Hx_pad_dst[global_idx] = Hx_shmem[H_shared_idx];
+          Hy_pad_dst[global_idx] = Hy_shmem[H_shared_idx];
+          Hz_pad_dst[global_idx] = Hz_shmem[H_shared_idx];
+        }
+      }
+
+      /*
+       * ---------------------
        * store to global memory, store E core 
        * ---------------------
        */
@@ -646,18 +693,77 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
         //   std::cout << "E_shared_x = " << E_shared_x << ", E_shared_y = " << E_shared_y << ", E_shared_z = " << E_shared_z << "\n";
         //   std::cout << "global_x = " << global_x << ", global_y = " << global_y << ", global_z = " << global_z << "\n";
         // }
+      }
 
       /*
        * ---------------------
-       * store to global memory, store H halo 
+       * store to global memory, store E halo 
        * ---------------------
        */
 
+      // halo data is stored only when this dimension is parallelogram (sub > 0)
+      // there are 3 E halos needed to be stored separately by local thread NTX - 3, NTX - 2, NTX - 1 
+      if(sub_xx > 0 && local_x >= NTX_MM_V5 - 3) {
+        int halo_x = local_x + 4;
+        int global_x_halo = xx_head + local_x; 
+
+        global_idx = global_x_halo + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
+        E_shared_idx = halo_x + E_shared_y * E_SHX_V5 + E_shared_z * E_SHX_V5 * E_SHY_V5;
+
+        if(global_x_halo >= 1 + LEFT_PAD_MM_V5 && global_x_halo <= Nx - 2 + LEFT_PAD_MM_V5 &&
+           global_y >= 1 + LEFT_PAD_MM_V5 && global_y <= Ny - 2 + LEFT_PAD_MM_V5 &&
+           global_z >= 1 + LEFT_PAD_MM_V5 && global_z <= Nz - 2 + LEFT_PAD_MM_V5) {
+
+          // std::cout << "local_x = " << local_x << ", halo_x = " << halo_x << ", global_x_halo = " << global_x_halo << ", ";
+          // if(store_to_src) std::cout << "storing to src\n";
+          // else std::cout << "storing to rep\n";
+
+          Ex_pad_dst[global_idx] = Ex_shmem[E_shared_idx];
+          Ey_pad_dst[global_idx] = Ey_shmem[E_shared_idx];
+          Ez_pad_dst[global_idx] = Ez_shmem[E_shared_idx];
+        }
+      }
+      if(sub_yy > 0 && local_y >= NTY_MM_V5 - 3) {
+        int halo_y = local_y + 4;
+        int global_y_halo = yy_head + local_y; 
+
+        global_idx = global_x + global_y_halo * Nx_pad + global_z * Nx_pad * Ny_pad;
+        E_shared_idx = E_shared_x + halo_y * E_SHX_V5 + E_shared_z * E_SHX_V5 * E_SHY_V5;
+
+        if(global_x >= 1 + LEFT_PAD_MM_V5 && global_x <= Nx - 2 + LEFT_PAD_MM_V5 &&
+           global_y_halo >= 1 + LEFT_PAD_MM_V5 && global_y_halo <= Ny - 2 + LEFT_PAD_MM_V5 &&
+           global_z >= 1 + LEFT_PAD_MM_V5 && global_z <= Nz - 2 + LEFT_PAD_MM_V5) {
+
+          // std::cout << "local_y = " << local_y << ", halo_y = " << halo_y << ", global_y_halo = " << global_y_halo << ", ";
+          // if(store_to_src) std::cout << "storing to src\n";
+          // else std::cout << "storing to rep\n";
+
+          Ex_pad_dst[global_idx] = Ex_shmem[E_shared_idx];
+          Ey_pad_dst[global_idx] = Ey_shmem[E_shared_idx];
+          Ez_pad_dst[global_idx] = Ez_shmem[E_shared_idx];
+        }
+      }
+      if(sub_zz > 0 && local_z >= NTZ_MM_V5 - 3) {
+        int halo_z = local_z + 4;
+        int global_z_halo = zz_head + local_z; 
+
+        global_idx = global_x + global_y * Nx_pad + global_z_halo * Nx_pad * Ny_pad;
+        E_shared_idx = E_shared_x + E_shared_y * E_SHX_V5 + halo_z * E_SHX_V5 * E_SHY_V5;
+
+        if(global_x >= 1 + LEFT_PAD_MM_V5 && global_x <= Nx - 2 + LEFT_PAD_MM_V5 &&
+           global_y >= 1 + LEFT_PAD_MM_V5 && global_y <= Ny - 2 + LEFT_PAD_MM_V5 &&
+           global_z_halo >= 1 + LEFT_PAD_MM_V5 && global_z_halo <= Nz - 2 + LEFT_PAD_MM_V5) {
+
+          // std::cout << "local_z = " << local_z << ", halo_z = " << halo_z << ", global_z_halo = " << global_z_halo << ", ";
+          // if(store_to_src) std::cout << "storing to src\n";
+          // else std::cout << "storing to rep\n";
+
+          Ex_pad_dst[global_idx] = Ex_shmem[E_shared_idx];
+          Ey_pad_dst[global_idx] = Ey_shmem[E_shared_idx];
+          Ez_pad_dst[global_idx] = Ez_shmem[E_shared_idx];
+        }
       }
     }
-
-
-
   }
 
 }
@@ -740,21 +846,21 @@ void gDiamond::update_FDTD_mix_mapping_sequential_ver5_larger_shmem(size_t num_t
                              zz_heads[index-1] + NUM_P_Z * BLZ_P;
   }
 
-  std::cout << "xx_heads = ";
-  for(const auto& data : xx_heads) {
-    std::cout << data << " ";
-  }
-  std::cout << "\n";
-  std::cout << "yy_heads = ";
-  for(const auto& data : yy_heads) {
-    std::cout << data << " ";
-  }
-  std::cout << "\n";
-  std::cout << "zz_heads = ";
-  for(const auto& data : zz_heads) {
-    std::cout << data << " ";
-  }
-  std::cout << "\n";
+  // std::cout << "xx_heads = ";
+  // for(const auto& data : xx_heads) {
+  //   std::cout << data << " ";
+  // }
+  // std::cout << "\n";
+  // std::cout << "yy_heads = ";
+  // for(const auto& data : yy_heads) {
+  //   std::cout << data << " ";
+  // }
+  // std::cout << "\n";
+  // std::cout << "zz_heads = ";
+  // for(const auto& data : zz_heads) {
+  //   std::cout << data << " ";
+  // }
+  // std::cout << "\n";
 
   size_t block_size = NTX_MM_V5 * NTY_MM_V5 * NTZ_MM_V5;
   size_t grid_size;
@@ -790,9 +896,26 @@ void gDiamond::update_FDTD_mix_mapping_sequential_ver5_larger_shmem(size_t num_t
                                     block_size,
                                     grid_size);
     }
-
   }
 
+  // transfer data back to unpadded arrays
+  for(size_t z = 0; z < _Nz; z++) {
+    for(size_t y = 0; y < _Ny; y++) {
+      for(size_t x = 0; x < _Nx; x++) {
+        size_t x_pad = x + LEFT_PAD_MM_V5;
+        size_t y_pad = y + LEFT_PAD_MM_V5;
+        size_t z_pad = z + LEFT_PAD_MM_V5;
+        size_t unpadded_index = x + y * _Nx + z * _Nx * _Ny;
+        size_t padded_index = x_pad + y_pad * Nx_pad + z_pad * Nx_pad * Ny_pad;
+        _Ex_simu[unpadded_index] = Ex_pad_src[padded_index];
+        _Ey_simu[unpadded_index] = Ey_pad_src[padded_index];
+        _Ez_simu[unpadded_index] = Ez_pad_src[padded_index];
+        _Hx_simu[unpadded_index] = Hx_pad_src[padded_index];
+        _Hy_simu[unpadded_index] = Hy_pad_src[padded_index];
+        _Hz_simu[unpadded_index] = Hz_pad_src[padded_index];
+      }
+    }
+  }
 
 }   
 
