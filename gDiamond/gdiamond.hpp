@@ -943,6 +943,34 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
           Ez_temp[idx] = _Caz[idx] * Ez_temp[idx] + _Cbz[idx] *
             ((Hy_temp[idx] - Hy_temp[idx - 1]) - (Hx_temp[idx] - Hx_temp[idx - _Nx]) - _Jz[idx] * _dx);
 
+          // if(i == 17 &&
+          //    j == 9 &&
+          //    k == 9) {
+          //   std::cout << "t = " << t;
+          //   std::cout << ", i = " << i
+          //             << ", j = " << j
+          //             << ", k = " << k;          
+          //   std::cout << ", Ex_temp[idx] = " << Ex_temp[idx] << ", "
+          //             << "Hz_temp[idx] = " << Hz_temp[idx] << ", "
+          //             << "Hz_temp[idx - _Nx] = " << Hz_temp[idx - _Nx] << ", "
+          //             << "Hy_temp[idx] = " << Hy_temp[idx] << ", "
+          //             << "Hy_temp[idx - _Nx * _Ny] = " << Hy_temp[idx - _Nx * _Ny] << "\n";
+          // }
+
+          // if(i == 17 &&
+          //    j == 8 &&
+          //    k == 9) {
+          //   std::cout << "t = " << t;
+          //   std::cout << ", i = " << i
+          //             << ", j = " << j
+          //             << ", k = " << k;          
+          //   std::cout << ", Ey_temp[idx] = " << Ey_temp[idx] << ", "
+          //             << "Hx_temp[idx] = " << Hx_temp[idx] << ", "
+          //             << "Hx_temp[idx - _Nx * _Ny] = " << Hx_temp[idx - _Nx * _Ny] << ", "
+          //             << "Hz_temp[idx] = " << Hz_temp[idx] << ", "
+          //             << "Hz_temp[idx - 1] = " << Hz_temp[idx - 1] << "\n";
+          // }
+
         }
       }
     }
@@ -984,6 +1012,20 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
           //             << ", Ey_temp[idx] = " << Ey_temp[idx]
           //             << ", _Mz[idx] = " << _Mz[idx] 
           //             << "\n";
+          // }
+
+          // if(i == 17 &&
+          //    j == 8 &&
+          //    k == 9) {
+          //   std::cout << "t = " << t;
+          //   std::cout << ", i = " << i
+          //             << ", j = " << j
+          //             << ", k = " << k;          
+          //   std::cout << ", Hz_temp[idx] = " << Hz_temp[idx] << ", "
+          //             << "Ex_temp[idx + _Nx] = " << Ex_temp[idx + _Nx] << ", "
+          //             << "Ex_temp[idx] = " << Ex_temp[idx] << ", "
+          //             << "Ey_temp[idx + 1] = " << Ey_temp[idx + 1] << ", "
+          //             << "Ey_temp[idx] = " << Ey_temp[idx] << "\n";
           // }
 
         }
@@ -1385,8 +1427,12 @@ bool gDiamond::check_correctness_simu() {
       break;
     }
   }
-
+ 
   return correct;
+
+  
+
+
 } 
 
 bool gDiamond::check_correctness_simu_shmem() {

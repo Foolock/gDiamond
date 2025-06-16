@@ -80,9 +80,19 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
     const int sub_zz = p.z;
 
     // Convert sub_xx == 0 into a binary flag
-    int is_rep_x = (sub_xx == 0); // 1 if replication, 0 otherwise
-    int is_rep_y = (sub_yy == 0);
-    int is_rep_z = (sub_zz == 0);
+    const int is_rep_x = (sub_xx == 0); // 1 if replication, 0 otherwise
+    const int is_rep_y = (sub_yy == 0);
+    const int is_rep_z = (sub_zz == 0);
+
+    // length of this subtile
+    const int sub_xx_len = is_rep_x * (BLX_R + 1) + (1 - is_rep_x) * (BLX_P + 4);
+    const int sub_yy_len = is_rep_y * (BLY_R + 1) + (1 - is_rep_y) * (BLY_P + 4);
+    const int sub_zz_len = is_rep_z * (BLZ_R + 1) + (1 - is_rep_z) * (BLZ_P + 4);
+
+    // check if the **left** subtile is replication
+    const bool left_is_replication_x = (sub_xx - 1 == 0);
+    const bool left_is_replication_y = (sub_yy - 1 == 0);
+    const bool left_is_replication_z = (sub_zz - 1 == 0);
 
     /*
      * ---------------------
@@ -94,15 +104,15 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
     const int yy_head = yy_heads[super_yy] + (sub_yy > 0) * (BLY_R + (sub_yy - 1) * BLY_P);
     const int zz_head = zz_heads[super_zz] + (sub_zz > 0) * (BLZ_R + (sub_zz - 1) * BLZ_P);
 
-    // if(super_xx == 0 && super_yy == 0 && super_zz == 0) {
-    //   std::cout << "sub_xx = " << sub_xx 
-    //             << ", sub_yy = " << sub_yy 
-    //             << ", sub_zz = " << sub_zz
-    //             << ", xx_head = " << xx_head
-    //             << ", yy_head = " << yy_head
-    //             << ", zz_head = " << zz_head
-    //             << "\n";
-    // }
+    if(super_xx == 1 && super_yy == 0 && super_zz == 0) {
+      std::cout << "sub_xx = " << sub_xx 
+                << ", sub_yy = " << sub_yy 
+                << ", sub_zz = " << sub_zz
+                << ", xx_head = " << xx_head
+                << ", yy_head = " << yy_head
+                << ", zz_head = " << zz_head
+                << "\n";
+    }
 
     /*
      * ---------------------
@@ -132,167 +142,110 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
       local_y = (thread_id / NTX_MM_V5) % NTY_MM_V5;
       local_z = thread_id / (NTX_MM_V5 * NTY_MM_V5);
 
-      // set H_shared and E_shared index by local index 
-      // If loading replication (sub == 0), H_shared = local, E_shared = local 
-      // If loading parallelogram (sub > 0), H_shared = local + 4, E_shared = local + 4
-      H_shared_x = local_x + (sub_xx > 0) * 4;
-      H_shared_y = local_y + (sub_yy > 0) * 4;
-      H_shared_z = local_z + (sub_zz > 0) * 4;
-      E_shared_x = local_x + (sub_xx > 0) * 4;
-      E_shared_y = local_y + (sub_yy > 0) * 4;
-      E_shared_z = local_z + (sub_zz > 0) * 4;
-
-      // set global index by local index
-      // if loading replication (sub == 0), global = head + local - 1
-      // if loading parallelogram (sub > 0), global = head + local 
-      global_x = xx_head + local_x - (sub_xx == 0) * 1;
-      global_y = yy_head + local_y - (sub_yy == 0) * 1;
-      global_z = zz_head + local_z - (sub_zz == 0) * 1;
-
       /*
        * ---------------------
-       * load shared memory, load core   
+       * load shared memory, load H   
        * ---------------------
        */
 
-      // core data should all be loaded from src copy
-      // only in X dimension, if loading replication (sub == 0), load_tail_X = xx_head + BLX_R - 1
-      int loadcore_tail_X = xx_head + (sub_xx == 0) * (BLX_R - BLX_P) + BLX_P - 1;
-      H_shared_idx = H_shared_x + H_shared_y * H_SHX_V5 + H_shared_z * H_SHX_V5 * H_SHY_V5;
-      E_shared_idx = E_shared_x + E_shared_y * E_SHX_V5 + E_shared_z * E_SHX_V5 * E_SHY_V5;
-      global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-      if(global_x <= loadcore_tail_X) {
+      for(H_shared_z = local_z; H_shared_z <= sub_zz_len - 1; H_shared_z += NTZ_MM_V5) {
+        for(H_shared_y = local_y; H_shared_y <= sub_yy_len - 1; H_shared_y += NTY_MM_V5) {
+          for(H_shared_x = local_x; H_shared_x <= sub_xx_len - 1; H_shared_x += NTX_MM_V5) {
 
-        // if(local_y == 0 && local_z == 0) {
-        //   std::cout << "loading global_x = " << global_x << "\n";
-        // }
+            // set global index by H_shared index
+            // If loading replication (sub == 0), global = head - 1 + H_shared
+            // If loading parallelogram (sub > 0), global = head - 4 + H_shared
+            global_x = xx_head - 1 + H_shared_x - 3 * (sub_xx > 0);
+            global_y = yy_head - 1 + H_shared_y - 3 * (sub_yy > 0);
+            global_z = zz_head - 1 + H_shared_z - 3 * (sub_zz > 0);
 
-        Hx_shmem[H_shared_idx] = Hx_pad_src[global_idx];
-        Hy_shmem[H_shared_idx] = Hy_pad_src[global_idx];
-        Hz_shmem[H_shared_idx] = Hz_pad_src[global_idx];
-        Ex_shmem[E_shared_idx] = Ex_pad_src[global_idx];
-        Ey_shmem[E_shared_idx] = Ey_pad_src[global_idx];
-        Ez_shmem[E_shared_idx] = Ez_pad_src[global_idx];
-      }
+            H_shared_idx = H_shared_x + H_shared_y * H_SHX_V5 + H_shared_z * H_SHX_V5 * H_SHY_V5;
+            global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
 
-      /*
-       * ---------------------
-       * load shared memory, load H halo   
-       * ---------------------
-       */
+            /*
+             * decide where to load H, rep or src
+             */
+            
+            // If loading replication (sub == 0), always load from src
+            // If loading parallelogram (sub > 0), only load from rep if it is in H halo
+            //                                     which is the first 3 element, 
+            //                                     xx_head - 4, xx_head - 3, xx_head - 2
+            //                                     also its **left** subtile must be replication (sub - 1 == 0)
+            const bool loadH_from_rep = (left_is_replication_x && global_x <= xx_head - 2) ||
+                                        (left_is_replication_y && global_y <= yy_head - 2) ||
+                                        (left_is_replication_z && global_z <= zz_head - 2);
 
-      // halo data is needed only when this dimension is parallelogram (sub > 0)
-      // there are 4 H halos needed to be loaded separately by local thread 0, 1, 2, 3
-      // local thread 0, 1, 2 load it from rep, local thread 3 load it from src 
-      // only the **first** parallelogram needs to load from rep
-      if(sub_xx > 0 && local_x < 4) {
-        int halo_x = local_x;
-        int global_x_halo = xx_head + local_x - 4;
+            float* Hx_pad_load = (loadH_from_rep)? Hx_pad_rep.data() : Hx_pad_src.data();
+            float* Hy_pad_load = (loadH_from_rep)? Hy_pad_rep.data() : Hy_pad_src.data();
+            float* Hz_pad_load = (loadH_from_rep)? Hz_pad_rep.data() : Hz_pad_src.data();
 
-        // if(local_y == 0 && local_z == 0) {
-        //   std::cout << "local_x = " << local_x << ", halo_x = " << halo_x << ", global_x_halo = " << global_x_halo << ", ";
-        //   if(local_x == 3) std::cout << "load from src.\n";
-        //   else std::cout << "load from rep.\n";
-        // }
+            // if(super_xx == 0 && super_yy == 0 && super_zz == 0) {
+            //   std::cout << "------------------------------------------------------\n";
+            //   if(loadH_from_rep) std::cout << "load from rep, ";
+            //   else std::cout << "load from src, ";
+            //   std::cout << "local_x = " << local_x << ", local_y = " << local_y << ", local_z = " << local_z << "\n";
+            //   std::cout << "global_x = " << global_x << ", global_y = " << global_y << ", global_z = " << global_z << "\n";
+            //   std::cout << "H_shared_x = " << H_shared_x << ", H_shared_y = " << H_shared_y << ", H_shared_z = " << H_shared_z << "\n";
+            // }
 
-        global_idx = global_x_halo + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-        H_shared_idx = halo_x + H_shared_y * H_SHX_V5 + H_shared_z * H_SHX_V5 * H_SHY_V5;
-
-        Hx_shmem[H_shared_idx] = (local_x == 3 && sub_xx == 1)? Hx_pad_src[global_idx] : Hx_pad_rep[global_idx];
-        Hy_shmem[H_shared_idx] = (local_x == 3 && sub_xx == 1)? Hy_pad_src[global_idx] : Hy_pad_rep[global_idx];
-        Hz_shmem[H_shared_idx] = (local_x == 3 && sub_xx == 1)? Hz_pad_src[global_idx] : Hz_pad_rep[global_idx];
-      }
-      if(sub_yy > 0 && local_y < 4) {
-        int halo_y = local_y;
-        int global_y_halo = yy_head + local_y - 4;
-
-        // if(local_x == 0 && local_z == 0) {
-        //   std::cout << "local_y = " << local_y << ", halo_y = " << halo_y << ", global_y_halo = " << global_y_halo << ", ";
-        //   if(local_y == 3) std::cout << "load from src.\n";
-        //   else std::cout << "load from rep.\n";
-        // }
-
-        global_idx = global_x + global_y_halo * Nx_pad + global_z * Nx_pad * Ny_pad;
-        H_shared_idx = H_shared_x + halo_y * H_SHX_V5 + H_shared_z * H_SHX_V5 * H_SHY_V5;
-
-        Hx_shmem[H_shared_idx] = (local_y == 3 && sub_yy == 1)? Hx_pad_src[global_idx] : Hx_pad_rep[global_idx];
-        Hy_shmem[H_shared_idx] = (local_y == 3 && sub_yy == 1)? Hy_pad_src[global_idx] : Hy_pad_rep[global_idx];
-        Hz_shmem[H_shared_idx] = (local_y == 3 && sub_yy == 1)? Hz_pad_src[global_idx] : Hz_pad_rep[global_idx];
-      }
-      if(sub_zz > 0 && local_z < 4) {
-        int halo_z = local_z;
-        int global_z_halo = zz_head + local_z - 4;
-
-        // if(local_x == 0 && local_y == 0) {
-        //   std::cout << "local_z = " << local_z << ", halo_z = " << halo_z << ", global_z_halo = " << global_z_halo << ", ";
-        //   if(local_z == 3) std::cout << "load from src.\n";
-        //   else std::cout << "load from rep.\n";
-        // }
-
-        global_idx = global_x + global_y * Nx_pad + global_z_halo * Nx_pad * Ny_pad;
-        H_shared_idx = H_shared_x + H_shared_y * H_SHX_V5 + halo_z * H_SHX_V5 * H_SHY_V5; 
-
-        Hx_shmem[H_shared_idx] = (local_z == 3 && sub_zz == 1)? Hx_pad_src[global_idx] : Hx_pad_rep[global_idx];
-        Hy_shmem[H_shared_idx] = (local_z == 3 && sub_zz == 1)? Hy_pad_src[global_idx] : Hy_pad_rep[global_idx];
-        Hz_shmem[H_shared_idx] = (local_z == 3 && sub_zz == 1)? Hz_pad_src[global_idx] : Hz_pad_rep[global_idx];
-      }
+            Hx_shmem[H_shared_idx] = Hx_pad_load[global_idx];
+            Hy_shmem[H_shared_idx] = Hy_pad_load[global_idx];
+            Hz_shmem[H_shared_idx] = Hz_pad_load[global_idx];
+          }
+        }
+      } 
 
       /*
        * ---------------------
-       * load shared memory, load E halo   
+       * load shared memory, load E   
        * ---------------------
        */
 
-      // there are 4 E halos needed to be loaded separately by local thread NTX - 4, NTX - 3, NTX - 2, NTX - 1 
-      // these 4 local threads all load it from rep 
-      // only the **first** parallelogram needs to load from rep
-      if(sub_xx > 0 && local_x >= NTX_MM_V5 - 4) {
-        int halo_x = local_x - NTX_MM_V5 + 4;
-        int global_x_halo = xx_head + halo_x - 4;
+      for(E_shared_z = local_z; E_shared_z <= sub_zz_len - 1; E_shared_z += NTZ_MM_V5) {
+        for(E_shared_y = local_y; E_shared_y <= sub_yy_len - 1; E_shared_y += NTY_MM_V5) {
+          for(E_shared_x = local_x; E_shared_x <= sub_xx_len - 1; E_shared_x += NTX_MM_V5) {
 
-        // if(local_y == 0 && local_z == 0) {
-        //   std::cout << "local_x = " << local_x << ", halo_x = " << halo_x << ", global_x_halo = " << global_x_halo << ", ";
-        //   std::cout << "load from rep.\n";
-        // }
+            // set global index by E_shared index
+            // If loading replication (sub == 0), global = head - 1 + E_shared
+            // If loading parallelogram (sub > 0), global = head - 4 + E_shared
+            global_x = xx_head - 1 + E_shared_x - 3 * (sub_xx > 0);
+            global_y = yy_head - 1 + E_shared_y - 3 * (sub_yy > 0);
+            global_z = zz_head - 1 + E_shared_z - 3 * (sub_zz > 0);
 
-        global_idx = global_x_halo + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-        E_shared_idx = halo_x + E_shared_y * E_SHX_V5 + E_shared_z * E_SHX_V5 * E_SHY_V5;
+            E_shared_idx = E_shared_x + E_shared_y * E_SHX_V5 + E_shared_z * E_SHX_V5 * E_SHY_V5;
+            global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
 
-        Ex_shmem[E_shared_idx] = (sub_xx == 1)? Ex_pad_rep[global_idx] : Ex_pad_src[global_idx];
-        Ey_shmem[E_shared_idx] = (sub_xx == 1)? Ey_pad_rep[global_idx] : Ey_pad_src[global_idx];
-        Ez_shmem[E_shared_idx] = (sub_xx == 1)? Ez_pad_rep[global_idx] : Ez_pad_src[global_idx];
-      }
-      if(sub_yy > 0 && local_y >= NTY_MM_V5 - 4) {
-        int halo_y = local_y - NTY_MM_V5 + 4;
-        int global_y_halo = yy_head + halo_y - 4;
+            /*
+             * decide where to load E, rep or src
+             */
+            
+            // If loading replication (sub == 0), always load from src
+            // If loading parallelogram (sub > 0), only load from rep if it is in E halo
+            //                                     which is the first 4 element, 
+            //                                     xx_head - 4, xx_head - 3, xx_head - 2, xx_head - 1
+            //                                     also its **left** subtile must be replication (sub - 1 == 0)
+            const bool loadE_from_rep = (left_is_replication_x && global_x <= xx_head - 1) ||
+                                        (left_is_replication_y && global_y <= yy_head - 1) ||
+                                        (left_is_replication_z && global_z <= zz_head - 1);
+            
+            float* Ex_pad_load = (loadE_from_rep)? Ex_pad_rep.data() : Ex_pad_src.data();
+            float* Ey_pad_load = (loadE_from_rep)? Ey_pad_rep.data() : Ey_pad_src.data();
+            float* Ez_pad_load = (loadE_from_rep)? Ez_pad_rep.data() : Ez_pad_src.data();
 
-        // if(local_x == 0 && local_z == 0) {
-        //   std::cout << "local_y = " << local_y << ", halo_y = " << halo_y << ", global_y_halo = " << global_y_halo << ", ";
-        //   std::cout << "load from rep.\n";
-        // }
+            // if(super_xx == 0 && super_yy == 0 && super_zz == 0) {
+            //   std::cout << "------------------------------------------------------\n";
+            //   if(loadE_from_rep) std::cout << "load from rep, ";
+            //   else std::cout << "load from src, ";
+            //   std::cout << "local_x = " << local_x << ", local_y = " << local_y << ", local_z = " << local_z << "\n";
+            //   std::cout << "global_x = " << global_x << ", global_y = " << global_y << ", global_z = " << global_z << "\n";
+            //   std::cout << "E_shared_x = " << E_shared_x << ", E_shared_y = " << E_shared_y << ", E_shared_z = " << E_shared_z << "\n";
+            // }
 
-        global_idx = global_x + global_y_halo * Nx_pad + global_z * Nx_pad * Ny_pad;
-        E_shared_idx = E_shared_x + halo_y * E_SHX_V5 + E_shared_z * E_SHX_V5 * E_SHY_V5;
-
-        Ex_shmem[E_shared_idx] = (sub_yy == 1)? Ex_pad_rep[global_idx] : Ex_pad_src[global_idx];
-        Ey_shmem[E_shared_idx] = (sub_yy == 1)? Ey_pad_rep[global_idx] : Ey_pad_src[global_idx];
-        Ez_shmem[E_shared_idx] = (sub_yy == 1)? Ez_pad_rep[global_idx] : Ez_pad_src[global_idx];
-      }
-      if(sub_zz > 0 && local_z >= NTZ_MM_V5 - 4) {
-        int halo_z = local_z - NTZ_MM_V5 + 4;
-        int global_z_halo = zz_head + halo_z - 4;
-
-        // if(local_x == 0 && local_y == 0) {
-        //   std::cout << "local_z = " << local_z << ", halo_z = " << halo_z << ", global_z_halo = " << global_z_halo << ", ";
-        //   std::cout << "load from rep.\n";
-        // }
-
-        global_idx = global_x + global_y * Nx_pad + global_z_halo * Nx_pad * Ny_pad;
-        E_shared_idx = E_shared_x + E_shared_y * E_SHX_V5 + halo_z * E_SHX_V5 * E_SHY_V5;
-
-        Ex_shmem[E_shared_idx] = (sub_zz == 1)? Ex_pad_rep[global_idx] : Ex_pad_src[global_idx];
-        Ey_shmem[E_shared_idx] = (sub_zz == 1)? Ey_pad_rep[global_idx] : Ey_pad_src[global_idx];
-        Ez_shmem[E_shared_idx] = (sub_zz == 1)? Ez_pad_rep[global_idx] : Ez_pad_src[global_idx];
+            Ex_shmem[E_shared_idx] = Ex_pad_load[global_idx];
+            Ey_shmem[E_shared_idx] = Ey_pad_load[global_idx];
+            Ez_shmem[E_shared_idx] = Ez_pad_load[global_idx];
+          }
+        }
       }
     }
 
@@ -498,39 +451,37 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
      * ---------------------
      */
 
-    // if storing replication (sub == 0), storeE_head = head + 3 
+    // If storing replication (sub == 0), storeE_head = head + 3
     //                                    storeE_tail = storeE_head + 3
     //                                    storeH_head = storeE_head
-    //                                    storeH_tail = storeH_head + 2 
-    // if storing parallelogram core part (sub > 0), storeE_head_core = head - 3
-    //                                               storeE_tail_core = storeE_head + NTX_MM_V5 - 1
-    //                                               storeH_head_core = storeE_head - 1
-    //                                               storeH_tail_core = store_H_head + NTX_MM_V5 - 1
-    // if storing parallelogram halo part (sub > 0), storeE_head_halo = head + NTX_MM_V5 - 3
-    //                                               storeE_tail_halo = storeE_head_halo + 2
-    //                                               storeH_head_halo = storeE_head_halo - 1
-    //                                               storeH_tail_halo = storeH_head_halo + 2
+    //                                    storeH_tail = storeH_head + 2
+    // If storing parallelogram (sub > 0), storeE_head = head - 3
+    //                                     storeE_tail = storeE_head + sub_len - 2
+    //                                     storeH_head = storeE_head - 1
+    //                                     storeH_tail = storeH_head + sub_len - 2
 
-    const int storeE_head_X_core = xx_head + is_rep_x * 3 - (1 - is_rep_x) * 3;
-    const int storeE_tail_X_core = storeE_head_X_core + is_rep_x * 3 + (1 - is_rep_x) * (NTX_MM_V5 - 1);
-    const int storeH_head_X_core = storeE_head_X_core - (1 - is_rep_x);
-    const int storeH_tail_X_core = storeH_head_X_core + is_rep_x * 2 + (1 - is_rep_x) * (NTX_MM_V5 - 1);
-    const int storeE_head_Y_core = yy_head + is_rep_y * 3 - (1 - is_rep_y) * 3;
-    const int storeE_tail_Y_core = storeE_head_Y_core + is_rep_y * 3 + (1 - is_rep_y) * (NTY_MM_V5 - 1);
-    const int storeH_head_Y_core = storeE_head_Y_core - (1 - is_rep_y);
-    const int storeH_tail_Y_core = storeH_head_Y_core + is_rep_y * 2 + (1 - is_rep_y) * (NTY_MM_V5 - 1);
-    const int storeE_head_Z_core = zz_head + is_rep_z * 3 - (1 - is_rep_z) * 3;
-    const int storeE_tail_Z_core = storeE_head_Z_core + is_rep_z * 3 + (1 - is_rep_z) * (NTZ_MM_V5 - 1);
-    const int storeH_head_Z_core = storeE_head_Z_core - (1 - is_rep_z);
-    const int storeH_tail_Z_core = storeH_head_Z_core + is_rep_z * 2 + (1 - is_rep_z) * (NTZ_MM_V5 - 1);
+    int storeE_head_X = (sub_xx == 0)? xx_head + 3 : xx_head - 3; 
+    int storeE_tail_X = (sub_xx == 0)? storeE_head_X + 3 : storeE_head_X + sub_xx_len - 2; 
+    int storeH_head_X = (sub_xx == 0)? storeE_head_X : storeE_head_X - 1;
+    int storeH_tail_X = (sub_xx == 0)? storeH_head_X + 2 : storeH_head_X + sub_xx_len - 2;
+
+    int storeE_head_Y = (sub_yy == 0)? yy_head + 3 : yy_head - 3; 
+    int storeE_tail_Y = (sub_yy == 0)? storeE_head_Y + 3 : storeE_head_Y + sub_yy_len - 2; 
+    int storeH_head_Y = (sub_yy == 0)? storeE_head_Y : storeE_head_Y - 1;
+    int storeH_tail_Y = (sub_yy == 0)? storeH_head_Y + 2 : storeH_head_Y + sub_yy_len - 2;
+
+    int storeE_head_Z = (sub_zz == 0)? zz_head + 3 : zz_head - 3; 
+    int storeE_tail_Z = (sub_zz == 0)? storeE_head_Z + 3 : storeE_head_Z + sub_zz_len - 2; 
+    int storeH_head_Z = (sub_zz == 0)? storeE_head_Z : storeE_head_Z - 1;
+    int storeH_tail_Z = (sub_zz == 0)? storeH_head_Z + 2 : storeH_head_Z + sub_zz_len - 2;
 
     // std::cout << "super_xx = " << super_xx << ", super_yy = " << super_yy << ", super_zz = " << super_zz << "\n";
-    // std::cout << "storeE_head_X_core = " << storeE_head_X_core << ", storeE_tail_X_core = " << storeE_tail_X_core
-    //           << ", storeH_head_X_core = " << storeH_head_X_core << ", storeH_tail_X_core = " << storeH_tail_X_core << "\n";
-    // std::cout << "storeE_head_Y_core = " << storeE_head_Y_core << ", storeE_tail_Y_core = " << storeE_tail_Y_core
-    //           << ", storeH_head_Y_core = " << storeH_head_Y_core << ", storeH_tail_Y_core = " << storeH_tail_Y_core << "\n";
-    // std::cout << "storeE_head_Z_core = " << storeE_head_Z_core << ", storeE_tail_Z_core = " << storeE_tail_Z_core
-    //           << ", storeH_head_Z_core = " << storeH_head_Z_core << ", storeH_tail_Z_core = " << storeH_tail_Z_core << "\n";
+    // std::cout << "storeE_head_X = " << storeE_head_X << ", storeE_tail_X = " << storeE_tail_X
+    //           << ", storeH_head_X = " << storeH_head_X << ", storeH_tail_X = " << storeH_tail_X << "\n";
+    // std::cout << "storeE_head_Y = " << storeE_head_Y << ", storeE_tail_Y = " << storeE_tail_Y
+    //           << ", storeH_head_Y = " << storeH_head_Y << ", storeH_tail_Y = " << storeH_tail_Y << "\n";
+    // std::cout << "storeE_head_Z = " << storeE_head_Z << ", storeE_tail_Z = " << storeE_tail_Z
+    //           << ", storeH_head_Z = " << storeH_head_Z << ", storeH_tail_Z = " << storeH_tail_Z << "\n";
     // std::cout << "\n";
 
     for(size_t thread_id = 0; thread_id < block_size; thread_id++) {
@@ -540,227 +491,71 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
 
       /*
        * ---------------------
-       * store to global memory, store H core 
+       * store to global memory, store H 
        * ---------------------
        */
 
-      // set H_shared index by local index 
-      // If storing H in replication (sub == 0), H_shared = local 
-      // If storing H in parallelogram core (sub > 0), H_shared = local 
-      H_shared_x = local_x;
-      H_shared_y = local_y;
-      H_shared_z = local_z;
+      for(H_shared_z = local_z; H_shared_z <= sub_zz_len - 1; H_shared_z += NTZ_MM_V5) {
+        for(H_shared_y = local_y; H_shared_y <= sub_yy_len - 1; H_shared_y += NTY_MM_V5) {
+          for(H_shared_x = local_x; H_shared_x <= sub_xx_len - 1; H_shared_x += NTX_MM_V5) {
 
-      // set global index by local index
-      // if storing H in replication (sub == 0), global = head + local - 1
-      // if storing H in parallelogram core (sub > 0), global = head + local - 4 
-      global_x = xx_head + local_x - 1 - (sub_xx > 0) * 3;
-      global_y = yy_head + local_y - 1 - (sub_yy > 0) * 3;
-      global_z = zz_head + local_z - 1 - (sub_zz > 0) * 3;
+            // set global index by H_shared index
+            // If storing replication (sub == 0), global = head - 1 + H_shared
+            // If storing parallelogram (sub > 0), global = head - 4 + H_shared
+            global_x = xx_head - 1 + H_shared_x - 3 * (sub_xx > 0);
+            global_y = yy_head - 1 + H_shared_y - 3 * (sub_yy > 0);
+            global_z = zz_head - 1 + H_shared_z - 3 * (sub_zz > 0);
 
-      if(global_x >= 1 + LEFT_PAD_MM_V5 && global_x <= Nx - 2 + LEFT_PAD_MM_V5 &&
-         global_y >= 1 + LEFT_PAD_MM_V5 && global_y <= Ny - 2 + LEFT_PAD_MM_V5 &&
-         global_z >= 1 + LEFT_PAD_MM_V5 && global_z <= Nz - 2 + LEFT_PAD_MM_V5 &&
-         global_x >= storeH_head_X_core && global_x <= storeH_tail_X_core &&
-         global_y >= storeH_head_Y_core && global_y <= storeH_tail_Y_core &&
-         global_z >= storeH_head_Z_core && global_z <= storeH_tail_Z_core) {
+            H_shared_idx = H_shared_x + H_shared_y * H_SHX_V5 + H_shared_z * H_SHX_V5 * H_SHY_V5;
+            global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
 
-        global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-        H_shared_idx = H_shared_x + H_shared_y * H_SHX_V5 + H_shared_z * H_SHX_V5 * H_SHY_V5;
+            if(global_x >= 1 + LEFT_PAD_MM_V5 && global_x <= Nx - 2 + LEFT_PAD_MM_V5 &&
+               global_y >= 1 + LEFT_PAD_MM_V5 && global_y <= Ny - 2 + LEFT_PAD_MM_V5 &&
+               global_z >= 1 + LEFT_PAD_MM_V5 && global_z <= Nz - 2 + LEFT_PAD_MM_V5 &&
+               global_x >= storeH_head_X && global_x <= storeH_tail_X &&
+               global_y >= storeH_head_Y && global_y <= storeH_tail_Y &&
+               global_z >= storeH_head_Z && global_z <= storeH_tail_Z) {
 
-        Hx_pad_dst[global_idx] = Hx_shmem[H_shared_idx];
-        Hy_pad_dst[global_idx] = Hy_shmem[H_shared_idx];
-        Hz_pad_dst[global_idx] = Hz_shmem[H_shared_idx];
-
-        // if(super_xx == 0 && super_yy == 0 && super_zz == 0) {
-        //   std::cout << "------------------------------------------------------\n";
-        //   if(store_to_src) std::cout << "storing to src, ";
-        //   else std::cout << "storing to rep, ";
-        //   std::cout << "local_x = " << local_x << ", local_y = " << local_y << ", local_z = " << local_z << "\n";
-        //   std::cout << "H_shared_x = " << H_shared_x << ", H_shared_y = " << H_shared_y << ", H_shared_z = " << H_shared_z << "\n";
-        //   std::cout << "global_x = " << global_x << ", global_y = " << global_y << ", global_z = " << global_z << "\n";
-        // }
-
-      }
-
-      /*
-       * ---------------------
-       * store to global memory, store H halo 
-       * ---------------------
-       */
-      
-      // halo data is stored only when this dimension is parallelogram (sub > 0)
-      // there are 3 H halos needed to be stored separately by local thread 0, 1, 2
-      if(sub_xx > 0 && local_x < 3) {
-        int halo_x = local_x + NTX_MM_V5;
-        int global_x_halo = xx_head - 4 + local_x + NTX_MM_V5;
-
-        global_idx = global_x_halo + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-        H_shared_idx = halo_x + H_shared_y * H_SHX_V5 + H_shared_z * H_SHX_V5 * H_SHY_V5;
-
-        if(global_x_halo >= 1 + LEFT_PAD_MM_V5 && global_x_halo <= Nx - 2 + LEFT_PAD_MM_V5 &&
-           global_y >= 1 + LEFT_PAD_MM_V5 && global_y <= Ny - 2 + LEFT_PAD_MM_V5 &&
-           global_z >= 1 + LEFT_PAD_MM_V5 && global_z <= Nz - 2 + LEFT_PAD_MM_V5) {
-
-          // std::cout << "local_x = " << local_x << ", halo_x = " << halo_x << ", global_x_halo = " << global_x_halo << ", ";
-          // if(store_to_src) std::cout << "storing to src\n";
-          // else std::cout << "storing to rep\n";
-
-          Hx_pad_dst[global_idx] = Hx_shmem[H_shared_idx];
-          Hy_pad_dst[global_idx] = Hy_shmem[H_shared_idx];
-          Hz_pad_dst[global_idx] = Hz_shmem[H_shared_idx];
-        }
-      }
-      if(sub_yy > 0 && local_y < 3) {
-        int halo_y = local_y + NTY_MM_V5;
-        int global_y_halo = yy_head - 4 + local_y + NTY_MM_V5;
-
-        global_idx = global_x + global_y_halo * Nx_pad + global_z * Nx_pad * Ny_pad;
-        H_shared_idx = H_shared_x + halo_y * H_SHX_V5 + H_shared_z * H_SHX_V5 * H_SHY_V5;
-
-        if(global_x >= 1 + LEFT_PAD_MM_V5 && global_x <= Nx - 2 + LEFT_PAD_MM_V5 &&
-           global_y_halo >= 1 + LEFT_PAD_MM_V5 && global_y_halo <= Ny - 2 + LEFT_PAD_MM_V5 &&
-           global_z >= 1 + LEFT_PAD_MM_V5 && global_z <= Nz - 2 + LEFT_PAD_MM_V5) {
-
-          // std::cout << "local_y = " << local_y << ", halo_y = " << halo_y << ", global_y_halo = " << global_y_halo << ", ";
-          // if(store_to_src) std::cout << "storing to src\n";
-          // else std::cout << "storing to rep\n";
-
-          Hx_pad_dst[global_idx] = Hx_shmem[H_shared_idx];
-          Hy_pad_dst[global_idx] = Hy_shmem[H_shared_idx];
-          Hz_pad_dst[global_idx] = Hz_shmem[H_shared_idx];
-        }
-      }
-      if(sub_zz > 0 && local_z < 3) {
-        int halo_z = local_z + NTZ_MM_V5;
-        int global_z_halo = zz_head - 4 + local_z + NTZ_MM_V5;
-
-        global_idx = global_x + global_y * Nx_pad + global_z_halo * Nx_pad * Ny_pad;
-        H_shared_idx = H_shared_x + H_shared_y * H_SHX_V5 + halo_z * H_SHX_V5 * H_SHY_V5;
-
-        if(global_x >= 1 + LEFT_PAD_MM_V5 && global_x <= Nx - 2 + LEFT_PAD_MM_V5 &&
-           global_y >= 1 + LEFT_PAD_MM_V5 && global_y <= Ny - 2 + LEFT_PAD_MM_V5 &&
-           global_z_halo >= 1 + LEFT_PAD_MM_V5 && global_z_halo <= Nz - 2 + LEFT_PAD_MM_V5) {
-
-          // std::cout << "local_z = " << local_z << ", halo_z = " << halo_z << ", global_z_halo = " << global_z_halo << ", ";
-          // if(store_to_src) std::cout << "storing to src\n";
-          // else std::cout << "storing to rep\n";
-
-          Hx_pad_dst[global_idx] = Hx_shmem[H_shared_idx];
-          Hy_pad_dst[global_idx] = Hy_shmem[H_shared_idx];
-          Hz_pad_dst[global_idx] = Hz_shmem[H_shared_idx];
+              Hx_pad_dst[global_idx] = Hx_shmem[H_shared_idx];
+              Hy_pad_dst[global_idx] = Hy_shmem[H_shared_idx];
+              Hz_pad_dst[global_idx] = Hz_shmem[H_shared_idx];
+            }
+          }
         }
       }
 
       /*
        * ---------------------
-       * store to global memory, store E core 
+       * store to global memory, store E 
        * ---------------------
        */
 
-      // set E_shared index by local index 
-      // If storing E in replication (sub == 0), E_shared = local 
-      // If storing E in parallelogram core (sub > 0), E_shared = local + 1 
-      E_shared_x = local_x + (sub_xx > 0) * 1;
-      E_shared_y = local_y + (sub_yy > 0) * 1;
-      E_shared_z = local_z + (sub_zz > 0) * 1;
+      for(E_shared_z = local_z; E_shared_z <= sub_zz_len - 1; E_shared_z += NTZ_MM_V5) {
+        for(E_shared_y = local_y; E_shared_y <= sub_yy_len - 1; E_shared_y += NTY_MM_V5) {
+          for(E_shared_x = local_x; E_shared_x <= sub_xx_len - 1; E_shared_x += NTX_MM_V5) {
 
-      // set global index by local index
-      // if storing E in replication (sub == 0), global = head + local - 1
-      // if storing E in parallelogram core (sub > 0), global = head + local - 3 
-      global_x = xx_head + local_x - 1 - (sub_xx > 0) * 2;
-      global_y = yy_head + local_y - 1 - (sub_yy > 0) * 2;
-      global_z = zz_head + local_z - 1 - (sub_zz > 0) * 2;
+            // set global index by E_shared index
+            // If storing replication (sub == 0), global = head - 1 + E_shared
+            // If storing parallelogram (sub > 0), global = head - 4 + E_shared
+            global_x = xx_head - 1 + E_shared_x - 3 * (sub_xx > 0);
+            global_y = yy_head - 1 + E_shared_y - 3 * (sub_yy > 0);
+            global_z = zz_head - 1 + E_shared_z - 3 * (sub_zz > 0);
 
-      if(global_x >= 1 + LEFT_PAD_MM_V5 && global_x <= Nx - 2 + LEFT_PAD_MM_V5 &&
-         global_y >= 1 + LEFT_PAD_MM_V5 && global_y <= Ny - 2 + LEFT_PAD_MM_V5 &&
-         global_z >= 1 + LEFT_PAD_MM_V5 && global_z <= Nz - 2 + LEFT_PAD_MM_V5 &&
-         global_x >= storeE_head_X_core && global_x <= storeE_tail_X_core && 
-         global_y >= storeE_head_Y_core && global_y <= storeE_tail_Y_core && 
-         global_z >= storeE_head_Z_core && global_z <= storeE_tail_Z_core) {
+            E_shared_idx = E_shared_x + E_shared_y * E_SHX_V5 + E_shared_z * E_SHX_V5 * E_SHY_V5;  
+            global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
 
-        global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad; 
-        E_shared_idx = E_shared_x + E_shared_y * E_SHX_V5 + E_shared_z * E_SHX_V5 * E_SHY_V5;  
-        Ex_pad_dst[global_idx] = Ex_shmem[E_shared_idx];
-        Ey_pad_dst[global_idx] = Ey_shmem[E_shared_idx];
-        Ez_pad_dst[global_idx] = Ez_shmem[E_shared_idx];
+            if(global_x >= 1 + LEFT_PAD_MM_V5 && global_x <= Nx - 2 + LEFT_PAD_MM_V5 &&
+               global_y >= 1 + LEFT_PAD_MM_V5 && global_y <= Ny - 2 + LEFT_PAD_MM_V5 &&
+               global_z >= 1 + LEFT_PAD_MM_V5 && global_z <= Nz - 2 + LEFT_PAD_MM_V5 &&
+               global_x >= storeE_head_X && global_x <= storeE_tail_X &&
+               global_y >= storeE_head_Y && global_y <= storeE_tail_Y &&
+               global_z >= storeE_head_Z && global_z <= storeE_tail_Z) {
 
-        // if(super_xx == 0 && super_yy == 0 && super_zz == 0) {
-        //   std::cout << "------------------------------------------------------\n";
-        //   if(store_to_src) std::cout << "storing to src, ";
-        //   else std::cout << "storing to rep, ";
-        //   std::cout << "local_x = " << local_x << ", local_y = " << local_y << ", local_z = " << local_z << "\n";
-        //   std::cout << "E_shared_x = " << E_shared_x << ", E_shared_y = " << E_shared_y << ", E_shared_z = " << E_shared_z << "\n";
-        //   std::cout << "global_x = " << global_x << ", global_y = " << global_y << ", global_z = " << global_z << "\n";
-        // }
-      }
-
-      /*
-       * ---------------------
-       * store to global memory, store E halo 
-       * ---------------------
-       */
-
-      // halo data is stored only when this dimension is parallelogram (sub > 0)
-      // there are 3 E halos needed to be stored separately by local thread NTX - 3, NTX - 2, NTX - 1 
-      if(sub_xx > 0 && local_x >= NTX_MM_V5 - 3) {
-        int halo_x = local_x + 4;
-        int global_x_halo = xx_head + local_x; 
-
-        global_idx = global_x_halo + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
-        E_shared_idx = halo_x + E_shared_y * E_SHX_V5 + E_shared_z * E_SHX_V5 * E_SHY_V5;
-
-        if(global_x_halo >= 1 + LEFT_PAD_MM_V5 && global_x_halo <= Nx - 2 + LEFT_PAD_MM_V5 &&
-           global_y >= 1 + LEFT_PAD_MM_V5 && global_y <= Ny - 2 + LEFT_PAD_MM_V5 &&
-           global_z >= 1 + LEFT_PAD_MM_V5 && global_z <= Nz - 2 + LEFT_PAD_MM_V5) {
-
-          // std::cout << "local_x = " << local_x << ", halo_x = " << halo_x << ", global_x_halo = " << global_x_halo << ", ";
-          // if(store_to_src) std::cout << "storing to src\n";
-          // else std::cout << "storing to rep\n";
-
-          Ex_pad_dst[global_idx] = Ex_shmem[E_shared_idx];
-          Ey_pad_dst[global_idx] = Ey_shmem[E_shared_idx];
-          Ez_pad_dst[global_idx] = Ez_shmem[E_shared_idx];
-        }
-      }
-      if(sub_yy > 0 && local_y >= NTY_MM_V5 - 3) {
-        int halo_y = local_y + 4;
-        int global_y_halo = yy_head + local_y; 
-
-        global_idx = global_x + global_y_halo * Nx_pad + global_z * Nx_pad * Ny_pad;
-        E_shared_idx = E_shared_x + halo_y * E_SHX_V5 + E_shared_z * E_SHX_V5 * E_SHY_V5;
-
-        if(global_x >= 1 + LEFT_PAD_MM_V5 && global_x <= Nx - 2 + LEFT_PAD_MM_V5 &&
-           global_y_halo >= 1 + LEFT_PAD_MM_V5 && global_y_halo <= Ny - 2 + LEFT_PAD_MM_V5 &&
-           global_z >= 1 + LEFT_PAD_MM_V5 && global_z <= Nz - 2 + LEFT_PAD_MM_V5) {
-
-          // std::cout << "local_y = " << local_y << ", halo_y = " << halo_y << ", global_y_halo = " << global_y_halo << ", ";
-          // if(store_to_src) std::cout << "storing to src\n";
-          // else std::cout << "storing to rep\n";
-
-          Ex_pad_dst[global_idx] = Ex_shmem[E_shared_idx];
-          Ey_pad_dst[global_idx] = Ey_shmem[E_shared_idx];
-          Ez_pad_dst[global_idx] = Ez_shmem[E_shared_idx];
-        }
-      }
-      if(sub_zz > 0 && local_z >= NTZ_MM_V5 - 3) {
-        int halo_z = local_z + 4;
-        int global_z_halo = zz_head + local_z; 
-
-        global_idx = global_x + global_y * Nx_pad + global_z_halo * Nx_pad * Ny_pad;
-        E_shared_idx = E_shared_x + E_shared_y * E_SHX_V5 + halo_z * E_SHX_V5 * E_SHY_V5;
-
-        if(global_x >= 1 + LEFT_PAD_MM_V5 && global_x <= Nx - 2 + LEFT_PAD_MM_V5 &&
-           global_y >= 1 + LEFT_PAD_MM_V5 && global_y <= Ny - 2 + LEFT_PAD_MM_V5 &&
-           global_z_halo >= 1 + LEFT_PAD_MM_V5 && global_z_halo <= Nz - 2 + LEFT_PAD_MM_V5) {
-
-          // std::cout << "local_z = " << local_z << ", halo_z = " << halo_z << ", global_z_halo = " << global_z_halo << ", ";
-          // if(store_to_src) std::cout << "storing to src\n";
-          // else std::cout << "storing to rep\n";
-
-          Ex_pad_dst[global_idx] = Ex_shmem[E_shared_idx];
-          Ey_pad_dst[global_idx] = Ey_shmem[E_shared_idx];
-          Ez_pad_dst[global_idx] = Ez_shmem[E_shared_idx];
+              Ex_pad_dst[global_idx] = Ex_shmem[E_shared_idx];
+              Ey_pad_dst[global_idx] = Ey_shmem[E_shared_idx];
+              Ez_pad_dst[global_idx] = Ez_shmem[E_shared_idx];
+            }
+          }
         }
       }
     }
