@@ -318,6 +318,7 @@ class gDiamond {
                                        int num_subtiles,
                                        int hyperplane_head,
                                        const std::vector<Pt_idx>& hyperplanes,
+                                       size_t& count,
                                        size_t block_size,
                                        size_t grid_size);
 
@@ -908,12 +909,12 @@ class gDiamond {
 void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use for result checking
 
   // create temporary E and H for experiments
-  std::vector<float> Ex_temp(_Nx * _Ny * _Nz, 0);
-  std::vector<float> Ey_temp(_Nx * _Ny * _Nz, 0);
-  std::vector<float> Ez_temp(_Nx * _Ny * _Nz, 0);
-  std::vector<float> Hx_temp(_Nx * _Ny * _Nz, 0);
-  std::vector<float> Hy_temp(_Nx * _Ny * _Nz, 0);
-  std::vector<float> Hz_temp(_Nx * _Ny * _Nz, 0);
+  std::vector<float> Ex_temp(_Nx * _Ny * _Nz, 1);
+  std::vector<float> Ey_temp(_Nx * _Ny * _Nz, 1);
+  std::vector<float> Ez_temp(_Nx * _Ny * _Nz, 1);
+  std::vector<float> Hx_temp(_Nx * _Ny * _Nz, 1);
+  std::vector<float> Hy_temp(_Nx * _Ny * _Nz, 1);
+  std::vector<float> Hz_temp(_Nx * _Ny * _Nz, 1);
 
   // clear source Mz for experiments
   _Mz.clear();
@@ -936,16 +937,26 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
           
           total_cal++;
 
-          Ex_temp[idx] = _Cax[idx] * Ex_temp[idx] + _Cbx[idx] *
-            ((Hz_temp[idx] - Hz_temp[idx - _Nx]) - (Hy_temp[idx] - Hy_temp[idx - _Nx * _Ny]) - _Jx[idx] * _dx);
-          Ey_temp[idx] = _Cay[idx] * Ey_temp[idx] + _Cby[idx] *
-            ((Hx_temp[idx] - Hx_temp[idx - _Nx * _Ny]) - (Hz_temp[idx] - Hz_temp[idx - 1]) - _Jy[idx] * _dx);
-          Ez_temp[idx] = _Caz[idx] * Ez_temp[idx] + _Cbz[idx] *
-            ((Hy_temp[idx] - Hy_temp[idx - 1]) - (Hx_temp[idx] - Hx_temp[idx - _Nx]) - _Jz[idx] * _dx);
+          // if(i == 4 &&
+          //    j == 11 &&
+          //    k == 14) {
+          //   std::cout << "t = " << t;
+          //   std::cout << ", i = " << i
+          //             << ", j = " << j
+          //             << ", k = " << k;          
+          //   std::cout << ", initially, Ey_temp[idx] = " << Ey_temp[idx];
+          // }  
 
-          // if(i == 17 &&
-          //    j == 9 &&
-          //    k == 9) {
+          Ex_temp[idx] = _Cax[idx] * Ex_temp[idx] + _Cbx[idx] *
+            ((Hz_temp[idx] + Hz_temp[idx - _Nx]) + (Hy_temp[idx] + Hy_temp[idx - _Nx * _Ny]) + _Jx[idx] * _dx);
+          Ey_temp[idx] = _Cay[idx] * Ey_temp[idx] + _Cby[idx] *
+            ((Hx_temp[idx] + Hx_temp[idx - _Nx * _Ny]) + (Hz_temp[idx] + Hz_temp[idx - 1]) + _Jy[idx] * _dx);
+          Ez_temp[idx] = _Caz[idx] * Ez_temp[idx] + _Cbz[idx] *
+            ((Hy_temp[idx] + Hy_temp[idx - 1]) + (Hx_temp[idx] + Hx_temp[idx - _Nx]) + _Jz[idx] * _dx);
+
+          // if(i == 3 &&
+          //    j == 11 &&
+          //    k == 14) {
           //   std::cout << "t = " << t;
           //   std::cout << ", i = " << i
           //             << ", j = " << j
@@ -957,9 +968,9 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
           //             << "Hy_temp[idx - _Nx * _Ny] = " << Hy_temp[idx - _Nx * _Ny] << "\n";
           // }
 
-          // if(i == 17 &&
-          //    j == 8 &&
-          //    k == 9) {
+          // if(i == 4 &&
+          //    j == 11 &&
+          //    k == 14) {
           //   std::cout << "t = " << t;
           //   std::cout << ", i = " << i
           //             << ", j = " << j
@@ -998,11 +1009,11 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
           total_cal++;
 
           Hx_temp[idx] = _Dax[idx] * Hx_temp[idx] + _Dbx[idx] *
-            ((Ey_temp[idx + _Nx * _Ny] - Ey_temp[idx]) - (Ez_temp[idx + _Nx] - Ez_temp[idx]) - _Mx[idx] * _dx);
+            ((Ey_temp[idx + _Nx * _Ny] + Ey_temp[idx]) + (Ez_temp[idx + _Nx] + Ez_temp[idx]) + _Mx[idx] * _dx);
           Hy_temp[idx] = _Day[idx] * Hy_temp[idx] + _Dby[idx] *
-            ((Ez_temp[idx + 1] - Ez_temp[idx]) - (Ex_temp[idx + _Nx * _Ny] - Ex_temp[idx]) - _My[idx] * _dx);
+            ((Ez_temp[idx + 1] + Ez_temp[idx]) + (Ex_temp[idx + _Nx * _Ny] + Ex_temp[idx]) + _My[idx] * _dx);
           Hz_temp[idx] = _Daz[idx] * Hz_temp[idx] + _Dbz[idx] *
-            ((Ex_temp[idx + _Nx] - Ex_temp[idx]) - (Ey_temp[idx + 1] - Ey_temp[idx]) - _Mz[idx] * _dx);
+            ((Ex_temp[idx + _Nx] + Ex_temp[idx]) + (Ey_temp[idx + 1] + Ey_temp[idx]) + _Mz[idx] * _dx);
 
           // if(t == 1 && i == 13 && j == 1 && k == 2) {
           //   std::cout << "here, Hz_temp[idx] = " << Hz_temp[idx]
@@ -1014,9 +1025,9 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
           //             << "\n";
           // }
 
-          // if(i == 17 &&
-          //    j == 8 &&
-          //    k == 9) {
+          // if(i == 3 &&
+          //    j == 11 &&
+          //    k == 14) {
           //   std::cout << "t = " << t;
           //   std::cout << ", i = " << i
           //             << ", j = " << j
@@ -1427,6 +1438,20 @@ bool gDiamond::check_correctness_simu() {
       break;
     }
   }
+
+  // for(size_t k=1; k<_Nz-1; k++) {
+  //   for(size_t j=1; j<_Ny-1; j++) {
+  //     for(size_t i=1; i<_Nx-1; i++) {
+  //       size_t idx = i + j*_Nx + k*(_Nx*_Ny);
+  //       if(fabs(_Ex_seq[idx] - _Ex_simu[idx]) >= 1e-8) {
+  //         correct = false;
+  //         std::cout << "(x, y, z) = " << i << ", " << j << ", " << k << ", ";
+  //         std::cout << "(pad_x, pad_y, pad_z) = " << i + 4 << ", " << j + 4 << ", " << k + 4 << ", ";
+  //         std::cout << "Ex_seq[idx] = " << _Ex_seq[idx] << ", Ex_simu[idx] = " << _Ex_simu[idx] << "\n";
+  //       }
+  //     }
+  //   }
+  // }
  
   return correct;
 
