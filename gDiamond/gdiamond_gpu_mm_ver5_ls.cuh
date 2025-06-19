@@ -264,6 +264,8 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
              * decide where to load E, rep or src
              */
             
+            bool load_from_rep;
+
             float* Ex_pad_load;
             float* Ey_pad_load;
             float* Ez_pad_load;
@@ -277,17 +279,20 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
                 Ex_pad_load = Ex_pad_src.data();
                 Ey_pad_load = Ey_pad_src.data();
                 Ez_pad_load = Ez_pad_src.data();
+                load_from_rep = false;
               case 0b001:  // z
                 // load from (x, y, z-1)
                 Ex_pad_load = (sub_zz - 1 == 0)? Ex_pad_rep.data() : Ex_pad_src.data();
                 Ey_pad_load = (sub_zz - 1 == 0)? Ey_pad_rep.data() : Ey_pad_src.data();
                 Ez_pad_load = (sub_zz - 1 == 0)? Ez_pad_rep.data() : Ez_pad_src.data();
+                load_from_rep = (sub_zz - 1 == 0);
                 break;
               case 0b010:  // y
                 // load from (x, y-1, z)
                 Ex_pad_load = (sub_yy - 1 == 0)? Ex_pad_rep.data() : Ex_pad_src.data();
                 Ey_pad_load = (sub_yy - 1 == 0)? Ey_pad_rep.data() : Ey_pad_src.data();
                 Ez_pad_load = (sub_yy - 1 == 0)? Ez_pad_rep.data() : Ez_pad_src.data();
+                load_from_rep = (sub_yy - 1 == 0);
 
                 // if(global_x == 9 && global_y == 15 && global_z == 18 &&
                 //    (sub_xx == 1 && sub_yy == 2 && sub_zz == 2)) {
@@ -304,24 +309,28 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
                 Ex_pad_load = (sub_yy - 1 == 0 || sub_zz - 1 == 0)? Ex_pad_rep.data() : Ex_pad_src.data();
                 Ey_pad_load = (sub_yy - 1 == 0 || sub_zz - 1 == 0)? Ey_pad_rep.data() : Ey_pad_src.data();
                 Ez_pad_load = (sub_yy - 1 == 0 || sub_zz - 1 == 0)? Ez_pad_rep.data() : Ez_pad_src.data();
+                load_from_rep = (sub_yy - 1 == 0 || sub_zz - 1 == 0);
                 break;
               case 0b100:  // x
                 // load from (x-1, y, z)
                 Ex_pad_load = (sub_xx - 1 == 0)? Ex_pad_rep.data() : Ex_pad_src.data();
                 Ey_pad_load = (sub_xx - 1 == 0)? Ey_pad_rep.data() : Ey_pad_src.data();
                 Ez_pad_load = (sub_xx - 1 == 0)? Ez_pad_rep.data() : Ez_pad_src.data();
+                load_from_rep = (sub_xx - 1 == 0);
                 break;
               case 0b101:  // x & z
                 // load from (x-1, y, z-1)
                 Ex_pad_load = (sub_xx - 1 == 0 || sub_zz - 1 == 0)? Ex_pad_rep.data() : Ex_pad_src.data();
                 Ey_pad_load = (sub_xx - 1 == 0 || sub_zz - 1 == 0)? Ey_pad_rep.data() : Ey_pad_src.data();
                 Ez_pad_load = (sub_xx - 1 == 0 || sub_zz - 1 == 0)? Ez_pad_rep.data() : Ez_pad_src.data();
+                load_from_rep = (sub_xx - 1 == 0 || sub_zz - 1 == 0);
                 break;
               case 0b110:  // x & y
                 // load from (x-1, y-1, z)
                 Ex_pad_load = (sub_xx - 1 == 0 || sub_yy - 1 == 0)? Ex_pad_rep.data() : Ex_pad_src.data();
                 Ey_pad_load = (sub_xx - 1 == 0 || sub_yy - 1 == 0)? Ey_pad_rep.data() : Ey_pad_src.data();
                 Ez_pad_load = (sub_xx - 1 == 0 || sub_yy - 1 == 0)? Ez_pad_rep.data() : Ez_pad_src.data();
+                load_from_rep = (sub_xx - 1 == 0 || sub_yy - 1 == 0);
 
                 // if(global_x == 7 && global_y == 15 && global_z == 18) {
                 //   if(sub_xx - 1 == 0 || sub_yy - 1 == 0) std::cout << "load from rep\n";
@@ -336,6 +345,7 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
                 Ex_pad_load = (sub_xx - 1 == 0 || sub_yy - 1 == 0 || sub_zz - 1 == 0)? Ex_pad_rep.data() : Ex_pad_src.data();
                 Ey_pad_load = (sub_xx - 1 == 0 || sub_yy - 1 == 0 || sub_zz - 1 == 0)? Ey_pad_rep.data() : Ey_pad_src.data();
                 Ez_pad_load = (sub_xx - 1 == 0 || sub_yy - 1 == 0 || sub_zz - 1 == 0)? Ez_pad_rep.data() : Ez_pad_src.data();
+                load_from_rep = (sub_xx - 1 == 0 || sub_yy - 1 == 0 || sub_zz - 1 == 0);
                 break;
               default:
                 break; // shouldn't reach here
@@ -352,11 +362,13 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
 
             // if(global_x == 7 && global_y == 15 && global_z == 18 &&
             //    (sub_xx == 1 && sub_yy == 2 && sub_zz == 2)) {
-            //   std::cout << "loading here\n";
-            //   std::cout << "E_halo_mask = " << E_halo_mask << ", ";
-            //   std::cout << "sub_xx = " << sub_xx << ", sub_yy = " << sub_yy << ", sub_zz = " << sub_zz << "\n";
-            //   std::cout << "Ey_pad_load[global_idx] = " << Ey_pad_load[global_idx] << "\n";
-            // }
+            if(global_x == 6 && global_y == 15 && global_z == 18) {
+              if(load_from_rep) std::cout << "loading from rep\n";
+              else std::cout << "loading from src\n";
+              std::cout << "E_halo_mask = " << E_halo_mask << ", ";
+              std::cout << "sub_xx = " << sub_xx << ", sub_yy = " << sub_yy << ", sub_zz = " << sub_zz << "\n";
+              std::cout << "Ey_pad_load[global_idx] = " << Ey_pad_load[global_idx] << "\n";
+            }
 
             Ex_shmem[E_shared_idx] = Ex_pad_load[global_idx];
             Ey_shmem[E_shared_idx] = Ey_pad_load[global_idx];
@@ -416,16 +428,16 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
       calH_tail_Z = calE_tail_Z - 1;
 
       // if(super_xx == 0 && super_yy == 0 && super_zz == 0) {
-      if(super_xx == 0 && super_yy == 0 && super_zz == 0 && 
-        (sub_xx == 0 && sub_yy == 2 && sub_zz == 2)) {
-        std::cout << "t = " << t << "\n";
-        std::cout << "calE_head_X = " << calE_head_X << ", calE_tail_X = " << calE_tail_X
-                  << ", calH_head_X = " << calH_head_X << ", calH_tail_X = " << calH_tail_X << "\n";
-        std::cout << "calE_head_Y = " << calE_head_Y << ", calE_tail_Y = " << calE_tail_Y
-                  << ", calH_head_Y = " << calH_head_Y << ", calH_tail_Y = " << calH_tail_Y << "\n";
-        std::cout << "calE_head_Z = " << calE_head_Z << ", calE_tail_Z = " << calE_tail_Z
-                  << ", calH_head_Z = " << calH_head_Z << ", calH_tail_Z = " << calH_tail_Z << "\n";
-      }
+      // if(super_xx == 0 && super_yy == 0 && super_zz == 0 && 
+      //   (sub_xx == 0 && sub_yy == 2 && sub_zz == 2)) {
+      //   std::cout << "t = " << t << "\n";
+      //   std::cout << "calE_head_X = " << calE_head_X << ", calE_tail_X = " << calE_tail_X
+      //             << ", calH_head_X = " << calH_head_X << ", calH_tail_X = " << calH_tail_X << "\n";
+      //   std::cout << "calE_head_Y = " << calE_head_Y << ", calE_tail_Y = " << calE_tail_Y
+      //             << ", calH_head_Y = " << calH_head_Y << ", calH_tail_Y = " << calH_tail_Y << "\n";
+      //   std::cout << "calE_head_Z = " << calE_head_Z << ", calE_tail_Z = " << calE_tail_Z
+      //             << ", calH_head_Z = " << calH_head_Z << ", calH_tail_Z = " << calH_tail_Z << "\n";
+      // }
 
       /*
        * ---------------------
@@ -460,17 +472,17 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
         E_shared_idx = E_shared_x + E_shared_y * E_SHX_V5 + E_shared_z * E_SHX_V5 * E_SHY_V5;
         H_shared_idx = H_shared_x + H_shared_y * H_SHX_V5 + H_shared_z * H_SHX_V5 * H_SHY_V5;
 
-        if(global_x == 7 && global_y == 15 && global_z == 18 && 
-           (sub_xx == 0 && sub_yy == 2 && sub_zz == 2)) {
-          std::cout << "???????";
-          std::cout << "t = " << t << "\n";
-          std::cout << "calE_head_X = " << calE_head_X << ", calE_tail_X = " << calE_tail_X
-                    << ", calH_head_X = " << calH_head_X << ", calH_tail_X = " << calH_tail_X << "\n";
-          std::cout << "calE_head_Y = " << calE_head_Y << ", calE_tail_Y = " << calE_tail_Y
-                    << ", calH_head_Y = " << calH_head_Y << ", calH_tail_Y = " << calH_tail_Y << "\n";
-          std::cout << "calE_head_Z = " << calE_head_Z << ", calE_tail_Z = " << calE_tail_Z
-                    << ", calH_head_Z = " << calH_head_Z << ", calH_tail_Z = " << calH_tail_Z << "\n";
-        }
+        // if(global_x == 7 && global_y == 15 && global_z == 18 && 
+        //    (sub_xx == 0 && sub_yy == 2 && sub_zz == 2)) {
+        //   std::cout << "???????";
+        //   std::cout << "t = " << t << "\n";
+        //   std::cout << "calE_head_X = " << calE_head_X << ", calE_tail_X = " << calE_tail_X
+        //             << ", calH_head_X = " << calH_head_X << ", calH_tail_X = " << calH_tail_X << "\n";
+        //   std::cout << "calE_head_Y = " << calE_head_Y << ", calE_tail_Y = " << calE_tail_Y
+        //             << ", calH_head_Y = " << calH_head_Y << ", calH_tail_Y = " << calH_tail_Y << "\n";
+        //   std::cout << "calE_head_Z = " << calE_head_Z << ", calE_tail_Z = " << calE_tail_Z
+        //             << ", calH_head_Z = " << calH_head_Z << ", calH_tail_Z = " << calH_tail_Z << "\n";
+        // }
 
         if(global_x >= 1 + LEFT_PAD_MM_V5 && global_x <= Nx - 2 + LEFT_PAD_MM_V5 &&
            global_y >= 1 + LEFT_PAD_MM_V5 && global_y <= Ny - 2 + LEFT_PAD_MM_V5 &&
@@ -512,17 +524,15 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
           //   std::cout << "Hy_shmem[H_shared_idx - H_SHX_V5 * H_SHY_V5] = " << Hy_shmem[H_shared_idx - H_SHX_V5 * H_SHY_V5] << "\n";
           // }
 
-          // if(global_x == 8 && global_y == 15 && global_z == 18) {
-          if(global_x == 7 && global_y == 15 && global_z == 18 && 
-             (sub_xx == 0 && sub_yy == 2 && sub_zz == 2)) {
-            std::cout << "sub_xx = " << sub_xx << ", sub_yy = " << sub_yy << ", sub_zz = " << sub_zz << "\n";
-            std::cout << "t = " << t << ", ";
-            std::cout << "Ey_shmem[E_shared_idx] = " << Ey_shmem[E_shared_idx] << ", ";
-            std::cout << "Hx_shmem[H_shared_idx] = " << Hx_shmem[H_shared_idx] << ", ";
-            std::cout << "Hx_shmem[H_shared_idx - H_SHX_V5 * H_SHY_V5] = " << Hx_shmem[H_shared_idx - H_SHX_V5 * H_SHY_V5] << ", ";
-            std::cout << "Hz_shmem[H_shared_idx] = " << Hz_shmem[H_shared_idx] << ", ";
-            std::cout << "Hz_shmem[H_shared_idx - 1] = " << Hz_shmem[H_shared_idx - 1] << "\n";
-          }
+          // if(global_x == 6 && global_y == 15 && global_z == 18) {
+          //   std::cout << "sub_xx = " << sub_xx << ", sub_yy = " << sub_yy << ", sub_zz = " << sub_zz << "\n";
+          //   std::cout << "t = " << t << ", ";
+          //   std::cout << "Ey_shmem[E_shared_idx] = " << Ey_shmem[E_shared_idx] << ", ";
+          //   std::cout << "Hx_shmem[H_shared_idx] = " << Hx_shmem[H_shared_idx] << ", ";
+          //   std::cout << "Hx_shmem[H_shared_idx - H_SHX_V5 * H_SHY_V5] = " << Hx_shmem[H_shared_idx - H_SHX_V5 * H_SHY_V5] << ", ";
+          //   std::cout << "Hz_shmem[H_shared_idx] = " << Hz_shmem[H_shared_idx] << ", ";
+          //   std::cout << "Hz_shmem[H_shared_idx - 1] = " << Hz_shmem[H_shared_idx - 1] << "\n";
+          // }
   
           count++;
 
@@ -586,7 +596,7 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
           //   std::cout << "global_x = " << global_x << ", global_y = " << global_y << ", global_z = " << global_z << "\n";
           // }
 
-          // if(global_x == 7 && global_y == 15 && global_z == 18) {
+          // if(global_x == 6 && global_y == 15 && global_z == 18) {
           //   std::cout << "sub_xx = " << sub_xx << ", sub_yy = " << sub_yy << ", sub_zz = " << sub_zz << "\n";
           //   std::cout << "t = " << t << ", ";
           //   std::cout << "Hz_shmem[H_shared_idx] = " << Hz_shmem[H_shared_idx] << ", ";
@@ -676,6 +686,31 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
             global_y = yy_head - 1 + H_shared_y - 3 * (sub_yy > 0);
             global_z = zz_head - 1 + H_shared_z - 3 * (sub_zz > 0);
 
+            // number of timesteps that's been calculated for a pixel in space
+            // The calculation of replication (sub == 0) and parallelogram (sub > 0) is different 
+            // If it is replication (sub == 0), when storing H, global_x is guaranteed to >= xx_head and <= xx_head + 5 
+            // If it is parallelogram (sub > 0), when storing H, global_x is guaranteed to >= xx_head - 4 and <= xx_head + NT - 2
+            int H_num_t_calculated_x = (sub_xx == 0)? ((global_x >= xx_head && global_x < xx_head + 3)? (global_x - xx_head + 1) :
+                                                     (global_x == xx_head + 3)? (global_x - xx_head) :
+                                                     (xx_head + 6 - global_x)) :
+                                                    ((global_x >= xx_head - 4 && global_x < xx_head)? (global_x - (xx_head - 4) + 1) :
+                                                     (global_x >= xx_head && global_x <= xx_head + NTX_MM_V5 - BLT_MM_V5 - 1)? (BLT_MM_V5) :
+                                                     (xx_head + NTX_MM_V5 - 1 - global_x)); 
+
+            int H_num_t_calculated_y = (sub_yy == 0)? ((global_y >= yy_head && global_y < yy_head + 3)? (global_y - yy_head + 1) :
+                                                     (global_y == yy_head + 3)? (global_y - yy_head) :
+                                                     (yy_head + 6 - global_y)) :
+                                                    ((global_y >= yy_head - 4 && global_y < yy_head)? (global_y - (yy_head - 4) + 1) :
+                                                     (global_y >= yy_head && global_y <= yy_head + NTY_MM_V5 - BLT_MM_V5 - 1)? (BLT_MM_V5) :
+                                                     (yy_head + NTY_MM_V5 - 1 - global_y)); 
+
+            int H_num_t_calculated_z = (sub_zz == 0)? ((global_z >= zz_head && global_z < zz_head + 3)? (global_z - zz_head + 1) :
+                                                     (global_z == zz_head + 3)? (global_z - zz_head) :
+                                                     (zz_head + 6 - global_z)) :
+                                                    ((global_z >= zz_head - 4 && global_z < zz_head)? (global_z - (zz_head - 4) + 1) :
+                                                     (global_z >= zz_head && global_z <= zz_head + NTZ_MM_V5 - BLT_MM_V5 - 1)? (BLT_MM_V5) :
+                                                     (zz_head + NTZ_MM_V5 - 1 - global_z)); 
+
             H_shared_idx = H_shared_x + H_shared_y * H_SHX_V5 + H_shared_z * H_SHX_V5 * H_SHY_V5;
             global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
 
@@ -689,9 +724,21 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
                global_y >= storeH_head_Y && global_y <= storeH_tail_Y &&
                global_z >= storeH_head_Z && global_z <= storeH_tail_Z) {
 
-              Hx_pad_dst[global_idx] = Hx_shmem[H_shared_idx];
-              Hy_pad_dst[global_idx] = Hy_shmem[H_shared_idx];
-              Hz_pad_dst[global_idx] = Hz_shmem[H_shared_idx];
+              bool same_side_xy = (global_x >= xx_head && global_y >= yy_head) || (global_x < xx_head && global_y < yy_head);
+              bool same_side_xz = (global_x >= xx_head && global_z >= zz_head) || (global_x < xx_head && global_z < zz_head);
+              bool same_side_yz = (global_y >= yy_head && global_z >= zz_head) || (global_y < yy_head && global_z < zz_head);
+
+              // If the H_num_t_calculated of two dimension adds up to > 4, it means this pixel is calculated in both two dimension
+              bool storeH = (same_side_xy + !same_side_xy * (H_num_t_calculated_x + H_num_t_calculated_y > 4)) &&
+                            (same_side_xz + !same_side_xz * (H_num_t_calculated_x + H_num_t_calculated_z > 4)) &&
+                            (same_side_yz + !same_side_yz * (H_num_t_calculated_y + H_num_t_calculated_z > 4));
+
+              if(storeH) {
+                Hx_pad_dst[global_idx] = Hx_shmem[H_shared_idx];
+                Hy_pad_dst[global_idx] = Hy_shmem[H_shared_idx];
+                Hz_pad_dst[global_idx] = Hz_shmem[H_shared_idx];
+              }
+
             }
           }
         }
@@ -714,6 +761,37 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
             global_y = yy_head - 1 + E_shared_y - 3 * (sub_yy > 0);
             global_z = zz_head - 1 + E_shared_z - 3 * (sub_zz > 0);
 
+            // number of timesteps that's been calculated for a pixel in space
+            // The calculation of replication (sub == 0) and parallelogram (sub > 0) is different 
+            // If it is replication (sub == 0), when storing E, global_x is guaranteed to >= xx_head and <= xx_head + 6 
+            // If it is parallelogram (sub > 0), when storing E, global_x is guaranteed to >= xx_head - 3 and <= xx_head + NT - 1 
+            int E_num_t_calculated_x = (sub_xx == 0)? ((global_x >= xx_head && global_x <= xx_head + 3)? (global_x - xx_head + 1) :
+                                                     (xx_head + 7 - global_x)) :
+                                                    ((global_x >= xx_head - 3 && global_x < xx_head)? (global_x - (xx_head - 3) + 1) :
+                                                     (global_x >= xx_head && global_x <= xx_head + NTX_MM_V5 - BLT_MM_V5)? BLT_MM_V5 :
+                                                     (xx_head + NTX_MM_V5 - global_x)); 
+
+            int E_num_t_calculated_y = (sub_yy == 0)? ((global_y >= yy_head && global_y <= yy_head + 3)? (global_y - yy_head + 1) :
+                                                     (yy_head + 7 - global_y)) :
+                                                    ((global_y >= yy_head - 3 && global_y < yy_head)? (global_y - (yy_head - 3) + 1) :
+                                                     (global_y >= yy_head && global_y <= yy_head + NTY_MM_V5 - BLT_MM_V5)? BLT_MM_V5 :
+                                                     (yy_head + NTY_MM_V5 - global_y)); 
+
+            int E_num_t_calculated_z = (sub_zz == 0)? ((global_z >= zz_head && global_z <= zz_head + 3)? (global_z - zz_head + 1) :
+                                                     (zz_head + 7 - global_z)) :
+                                                    ((global_z >= zz_head - 3 && global_z < zz_head)? (global_z - (zz_head - 3) + 1) :
+                                                     (global_z >= zz_head && global_z <= zz_head + NTZ_MM_V5 - BLT_MM_V5)? BLT_MM_V5 :
+                                                     (zz_head + NTZ_MM_V5 - global_z)); 
+
+            // if(global_x == 7 && global_y == 15 && global_z == 18 &&
+            //    sub_xx == 0 && sub_yy == 1 && sub_zz == 2) {
+            //   std::cout << "-------\n";
+            //   std::cout << "E_num_t_calculated_x = " << E_num_t_calculated_x << ", "
+            //             << "E_num_t_calculated_y = " << E_num_t_calculated_y << ", "
+            //             << "E_num_t_calculated_z = " << E_num_t_calculated_z << "\n";
+            //   std::cout << "-------\n";
+            // }
+
             E_shared_idx = E_shared_x + E_shared_y * E_SHX_V5 + E_shared_z * E_SHX_V5 * E_SHY_V5;  
             global_idx = global_x + global_y * Nx_pad + global_z * Nx_pad * Ny_pad;
 
@@ -727,6 +805,15 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
                global_y >= storeE_head_Y && global_y <= storeE_tail_Y &&
                global_z >= storeE_head_Z && global_z <= storeE_tail_Z) {
 
+              bool same_side_xy = (global_x >= xx_head && global_y >= yy_head) || (global_x < xx_head && global_y < yy_head);
+              bool same_side_xz = (global_x >= xx_head && global_z >= zz_head) || (global_x < xx_head && global_z < zz_head);
+              bool same_side_yz = (global_y >= yy_head && global_z >= zz_head) || (global_y < yy_head && global_z < zz_head);
+
+              // If the E_num_t_calculated of two dimension adds up to > 4, it means this pixel is calculated in both two dimension
+              bool storeE = (same_side_xy + !same_side_xy * (E_num_t_calculated_x + E_num_t_calculated_y > 4)) &&
+                            (same_side_xz + !same_side_xz * (E_num_t_calculated_x + E_num_t_calculated_z > 4)) &&
+                            (same_side_yz + !same_side_yz * (E_num_t_calculated_y + E_num_t_calculated_z > 4));
+
               // if(global_x == 8 && global_y == 15 && global_z == 18 &&
               //    (sub_xx == 1 && sub_yy == 1 && sub_zz == 2)) {
               //   std::cout << "sub_xx = " << sub_xx << ", sub_yy = " << sub_yy << ", sub_zz = " << sub_zz << "\n";
@@ -737,19 +824,20 @@ void gDiamond::_updateEH_mix_mapping_ver5_ls(std::vector<float>& Ex_pad_src, std
 
               // if(global_x == 9 && global_y == 15 && global_z == 18 &&
               //    (sub_xx == 1 && sub_yy == 1 && sub_zz == 2)) {
-              
-              Ex_pad_dst[global_idx] = Ex_shmem[E_shared_idx];
-              Ey_pad_dst[global_idx] = Ey_shmem[E_shared_idx];
-              Ez_pad_dst[global_idx] = Ez_shmem[E_shared_idx];
+              if(storeE) {              
+                Ex_pad_dst[global_idx] = Ex_shmem[E_shared_idx];
+                Ey_pad_dst[global_idx] = Ey_shmem[E_shared_idx];
+                Ez_pad_dst[global_idx] = Ez_shmem[E_shared_idx];
 
-              // if(global_x == 7 && global_y == 15 && global_z == 18) {
-              //   if(store_to_src) std::cout << "storing in src\n";
-              //   else std::cout << "storing in rep\n";
-              //   std::cout << "sub_xx = " << sub_xx << ", sub_yy = " << sub_yy << ", sub_zz = " << sub_zz << "\n";
-              //   std::cout << "Ey_shmem[E_shared_idx] = " << Ey_shmem[E_shared_idx] << "\n";
-              //   std::cout << "Ey_pad_dst[global_idx] = " << Ey_pad_dst[global_idx] << "\n";
-              // }
+                if(global_x == 6 && global_y == 15 && global_z == 18) {
+                  if(store_to_src) std::cout << "storing in src\n";
+                  else std::cout << "storing in rep\n";
+                  std::cout << "sub_xx = " << sub_xx << ", sub_yy = " << sub_yy << ", sub_zz = " << sub_zz << "\n";
+                  std::cout << "Ey_shmem[E_shared_idx] = " << Ey_shmem[E_shared_idx] << "\n";
+                  std::cout << "Ey_pad_dst[global_idx] = " << Ey_pad_dst[global_idx] << "\n";
+                }
 
+              }
             }
           }
         }
@@ -892,7 +980,7 @@ void gDiamond::update_FDTD_mix_mapping_sequential_ver5_larger_shmem(size_t num_t
     // for each hyperplane, use one kernel
     for(size_t h=0; h<hyperplane_heads.size(); h++) {
       grid_size = xx_num * yy_num * zz_num * hyperplane_sizes[h];
-      std::cout << "for hyperplane " << h << ", grid_size = " << grid_size << "\n";
+      std::cout << "---------------------------for hyperplane " << h << ", grid_size = " << grid_size << "\n";
       _updateEH_mix_mapping_ver5_ls(Ex_pad_src, Ey_pad_src, Ez_pad_src,
                                     Hx_pad_src, Hy_pad_src, Hz_pad_src,
                                     Ex_pad_rep, Ey_pad_rep, Ez_pad_rep,

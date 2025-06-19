@@ -968,7 +968,7 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
           //             << "Hy_temp[idx - _Nx * _Ny] = " << Hy_temp[idx - _Nx * _Ny] << "\n";
           // }
 
-          // if(i == 4 &&
+          // if(i == 2 &&
           //    j == 11 &&
           //    k == 14) {
           //   std::cout << "t = " << t;
@@ -1025,7 +1025,7 @@ void gDiamond::update_FDTD_seq_check_result(size_t num_timesteps) { // only use 
           //             << "\n";
           // }
 
-          // if(i == 3 &&
+          // if(i == 2 &&
           //    j == 11 &&
           //    k == 14) {
           //   std::cout << "t = " << t;
